@@ -17,6 +17,7 @@
   "dependencies": {
     "@astrojs/starlight": "^0.35.2",
     "astro": "^5.8.0",
+    "glightbox": "^3.3.1",
     "yaml": "^2.5.0",
     "zod": "^3.23.8"
   },

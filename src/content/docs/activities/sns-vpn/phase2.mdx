@@ -1,0 +1,561 @@
+---
+title: "Phase 2 - Configuration LDAP et utilisateurs VPN"
+description: "Configuration de l'annuaire LDAP interne du Stormshield et création des utilisateurs pour l'authentification VPN SSL"
+---
+
+# Phase 2 : Configuration LDAP interne et utilisateurs VPN
+
+## Informations
+
+- **Durée estimée** : 1h30
+- **Prérequis** : Phase 1 terminée et validée
+- **Rôle principal** : Étudiant Y (Serveur VPN)
+
+---
+
+## Objectifs de cette phase
+
+- ✅ Comprendre le rôle de l'authentification dans un VPN
+- ✅ Activer et configurer l'annuaire LDAP interne du SNS
+- ✅ Créer des utilisateurs pour l'accès VPN
+- ✅ Créer des groupes d'utilisateurs
+- ✅ Tester l'authentification via le portail captif
+- ✅ Préparer les comptes pour la connexion VPN SSL
+
+---
+
+## Contexte : Pourquoi un annuaire LDAP ?
+
+### Rappel du besoin métier
+
+Dans le contexte de l'entreprise **TechServices SARL** :
+- Les collaborateurs de l'agence de Lyon doivent accéder aux ressources du siège
+- Les télétravailleurs doivent pouvoir se connecter depuis leur domicile
+- **Besoin d'authentification forte** : vérifier l'identité avant d'autoriser l'accès
+
+### Qu'est-ce que LDAP ?
+
+**LDAP** (_Lightweight Directory Access Protocol_) est un protocole qui permet :
+- De stocker des informations sur les utilisateurs (nom, prénom, login, mot de passe, etc.)
+- D'organiser ces utilisateurs en groupes
+- D'authentifier ces utilisateurs (vérifier leur identité)
+
+### Choix de l'annuaire interne du SNS
+
+Le Stormshield propose deux options :
+1. **Annuaire externe** (Active Directory, OpenLDAP) : pour les grandes entreprises
+2. **Annuaire interne** : intégré au firewall, simple à configurer
+
+Pour cette activité, nous utilisons l'**annuaire interne** car :
+- ✅ Simple et rapide à mettre en place
+- ✅ Pas besoin de serveur supplémentaire
+- ✅ Parfait pour une PME ou un POC (_Proof of Concept_)
+
+:::tip[En production]
+Dans une vraie entreprise, on connecterait généralement le SNS à l'Active Directory existant pour centraliser la gestion des utilisateurs.
+:::
+
+---
+
+## Étape 2.1 : Activation de l'annuaire LDAP interne
+
+:::caution[Rôle spécifique]
+**Cette phase est réalisée par l'Étudiant Y** (Serveur VPN).
+L'Étudiant X observe ou prend des notes.
+:::
+
+### 🔧 Tâche : Activer le module LDAP
+
+**1. Se connecter à l'interface web du SNS**
+
+```
+URL : https://172.25.Y.254/admin
+Login : admin
+Mot de passe : admin
+```
+
+**2. Accéder à la configuration de l'annuaire**
+
+Menu de gauche :
+```
+Configuration → Utilisateurs → Annuaire
+```
+
+**3. Activer l'annuaire interne**
+
+Onglet **Annuaire interne** :
+
+- **Activer l'annuaire LDAP interne** : ✅ Cocher
+- **Base DN** (_Distinguished Name_) : Définir la racine de l'annuaire
+  - Format : `dc=techservices,dc=local`
+  - Explication : `dc` = Domain Component
+  - On crée un domaine virtuel "techservices.local"
+
+**4. Configuration du serveur LDAP**
+
+- **Port d'écoute LDAP** : `389` (port standard)
+- **Activer LDAPS (SSL)** : ❌ Laisser décoché pour l'instant (simplification)
+- **Autoriser les connexions anonymes** : ❌ Non (sécurité)
+
+**5. Appliquer la configuration**
+
+Cliquer sur `Appliquer` en bas de la page.
+
+:::tip[Validation Étape 2.1]
+- ✅ Message de confirmation : "L'annuaire LDAP interne est activé"
+- ✅ Capture d'écran : Page de configuration de l'annuaire avec LDAP activé
+:::
+
+---
+
+## Étape 2.2 : Création d'une Unité Organisationnelle (OU)
+
+### 🎯 Objectif
+Organiser les utilisateurs dans une structure logique (comme des dossiers).
+
+### 🔧 Tâche : Créer une OU pour les utilisateurs VPN
+
+**1. Accéder à la gestion de l'annuaire**
+
+```
+Configuration → Utilisateurs → Annuaire → Onglet "Gestion de l'annuaire"
+```
+
+Vous voyez une arborescence avec la base : `dc=techservices,dc=local`
+
+**2. Créer une Unité Organisationnelle**
+
+- Clic droit sur `dc=techservices,dc=local`
+- Sélectionner : `Ajouter une unité organisationnelle`
+
+Paramètres :
+- **Nom de l'OU** : `utilisateurs_vpn`
+- **Description** : `Utilisateurs autorisés à se connecter au VPN SSL`
+
+**3. Créer**
+
+Cliquer sur `Créer`.
+
+Vous devez maintenant voir dans l'arborescence :
+```
+dc=techservices,dc=local
+  └── ou=utilisateurs_vpn
+```
+
+:::tip[Qu'est-ce qu'une OU ?]
+Une **Unité Organisationnelle** (_Organizational Unit_) est un conteneur logique qui permet d'organiser les objets (utilisateurs, groupes) dans l'annuaire.
+C'est comme créer un dossier pour ranger des fichiers.
+:::
+
+:::tip[Validation Étape 2.2]
+- ✅ L'OU `utilisateurs_vpn` apparaît dans l'arborescence
+- ✅ Capture d'écran : Arborescence LDAP avec l'OU créée
+:::
+
+---
+
+## Étape 2.3 : Création des utilisateurs
+
+### 🎯 Objectif
+Créer les comptes utilisateurs qui pourront se connecter au VPN.
+
+### Contexte métier : Utilisateurs à créer
+
+Pour l'entreprise **TechServices SARL**, créons les comptes suivants :
+
+| Nom complet   | Login   | Service           | Rôle                  |
+| ------------- | ------- | ----------------- | --------------------- |
+| Jean Dupont   | jdupont | Commercial Lyon   | Accès VPN agence      |
+| Marie Martin  | mmartin | Commercial Lyon   | Accès VPN agence      |
+| Pierre Durand | pdurand | Support technique | Accès VPN télétravail |
+
+### 🔧 Tâche : Créer l'utilisateur Jean Dupont
+
+**1. Accéder à la création d'utilisateur**
+
+- Dans l'arborescence LDAP, clic droit sur `ou=utilisateurs_vpn`
+- Sélectionner : `Ajouter un utilisateur`
+
+**2. Remplir les informations utilisateur**
+
+**Onglet Identité :**
+- **Login** : `jdupont`
+- **Nom** : `Dupont`
+- **Prénom** : `Jean`
+- **Nom complet** (CN) : `Jean Dupont` (calculé automatiquement)
+- **Description** : `Commercial - Agence Lyon`
+- **E-mail** : `jdupont@techservices.local`
+
+**Onglet Authentification :**
+- **Mot de passe** : `Vpn2025!`
+- **Confirmer le mot de passe** : `Vpn2025!`
+- **Forcer le changement au prochain login** : ❌ Décocher (pour simplifier les tests)
+- **Le mot de passe n'expire jamais** : ✅ Cocher (pour cette activité)
+- **Compte activé** : ✅ Cocher
+
+**Onglet Appartenance aux groupes :**
+- Laisser vide pour l'instant (on créera les groupes après)
+
+**3. Créer l'utilisateur**
+
+Cliquer sur `Créer`.
+
+L'utilisateur apparaît maintenant dans l'arborescence :
+```
+dc=techservices,dc=local
+  └── ou=utilisateurs_vpn
+        └── cn=Jean Dupont (jdupont)
+```
+
+### 🔧 Tâche : Créer les utilisateurs suivants
+
+Répétez la procédure pour créer :
+
+**Utilisateur 2 - Marie Martin :**
+- **Login** : `mmartin`
+- **Nom** : `Martin`
+- **Prénom** : `Marie`
+- **Description** : `Commercial - Agence Lyon`
+- **E-mail** : `mmartin@techservices.local`
+- **Mot de passe** : `Vpn2025!`
+
+**Utilisateur 3 - Pierre Durand :**
+- **Login** : `pdurand`
+- **Nom** : `Durand`
+- **Prénom** : `Pierre`
+- **Description** : `Support technique - Télétravail`
+- **E-mail** : `pdurand@techservices.local`
+- **Mot de passe** : `Vpn2025!`
+
+:::tip[Validation Étape 2.3]
+- ✅ Les 3 utilisateurs apparaissent dans l'arborescence sous `ou=utilisateurs_vpn`
+- ✅ Capture d'écran : Arborescence LDAP complète avec les 3 utilisateurs
+- ✅ Capture d'écran : Fiche détaillée d'un utilisateur (ex: Jean Dupont)
+:::
+
+---
+
+## Étape 2.4 : Création de groupes d'utilisateurs
+
+### 🎯 Objectif
+Organiser les utilisateurs en groupes pour faciliter la gestion des droits d'accès.
+
+### 🔧 Tâche : Créer un groupe "Utilisateurs VPN"
+
+**1. Créer une OU pour les groupes**
+
+- Clic droit sur `dc=techservices,dc=local`
+- `Ajouter une unité organisationnelle`
+- **Nom** : `groupes`
+- **Description** : `Groupes d'utilisateurs`
+- Créer
+
+**2. Créer le groupe**
+
+- Clic droit sur `ou=groupes`
+- Sélectionner : `Ajouter un groupe`
+
+Paramètres :
+- **Nom du groupe (CN)** : `Utilisateurs_VPN`
+- **Description** : `Groupe des utilisateurs autorisés à se connecter au VPN SSL`
+- **Type de groupe** : `Groupe de sécurité` (par défaut)
+
+**3. Ajouter des membres au groupe**
+
+**Onglet Membres :**
+- Cliquer sur `Ajouter`
+- Dans la fenêtre de recherche, chercher et sélectionner :
+  - ✅ `Jean Dupont (jdupont)`
+  - ✅ `Marie Martin (mmartin)`
+  - ✅ `Pierre Durand (pdurand)`
+- Valider
+
+**4. Créer le groupe**
+
+Cliquer sur `Créer`.
+
+Votre arborescence LDAP complète :
+```
+dc=techservices,dc=local
+  ├── ou=utilisateurs_vpn
+  │     ├── cn=Jean Dupont (jdupont)
+  │     ├── cn=Marie Martin (mmartin)
+  │     └── cn=Pierre Durand (pdurand)
+  └── ou=groupes
+        └── cn=Utilisateurs_VPN (3 membres)
+```
+
+:::tip[Pourquoi créer des groupes ?]
+Les groupes permettent de :
+- **Simplifier la gestion** : au lieu d'autoriser 3 utilisateurs un par un, on autorise le groupe
+- **Faciliter l'évolution** : ajouter un nouvel utilisateur = juste l'ajouter au groupe
+- **Appliquer des politiques** : des règles différentes selon les groupes (VPN, Admin, Invités, etc.)
+:::
+
+:::tip[Validation Étape 2.4]
+- ✅ Le groupe `Utilisateurs_VPN` apparaît dans `ou=groupes`
+- ✅ Le groupe contient 3 membres
+- ✅ Capture d'écran : Fiche du groupe montrant les 3 membres
+:::
+
+---
+
+## Étape 2.5 : Test de l'authentification LDAP
+
+### 🎯 Objectif
+Vérifier que l'annuaire LDAP fonctionne correctement avant de configurer le VPN.
+
+### 🔧 Tâche : Tester l'authentification via l'outil de diagnostic
+
+**1. Accéder à l'outil de test**
+
+```
+Configuration → Utilisateurs → Annuaire → Onglet "Test d'authentification"
+```
+
+**2. Tester l'authentification d'un utilisateur**
+
+Paramètres de test :
+- **Méthode d'authentification** : `Annuaire interne`
+- **Nom d'utilisateur** : `jdupont`
+- **Mot de passe** : `Vpn2025!`
+
+Cliquer sur `Tester`.
+
+**Résultat attendu :**
+```
+✅ Authentification réussie
+Utilisateur : cn=Jean Dupont,ou=utilisateurs_vpn,dc=techservices,dc=local
+Groupes : cn=Utilisateurs_VPN,ou=groupes,dc=techservices,dc=local
+```
+
+**3. Tester les autres utilisateurs**
+
+Répéter le test avec :
+- `mmartin` / `Vpn2025!` → ✅ Doit réussir
+- `pdurand` / `Vpn2025!` → ✅ Doit réussir
+- `jdupont` / `MauvaisMotDePasse` → ❌ Doit échouer
+
+:::tip[Validation Étape 2.5]
+- ✅ Les 3 utilisateurs s'authentifient avec succès
+- ✅ Un mauvais mot de passe est refusé
+- ✅ Capture d'écran : Résultat du test d'authentification réussi pour jdupont
+:::
+
+---
+
+## Étape 2.6 : Configuration du portail captif (optionnel mais recommandé)
+
+### 🎯 Objectif
+Activer le portail captif pour tester l'authentification web des utilisateurs.
+
+:::note[Portail captif]
+Un **portail captif** est une page web qui demande l'authentification avant d'autoriser l'accès au réseau.
+C'est similaire au WiFi public des hôtels ou aéroports.
+:::
+
+### 🔧 Tâche : Activer le portail captif sur l'interface IN
+
+**1. Accéder à la configuration du portail captif**
+
+```
+Configuration → Utilisateurs → Authentification → Portail captif
+```
+
+**2. Configurer le portail captif**
+
+**Onglet Général :**
+- **Activer le portail captif** : ✅ Cocher
+- **Type de portail** : `Standard` (page de login simple)
+- **Méthode d'authentification** : `Annuaire LDAP interne`
+
+**Onglet Interfaces :**
+- **Interfaces activées** :
+  - ✅ Cocher `in` (interface réseau interne)
+  - ❌ Décocher `out` (pas d'authentification sur Internet)
+
+**Onglet Redirection :**
+- **URL de redirection après authentification** : `http://10.Y.1.20` (votre serveur web)
+- Laisser les autres paramètres par défaut
+
+**3. Appliquer**
+
+Cliquer sur `Appliquer`.
+
+### 🔧 Tâche : Tester le portail captif
+
+**1. Depuis le serveur Debian (ou créer une VM cliente temporaire sur le réseau interne)**
+
+Ouvrir un navigateur web et tenter d'accéder à n'importe quel site :
+```
+http://www.google.com
+```
+
+**2. Vous devez être redirigé vers le portail captif**
+
+Page d'authentification du SNS :
+- **Nom d'utilisateur** : `jdupont`
+- **Mot de passe** : `Vpn2025!`
+- Se connecter
+
+**3. Après authentification**
+
+Vous êtes redirigé vers `http://10.Y.1.20` (votre serveur web Debian).
+
+:::tip[Si le portail captif ne s'affiche pas]
+Vérifiez que :
+- Le portail est bien activé sur l'interface `in`
+- Les règles de filtrage autorisent l'accès au port 443 du firewall
+- Le serveur Debian a bien le SNS comme gateway
+:::
+
+:::tip[Validation Étape 2.6]
+- ✅ Le portail captif s'affiche lors de la navigation
+- ✅ L'authentification avec jdupont fonctionne
+- ✅ Après authentification, accès au serveur web possible
+- ✅ Capture d'écran : Page du portail captif
+- ✅ Capture d'écran : Page web du serveur Debian après authentification
+:::
+
+---
+
+## Étape 2.7 : Vérification des logs d'authentification
+
+### 🔧 Tâche : Consulter les événements d'authentification
+
+**1. Accéder aux logs d'authentification**
+
+```
+Monitoring → Logs → Utilisateurs → Authentifications
+```
+
+**2. Observer les événements**
+
+Vous devriez voir :
+- Les tentatives de connexion (réussies et échouées)
+- L'utilisateur concerné (jdupont, mmartin, etc.)
+- La date et l'heure
+- La méthode (LDAP interne)
+- Le statut (Success / Failed)
+
+**3. Analyser un échec d'authentification**
+
+Tentez de vous connecter avec un mauvais mot de passe et observez :
+- ❌ Ligne rouge dans les logs
+- Message : "Authentication failed"
+- Raison : "Invalid credentials"
+
+:::tip[Validation Étape 2.7]
+- ✅ Les logs d'authentification sont visibles
+- ✅ Les authentifications réussies apparaissent en vert
+- ✅ Les échecs apparaissent en rouge
+- ✅ Capture d'écran : Logs d'authentification montrant une connexion réussie
+:::
+
+---
+
+## ✅ Tableau de validation de la Phase 2
+
+Complétez ce tableau dans votre compte-rendu :
+
+| Tâche                             | Détails                            | ✅/❌ |
+| --------------------------------- | ---------------------------------- | ----- |
+| Activation LDAP interne           | Base DN : dc=techservices,dc=local |       |
+| Création OU utilisateurs_vpn      | Visible dans l'arborescence        |       |
+| Création utilisateur jdupont      | Login fonctionnel                  |       |
+| Création utilisateur mmartin      | Login fonctionnel                  |       |
+| Création utilisateur pdurand      | Login fonctionnel                  |       |
+| Création OU groupes               | Visible dans l'arborescence        |       |
+| Création groupe Utilisateurs_VPN  | 3 membres                          |       |
+| Test d'authentification jdupont   | Succès                             |       |
+| Test d'authentification mmartin   | Succès                             |       |
+| Test mauvais mot de passe         | Échec (normal)                     |       |
+| Portail captif activé (optionnel) | Fonctionne sur interface in        |       |
+| Logs d'authentification visibles  | Événements affichés                |       |
+
+---
+
+## ✅ Critères de validation de la Phase 2
+
+Avant de passer à la Phase 3, assurez-vous que :
+
+- [ ] L'annuaire LDAP interne est activé
+- [ ] L'arborescence LDAP est correctement structurée (OU + utilisateurs + groupes)
+- [ ] Les 3 utilisateurs sont créés avec les bons mots de passe
+- [ ] Le groupe `Utilisateurs_VPN` contient les 3 membres
+- [ ] Les tests d'authentification dans l'outil de diagnostic réussissent
+- [ ] Les logs d'authentification sont consultables
+- [ ] (Optionnel) Le portail captif fonctionne sur l'interface interne
+
+:::tip[Checkpoint enseignant]
+👨‍🏫 Avant de continuer, faites valider votre configuration par l'enseignant.
+Montrez-lui :
+1. L'arborescence LDAP complète
+2. La fiche d'un utilisateur
+3. La fiche du groupe avec ses membres
+4. Un test d'authentification réussi
+5. Les logs d'authentification
+:::
+
+---
+
+## 🎯 Résumé de la Phase 2
+
+Vous avez maintenant :
+
+- ✅ Un annuaire LDAP interne opérationnel
+- ✅ Une structure organisationnelle claire (OU pour utilisateurs et groupes)
+- ✅ 3 utilisateurs créés et testés
+- ✅ 1 groupe de sécurité contenant ces utilisateurs
+- ✅ Un système d'authentification fonctionnel
+- ✅ Des logs pour tracer les connexions
+
+**Infrastructure d'authentification prête pour le VPN SSL !**
+
+**Prochaine étape** : Phase 3 - Configuration du serveur VPN SSL sur le Stormshield
+
+---
+
+## 📚 Pour aller plus loin (bonus)
+
+Si vous avez terminé en avance, vous pouvez :
+
+### Bonus 1 : Créer un deuxième groupe avec des droits différents
+
+Créez un groupe `Administrateurs_VPN` avec :
+- Un utilisateur `admin_vpn`
+- Qui aura des droits d'administration sur le VPN (on verra ça en Phase 4)
+
+### Bonus 2 : Tester l'authentification depuis la ligne de commande
+
+Depuis votre machine hôte, installez `ldapsearch` :
+```bash
+sudo apt install ldap-utils
+```
+
+Testez une requête LDAP :
+```bash
+ldapsearch -x -H ldap://172.25.Y.254:389 \
+  -D "cn=Jean Dupont,ou=utilisateurs_vpn,dc=techservices,dc=local" \
+  -w "Vpn2025!" \
+  -b "dc=techservices,dc=local" "(objectClass=*)"
+```
+
+Vous devriez voir l'arborescence LDAP complète.
+
+### Bonus 3 : Comprendre le format DN (Distinguished Name)
+
+Analysez le DN complet d'un utilisateur :
+```
+cn=Jean Dupont,ou=utilisateurs_vpn,dc=techservices,dc=local
+```
+
+Décomposition :
+- `cn` = Common Name (nom complet de l'utilisateur)
+- `ou` = Organizational Unit (unité organisationnelle)
+- `dc` = Domain Component (composant du domaine)
+
+C'est comme un chemin de fichier, mais lu de droite à gauche :
+```
+techservices.local / utilisateurs_vpn / Jean Dupont
+```

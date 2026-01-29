@@ -1,0 +1,439 @@
+---
+title: "Phase 1 : Configuration de base et accès à l'interface web"
+---
+
+## Phase 1 : Configuration de base et accès à l'interface web
+
+### Durée estimée : 1h00
+
+### Objectifs de cette phase
+
+- ✅ Se connecter à l'interface web d'administration du SNS
+- ✅ Découvrir l'interface graphique Stormshield
+- ✅ Configurer les paramètres système de base
+- ✅ Créer les premières règles de filtrage
+- ✅ Configurer le NAT pour l'accès Internet depuis le réseau interne
+
+---
+
+### Étape 1.1 : Première connexion à l'interface web (Étudiant Y)
+
+:::caution[Rôle spécifique]
+**Cette phase est principalement réalisée par l'Étudiant Y** (Serveur VPN).
+L'Étudiant X peut observer ou réaliser les mêmes manipulations sur son propre SNS pour s'entraîner.
+:::
+
+#### 🔧 Tâche : Se connecter à l'interface d'administration
+
+**1. Ouvrir un navigateur web**
+
+Depuis votre **machine hôte** ou depuis la **VM Client VPN** :
+
+```
+URL : https://172.25.Y.254/admin
+```
+(Remplacer Y par votre numéro)
+
+**2. Accepter le certificat auto-signé**
+
+Le navigateur va afficher un avertissement de sécurité (certificat SSL non reconnu) :
+- Cliquer sur `Avancé` ou `Paramètres avancés`
+- Cliquer sur `Accepter le risque et continuer` ou `Continuer vers le site`
+
+:::tip[Pourquoi cette alerte ?]
+Le SNS utilise un certificat SSL auto-signé (non validé par une autorité de certification).
+C'est normal pour un environnement de test. En production, on utiliserait un vrai certificat.
+:::
+
+**3. Se connecter**
+
+Page de login du SNS :
+- **Nom d'utilisateur** : `admin`
+- **Mot de passe** : `admin`
+- Cliquer sur `Connexion`
+
+---
+
+### Étape 1.2 : Configuration système de base
+
+#### 🔧 Tâche : Définir les paramètres généraux du firewall
+
+**1. Accéder à la configuration système**
+
+Dans le menu de gauche :
+```
+Configuration → Système → Configuration
+```
+
+**2. Configurer les paramètres généraux**
+
+Onglet **Général** :
+- **Nom du firewall** : `SNS-Serveur-Y` (remplacer Y)
+- **Fuseau horaire** : `Europe/Paris`
+- **Serveurs NTP** :
+- Laisser les autres paramètres par défaut
+
+**3. Enregistrer**
+
+Cliquer sur `Appliquer` en bas de la page.
+
+#### 🔧 Tâche : Vérifier la configuration réseau
+
+**1. Accéder aux interfaces réseau**
+
+```
+Configuration → Réseau → Interfaces
+```
+
+**2. Vérifier les interfaces**
+
+Vous devez voir :
+
+| Interface | Nom | Adresse IP      | État          |
+| --------- | --- | --------------- | ------------- |
+| **out**   | out | 172.25.Y.254/16 | UP (connecté) |
+| **in**    | in  | 10.Y.1.254/24   | UP (connecté) |
+
+**3. Configurer les rôles des interfaces (si pas déjà fait)**
+
+Cliquer sur l'interface **out** :
+- **Protection** : ✅ Activer le filtrage
+- **Type de zone** : `Internet` (rouge)
+- **Appliquer**
+
+Cliquer sur l'interface **in** :
+- **Protection** : ✅ Activer le filtrage
+- **Type de zone** : `Réseau interne` (vert)
+- **Appliquer**
+
+:::tip[Zones de sécurité]
+Les couleurs représentent les niveaux de confiance :
+- 🔴 **Rouge (Internet/out)** : Zone non fiable, accès depuis l'extérieur
+- 🟢 **Vert (Interne/in)** : Zone de confiance, réseau d'entreprise
+- 🟠 **Orange (DMZ)** : Zone intermédiaire (serveurs publics)
+:::
+
+**4. Vérifier les routes**
+
+```
+Configuration → Réseau → Routage → Routes
+```
+
+Vérifier la présence de la route par défaut :
+- **Destination** : `0.0.0.0/0` (route par défaut)
+- **Passerelle** : `172.25.254.254`
+- **Interface** : `out`
+
+:::tip[Validation Étape 1.2]
+✅ Capture d'écran à inclure :
+- Page des interfaces réseau montrant les deux interfaces UP
+- Page des routes montrant la route par défaut
+:::
+
+---
+
+### Étape 1.3 : Configuration des règles de filtrage de base
+
+#### 🎯 Objectif
+Créer les règles nécessaires pour :
+1. Autoriser le SNS à accéder à Internet (mises à jour, NTP)
+2. Autoriser le serveur Debian à accéder à Internet
+3. Bloquer tout le reste par défaut
+
+#### 🔧 Tâche : Accéder au module de filtrage
+
+```
+Configuration → Politique de sécurité → Filtrage et NAT → Règles de filtrage
+```
+
+Vous voyez la liste des règles par défaut (généralement vide ou avec quelques règles de base).
+
+#### 🔧 Tâche : Créer la règle 1 - Autoriser le firewall vers Internet
+
+**1. Cliquer sur `Ajouter` (en haut)**
+
+**2. Paramètres de la règle :**
+
+- **Nom de la règle** : `Firewall vers Internet`
+- **État** : ✅ Activé
+- **Action** : `Accepter` (couleur verte)
+
+**Onglet Origine :**
+- **Source** : Cliquer sur `+`
+  - Type : `Objet de type Firewall`
+  - Sélectionner : `Firewall_out` (interface OUT du firewall)
+  - Valider
+
+**Onglet Destination :**
+- **Destination** : Cliquer sur `+`
+  - Type : `Réseau`
+  - Sélectionner : `Internet` (objet prédéfini)
+  - Valider
+
+**Onglet Service :**
+- **Service** : Laisser `any` (tous les services)
+
+**Onglet Options :**
+- Inspection : `Désactivée` (pour l'instant)
+- Logs : ✅ `Activer les logs` (pour déboguer)
+
+**3. Cliquer sur `Créer`**
+
+:::tip[Explication]
+Cette règle permet au firewall lui-même (son interface OUT) de sortir vers Internet.
+C'est nécessaire pour :
+- Synchronisation NTP (heure)
+- Téléchargement des mises à jour
+- Résolution DNS
+:::
+
+#### 🔧 Tâche : Créer la règle 2 - Autoriser le réseau interne vers Internet
+
+**1. Cliquer sur `Ajouter`**
+
+**2. Paramètres :**
+
+- **Nom** : `Réseau interne vers Internet`
+- **État** : ✅ Activé
+- **Action** : `Accepter`
+
+**Origine :**
+- Source : `Network_internals` (ou créer un objet réseau `10.Y.1.0/24`)
+  - Si l'objet n'existe pas : `Configuration → Objets → Réseaux` → `Ajouter`
+  - Nom : `Reseau_Interne_Y`
+  - Type : `Réseau`
+  - Adresse : `10.Y.1.0/24`
+  - Sauvegarder et retourner aux règles
+
+**Destination :**
+- Destination : `Internet`
+
+**Service :**
+- Service : `any`
+
+**Options :**
+- Logs : ✅ Activés
+
+**3. Créer**
+
+#### 🔧 Tâche : Vérifier l'ordre des règles
+
+**Important** : Les règles de filtrage sont évaluées **de haut en bas**.
+La première règle correspondante est appliquée.
+
+Ordre recommandé :
+```
+1. Firewall vers Internet          [ACCEPT]
+2. Réseau interne vers Internet    [ACCEPT]
+3. [Implicite] Deny All            [BLOCK]
+```
+
+Si l'ordre n'est pas bon, utilisez les flèches ⬆️ ⬇️ pour réorganiser.
+
+:::caution[Règle implicite]
+Par défaut, Stormshield a une règle implicite en fin de liste : **TOUT BLOQUER**.
+Donc si aucune règle ne correspond, le trafic est bloqué.
+C'est une bonne pratique de sécurité : "Ce qui n'est pas explicitement autorisé est interdit".
+:::
+
+:::tip[Validation Étape 1.3]
+✅ Capture d'écran à inclure :
+- Liste des règles de filtrage créées
+✅ Commandes de test depuis le serveur Debian :
+```bash
+ping 8.8.8.8          # Doit échouer (NAT pas encore configuré)
+```
+:::
+
+---
+
+### Étape 1.4 : Configuration du NAT (Network Address Translation)
+
+#### 🎯 Objectif
+Le serveur Debian (10.Y.1.20) a une IP privée. Pour qu'il puisse accéder à Internet, il faut configurer le NAT sur le firewall pour traduire son adresse privée en l'adresse publique du SNS (172.25.Y.254).
+
+#### 🔧 Tâche : Créer une règle de NAT dynamique
+
+**1. Accéder au NAT**
+
+```
+Configuration → Politique de sécurité → Filtrage et NAT → NAT
+```
+
+**2. Créer une règle de NAT**
+
+Cliquer sur `Ajouter` :
+
+- **Nom** : `NAT Réseau interne vers Internet`
+- **État** : ✅ Activé
+
+**Onglet Original :**
+- **Source** : `Network_internals` ou `Reseau_Interne_Y` (10.Y.1.0/24)
+- **Destination** : `Internet`
+- **Service** : `any`
+
+**Onglet Translaté :**
+- **Source** :
+  - Type : `Objet Firewall`
+  - Sélectionner : `Firewall_out` (l'interface OUT du SNS - 172.25.Y.254)
+- **Destination** : `Original destination` (ne pas modifier)
+- **Service** : `Original service`
+
+**Type de NAT :** `Dynamique` (PAT - Port Address Translation)
+
+**3. Créer et appliquer**
+
+:::tip[Principe du NAT]
+Le NAT va transformer :
+- Paquet sortant du serveur : `SRC: 10.Y.1.20 → DST: 8.8.8.8`
+- En : `SRC: 172.25.Y.254:random_port → DST: 8.8.8.8`
+
+Le firewall garde une table de correspondance pour retransmettre les réponses au bon serveur.
+:::
+
+---
+
+### Étape 1.5 : Validation de la configuration réseau
+
+#### ✅ Tests à effectuer depuis le serveur Debian (Étudiant Y)
+
+Se connecter en SSH au serveur Debian (depuis votre VM Client ou machine hôte) :
+
+```bash
+ssh techservices@10.Y.1.20
+# Mot de passe : Sio2025!
+```
+
+**Test 1 - Connectivité Internet :**
+```bash
+ping -c 4 8.8.8.8
+```
+**Résultat attendu :** ✅ Réponses OK
+
+**Test 2 - Résolution DNS :**
+```bash
+ping -c 4 www.google.com
+```
+**Résultat attendu :** ✅ Réponses OK (preuve que le DNS fonctionne)
+
+**Test 3 - Accès HTTP :**
+```bash
+curl -I https://www.google.com
+```
+**Résultat attendu :** ✅ HTTP 200 OK ou 301/302 redirect
+
+**Test 4 - Mise à jour des paquets :**
+```bash
+sudo apt update
+```
+**Résultat attendu :** ✅ Liste des paquets disponibles
+
+#### ✅ Tests depuis la VM Client VPN (Étudiant X)
+
+**Test 1 - Accès au SNS Serveur :**
+```bash
+ping -c 4 172.25.Y.254
+```
+**Résultat attendu :** ✅ Réponses OK
+
+**Test 2 - Tentative d'accès au serveur Debian :**
+```bash
+ping -c 4 10.Y.1.20
+```
+**Résultat attendu :** ❌ Pas de réponse (NORMAL - c'est ce que le VPN va résoudre !)
+
+**Test 3 - Tentative d'accès web au serveur :**
+```bash
+curl http://10.Y.1.20
+```
+**Résultat attendu :** ❌ Timeout ou pas de route (NORMAL)
+
+---
+
+### Étape 1.6 : Consultation des logs
+
+#### 🔧 Tâche : Vérifier que les règles fonctionnent
+
+**1. Accéder aux logs de filtrage**
+
+```
+Monitoring → Logs → Filtrage et NAT → Connexions
+```
+
+**2. Observer les logs en temps réel**
+
+Pendant que vous effectuez les tests ci-dessus, observez :
+- Les lignes vertes (ACCEPT) correspondant aux règles autorisées
+- L'absence de lignes rouges (BLOCK) pour le trafic autorisé
+
+**3. Filtrer les logs**
+
+Utilisez les filtres pour voir uniquement :
+- Source : `10.Y.1.20` (votre serveur Debian)
+- Action : `PASS` (accepté)
+
+Vous devriez voir les connexions sortantes du serveur vers Internet.
+
+:::tip[Validation Étape 1.6]
+✅ Capture d'écran à inclure :
+- Logs montrant une connexion autorisée depuis 10.Y.1.20 vers Internet
+- Avec la règle appliquée visible dans la colonne "Règle"
+:::
+
+---
+
+### ✅ Tableau de validation de la Phase 1
+
+Complétez ce tableau dans votre compte-rendu :
+
+| Test                           | Commande                           | Résultat attendu         | ✅/❌ |
+| ------------------------------ | ---------------------------------- | ------------------------ | ----- |
+| Connexion interface web SNS    | `https://172.25.Y.254/admin`       | Page de login accessible |       |
+| SNS vers Internet              | Depuis SNS console: `ping 8.8.8.8` | OK                       |       |
+| Serveur Debian vers gateway    | `ping 10.Y.1.254`                  | OK                       |       |
+| Serveur Debian vers Internet   | `ping 8.8.8.8`                     | OK                       |       |
+| Serveur Debian résolution DNS  | `ping www.google.com`              | OK                       |       |
+| Client VPN vers SNS OUT        | `ping 172.25.Y.254`                | OK                       |       |
+| Client VPN vers Serveur Debian | `ping 10.Y.1.20`                   | ❌ ÉCHEC (normal)        |       |
+| Logs de filtrage visibles      | Interface web SNS                  | Logs affichés            |       |
+
+---
+
+### ✅ Critères de validation de la Phase 1
+
+Avant de passer à la Phase 2, assurez-vous que :
+
+- [ ] Vous pouvez vous connecter à l'interface web du SNS Serveur
+- [ ] Les deux interfaces réseau (out et in) sont UP
+- [ ] Le serveur Debian peut pinguer Internet (8.8.8.8)
+- [ ] Le serveur Debian peut résoudre des noms de domaine
+- [ ] Les règles de filtrage sont créées et fonctionnelles
+- [ ] Le NAT est configuré et opérationnel
+- [ ] Vous voyez les logs de connexions dans l'interface
+- [ ] Le Client VPN **ne peut toujours PAS** accéder au serveur Debian (c'est normal !)
+
+:::tip[Checkpoint enseignant]
+👨‍🏫 Avant de continuer, faites valider votre configuration par l'enseignant.
+Montrez-lui :
+1. L'interface web du SNS
+2. Les règles de filtrage créées
+3. Un ping réussi depuis le serveur Debian vers Internet
+4. Un ping échoué depuis le Client VPN vers le serveur Debian
+:::
+
+---
+
+## 🎯 Résumé de la Phase 1
+
+Vous avez maintenant :
+
+- ✅ Un firewall Stormshield accessible via interface web
+- ✅ Des règles de filtrage de base configurées
+- ✅ Un NAT fonctionnel pour le réseau interne
+- ✅ Un serveur Debian qui peut accéder à Internet
+- ✅ Un client VPN qui ne peut toujours pas accéder aux ressources internes (problème à résoudre avec le VPN !)
+
+**Prochaine étape** : Phase 2 - Configuration de l'annuaire LDAP interne et création des utilisateurs pour l'authentification VPN
+
+---
+
