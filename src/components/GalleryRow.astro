@@ -1,0 +1,129 @@
+---
+/**
+ * GalleryRow.astro
+ * Rangée de miniatures (wrap), zoom + navigation (GLightbox).
+ * Utilise src/data/images.manifest.json pour cibler AVIF/WebP/fallback.
+ *
+ * Props:
+ * - images: { src: string; alt?: string; caption?: string }[]
+ * - group?: string
+ * - thumbHeight?: number (px) — utilisé si aucune thumb n’existe
+ * - gap?: string
+ */
+
+import 'glightbox/dist/css/glightbox.css';
+
+interface ImgItem {
+  src: string;      // ex: "/images/win/etape1.png" (JPG/PNG original)
+  alt?: string;
+  caption?: string;
+}
+
+const {
+  images = [],
+  group = 'gallery-row',
+  thumbHeight = 120,
+  gap = '0.5rem',
+} = Astro.props as {
+  images: ImgItem[];
+  group?: string;
+  thumbHeight?: number;
+  gap?: string;
+};
+
+// Manifest généré par tools/build-images.mjs
+let manifest: Record<string, {
+  full: { avif: string | null; webp: string | null; fallback: string };
+  thumb: { avif: string | null; webp: string | null; fallback: string | null };
+}> = {};
+try {
+  manifest = (await import('../data/images.manifest.json')).default;
+} catch {
+  manifest = {};
+}
+
+function resolve(item: ImgItem) {
+  const entry = manifest[item.src];
+  if (!entry) {
+    // Pas dans le manifest (ex: source WebP ou chemin erroné) → fallback simple
+    return {
+      full: { avif: null, webp: null, fallback: item.src },
+      thumb: { avif: null, webp: null, fallback: null },
+      alt: item.alt ?? '',
+      caption: item.caption ?? ''
+    };
+  }
+  return {
+    full: entry.full,
+    thumb: entry.thumb,
+    alt: item.alt ?? '',
+    caption: item.caption ?? ''
+  };
+}
+
+const resolved = images.map(resolve);
+---
+
+<div class="gallery-row" style={`--gap:${gap}; --thumb-h:${thumbHeight}px;`}>
+  {resolved.map((img) => (
+    <a
+      class="glx-item"
+      href={img.full.avif ?? img.full.webp ?? img.full.fallback}
+      data-gallery={group}
+      data-title={img.caption}
+      title={img.caption || img.alt}
+    >
+      <picture>
+        {img.thumb.avif && <source srcset={img.thumb.avif} type="image/avif" />}
+        {img.thumb.webp && <source srcset={img.thumb.webp} type="image/webp" />}
+        <img
+          src={img.thumb.fallback ?? img.full.webp ?? img.full.fallback}
+          alt={img.alt}
+          loading="lazy"
+          decoding="async"
+          style={!img.thumb.avif && !img.thumb.webp && !img.thumb.fallback
+            ? `height: var(--thumb-h, 120px); width: auto;`
+            : undefined}
+        />
+      </picture>
+    </a>
+  ))}
+</div>
+
+<style>
+  .gallery-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--gap, 0.5rem);
+    align-items: flex-start;
+  }
+  .gallery-row .glx-item {
+    display: inline-flex;
+    text-decoration: none;
+    border: 0;
+    outline: none;
+  }
+  .gallery-row img {
+    height: var(--thumb-h, 120px);
+    width: auto;
+    max-width: 100%;
+    border-radius: 8px;
+    object-fit: cover;
+    display: block;
+    cursor: zoom-in;
+  }
+  .gallery-row .glx-item:focus-visible img {
+    outline: 3px solid currentColor;
+    outline-offset: 2px;
+  }
+</style>
+
+<script client:load>
+  import GLightbox from 'glightbox';
+  GLightbox({
+    selector: `a.glx-item[data-gallery="${{group}}"]`,
+    touchNavigation: true,
+    loop: false,
+    zoomable: true
+  });
+</script>

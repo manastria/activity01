@@ -1,0 +1,52 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Select the branch to deploy"
+        required: true
+        default: "main"
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref }}
+      - name: Install, build, and upload
+        uses: withastro/action@v4
+        # Optional inputs:
+        #   node-version: 22
+        #   package-manager: npm@latest
+        #   path: .
+        # If deploying to a project subpath, set site/base in astro.config.mjs
+        # and ensure GitHub Pages is enabled in repo settings.
+        # For custom domains, configure CNAME in the repo settings.
+        # See: https://docs.astro.build/en/guides/deploy/github/
+        # This action will upload the dist/ artifact for deploy-pages.
+        # No extra steps needed.
+        # (Leave commented values as examples)
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

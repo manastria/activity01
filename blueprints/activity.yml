@@ -1,0 +1,9 @@
+# Exemple de configuration YAML pour créer une activité
+slug: a01-intro-html
+title: "A01 · Introduction HTML"
+description: "Découvrir la structure minimale d'une page HTML et les bonnes pratiques de base."
+level: "BTS SIO 1"
+duration: "1h30"
+tags: ["html", "intro"]
+status: "draft"
+order: 1

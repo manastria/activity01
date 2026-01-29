@@ -1,0 +1,11 @@
+{
+    "files.exclude": {
+        "**/.astro": true,
+        "**/node_modules": true
+    },
+    "path-intellisense.mappings": {
+        "/": "${workspaceFolder}/public"
+    },
+    "pasteImage.path": "${projectRoot}/public/images/activities/${currentFileNameNoExt}",
+    "pasteImage.insertPattern": "/images/activities/${currentFileNameNoExt}/${fileName}"
+}

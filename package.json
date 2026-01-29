@@ -1,0 +1,28 @@
+{
+  "name": "starlight-activities-template",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18.20.8"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "new": "node scripts/new-activity.mjs",
+    "images:build": "node tools/build-images.mjs",
+    "images:watch": "node tools/build-images.mjs --watch"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.35.2",
+    "astro": "^5.8.0",
+    "yaml": "^2.5.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "fast-glob": "^3.3.3",
+    "mkdirp": "^3.0.1",
+    "sharp": "^0.34.4"
+  }
+}

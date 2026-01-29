@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Astro build output
+dist/
+.cache/
+.output/
+.astro/
+
+# Editor
+#.vscode/
+#.idea/

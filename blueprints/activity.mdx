@@ -1,0 +1,40 @@
+---
+title: "{TITLE}"
+description: "{DESCRIPTION}"
+sidebar:
+  label: "{SIDEBAR_LABEL}"
+  order: {ORDER}
+  # hidden: true
+status: "{STATUS}"
+level: "{LEVEL}"
+duration: "{DURATION}"
+tags: [{TAGS}]
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+# {TITLE}
+
+> Objectifs pédagogiques
+>
+> - …
+
+## Prérequis
+- …
+
+## Consignes
+1. …
+2. …
+3. …
+
+## Ressources
+<CardGrid>
+  <Card title="Support de cours" href="/index" />
+</CardGrid>
+
+## Évaluation
+- Critères : …
+
+---
+
+Dernière mise à jour : {DATE}.
