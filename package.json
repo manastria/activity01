@@ -7,7 +7,7 @@
     "node": ">=18.20.8"
   },
   "scripts": {
-    "dev": "astro dev",
+    "dev": "astro dev --host",
     "build": "astro build",
     "preview": "astro preview",
     "new": "node scripts/new-activity.mjs",
