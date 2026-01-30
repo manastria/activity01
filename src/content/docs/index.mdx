@@ -4,12 +4,17 @@ description: "Activités pédagogiques — BTS SIO SISR"
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
+import { LinkButton } from '@astrojs/starlight/components';
 
 # BTS SIO — Activités SISR
 
 Ce site regroupe les activités prêtes à l’emploi. Utilisez la barre latérale pour parcourir par thèmes.
 
 <CardGrid>
+  <Card title="ntopng" >
+    <p>Analyse de trafic réseau avec ntopng</p>
+    <LinkButton href="/activities/ntopng/">Voir l’activité</LinkButton>
+  </Card>
   <Card title="Toutes les activités" href="/activities/" />
   <Card title="Commencer ici (méthode)" href="/methodologie/" />
   <Card title="Critères d’évaluation" href="/evaluation/" />
