@@ -1,0 +1,238 @@
+---
+title: "Remise à zéro d’un pare-feu SNS EVA1 (Stormshield) dans VirtualBox"
+description: "Procédure guidée pour réinitialiser une VM SNS EVA1, simplifier l’accès initial (DHCP, suppression du bridge) et préparer la configuration via l’interface web, avec points de sécurité et aide-mémoire."
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+## Objectifs pédagogiques
+
+À l’issue du TP, vous serez capable de :
+
+- Importer une appliance au format _OVA_ (_Open Virtual Appliance_) dans VirtualBox.
+- Démarrer et accéder à la console d’une _VM_ (_Virtual Machine_).
+- Lancer une remise à zéro « usine » avec une commande en _CLI_ (_Command-Line Interface_, interface en ligne de commande).
+- Réaliser la configuration initiale (clavier, mot de passe, interfaces en _DHCP_ (_Dynamic Host Configuration Protocol_, attribution automatique d’adresse IP)).
+- Comprendre les compromis de sécurité acceptables en TP, mais proscrits en production.
+
+---
+
+## Environnement de travail
+
+### Fichiers et ressources
+
+- **Fichier d’import** : `CSNx-v4.3-FW-DEBIANS.ova` (Stormshield Academy)
+  Contient 3 machines virtuelles regroupées dans VirtualBox sous **« OVA_virtual_lab »**.
+
+### Machines virtuelles incluses
+
+- **SNS_EVA1_V4.3** : pare-feu SNS EVA1 (cible du TP)
+- **Debian-Training-Webmail** : serveur (ex. services associés / _webmail_)
+- **Graphical_client** : client graphique
+
+### Pré-requis
+
+- VirtualBox installé sur votre poste.
+- Connaissances de base : adresse IP, réseau, passerelle, notion de service.
+
+[IMAGE : Groupe « OVA_virtual_lab » dans VirtualBox avec les 3 VMs visibles]
+
+---
+
+## Vue d’ensemble de la stratégie
+
+L’objectif de la remise à zéro est, dans un premier temps, de **simplifier l’accès** :
+
+- **Supprimer le _bridge_** (liaison directe avec le réseau réel) pour éviter les effets de bord.
+- Mettre les interfaces en _DHCP_ (ou adresses fixes simples) pour faciliter la prise en main via l’interface web.
+
+:::caution
+**Mise en garde — compromis de sécurité en TP**
+
+Les choix suivants peuvent être acceptés en TP (environnement isolé, machines éphémères), mais sont proscrits en production :
+
+- identifiants par défaut (« admin/admin »),
+- mot de passe faible ou partagé (« netlab123 »),
+- administration autorisée sur une interface exposée (« OUT »),
+- dépendance à un _DHCP_ non maîtrisé.
+
+**Risques en production** : compromission du pare-feu, prise de contrôle à distance, exposition de l’administration sur un réseau non fiable, interception ou détournement de configuration, perte de traçabilité.
+:::
+
+---
+
+## Procédure détaillée
+
+<Steps>
+1. **Importer l’appliance _OVA_ dans VirtualBox**
+
+   1. Dans VirtualBox, importer le fichier `CSNx-v4.3-FW-DEBIANS.ova`.
+   2. Vérifier que les 3 VMs apparaissent dans le groupe **« OVA_virtual_lab »**.
+
+   [IMAGE : Assistant d’import VirtualBox montrant le fichier .ova sélectionné]
+
+2. **Ajuster les ressources matérielles de la VM SNS**
+
+   Sur la VM **SNS_EVA1_V4.3** :
+
+   - Mémoire : **2048 Mo de _RAM_** (_Random Access Memory_, mémoire vive)
+   - Processeur : **2 _CPU_** (_Central Processing Unit_, processeur)
+
+   [IMAGE : Paramètres VirtualBox → Système → Mémoire à 2048 Mo et Processeur à 2]
+
+   :::caution
+   **Mise en garde — dimensionnement en production**
+
+   En production, les ressources (CPU/RAM) se dimensionnent selon le débit attendu, le nombre de règles, l’inspection (IPS, proxy, etc.) et la journalisation.
+   Sous-dimensionner peut entraîner des pertes de performance et des dysfonctionnements (latence, chute de débit, services instables).
+   :::
+
+3. **Démarrer et se connecter à la console en administrateur**
+
+   1. Démarrer **SNS_EVA1_V4.3**.
+   2. Accéder à la console.
+   3. Se connecter avec les identifiants par défaut : « admin/admin ».
+
+   [IMAGE : Console SNS EVA1 au démarrage, invite de connexion]
+
+   :::caution
+   **Mise en garde — identifiants par défaut**
+
+   En production, laisser « admin/admin » est une vulnérabilité critique : un attaquant peut prendre le contrôle immédiatement.
+   En TP, c’est toléré uniquement si :
+
+   - le réseau est isolé,
+   - l’accès est limité (pas d’exposition Internet),
+   - la réinitialisation est fréquente.
+   :::
+
+4. **Lancer la remise à zéro « usine » (commande `defaultconfig`)**
+
+   Dans la console, exécuter :
+
+   ```bash
+   defaultconfig -f -r -p -c -L
+   ````
+
+   [IMAGE : Saisie de la commande defaultconfig dans la console]
+
+   **Détail de la commande**
+
+   | Élément         | Rôle                                                                                                |
+   | --------------- | --------------------------------------------------------------------------------------------------- |
+   | `defaultconfig` | Outil de remise à zéro de la configuration du pare-feu (retour à un état initial).                  |
+   | `-f`            | Force l’opération (évite certaines confirmations / protège contre les annulations involontaires).   |
+   | `-r`            | Redémarre la machine après l’opération.                                                             |
+   | `-p`            | Réinitialise le mot de passe (utile si mot de passe inconnu ou à remettre à un état contrôlé).      |
+   | `-c`            | Ne conserve pas les fichiers de sauvegarde « .old » (évite l’accumulation de fichiers historiques). |
+   | `-L`            | Supprime les journaux (*logs*) pour repartir proprement.                                            |
+
+5. **Répondre aux questions de configuration initiale**
+
+   Après redémarrage, le système pose des questions d’initialisation.
+
+   **Choix du clavier**
+
+   * Sélectionner « fr » : **choisir 4** (touche « 4 » sans Maj).
+
+   [IMAGE : Écran de sélection du clavier avec l’option fr correspondante à 4]
+
+   **Définir un mot de passe**
+
+   * Pour le TP : saisir « netlab123 » puis confirmer.
+
+   [IMAGE : Écran de définition du mot de passe (sans révéler le mot de passe sur la capture)]
+
+6. **Configurer les interfaces réseau en *DHCP* pour le premier démarrage**
+
+   Objectif : **ne pas bloquer la suite** et permettre un accès rapide à l’interface web.
+
+   * Pour ce premier démarrage, **laisser les interfaces en *DHCP***.
+   * Répondre « N » ou appuyer sur Entrée, même si aucun serveur *DHCP* n’est présent sur le réseau.
+
+   [IMAGE : Écran de configuration réseau demandant le mode DHCP / statique]
+
+7. **Autoriser l’administration sur l’interface « OUT » (uniquement pour le TP)**
+
+   * Répondre « Y » à la question autorisant l’administration sur l’interface « OUT ».
+
+   [IMAGE : Question « Autoriser l’administration sur l’interface OUT ? (Y/N) »]
+
+8. **Vérifier la prise en compte (clavier et accès)**
+
+   1. Tester la saisie au clavier (accents, chiffres, etc.).
+   2. Se reconnecter avec votre login/mot de passe pour valider que tout est cohérent.
+
+   [IMAGE : Écran de connexion après configuration initiale]
+
+</Steps>
+
+---
+
+## Points d’attention et erreurs fréquentes
+
+* **Confusion clavier** : les chiffres peuvent être mal saisis si le clavier n’est pas « fr ».
+* **Pas de *DHCP*** : si le réseau de TP n’a pas de serveur *DHCP*, vous ne pourrez pas accéder à l’interface web tant qu’une adresse IP fixe n’aura pas été définie.
+* **Administration sur OUT** : pratique pour démarrer, mais à désactiver dès que possible si l’environnement devient moins isolé.
+
+---
+
+## Annexe — Aide-mémoire des commandes
+
+### `defaultconfig`
+
+Commande de remise à zéro.
+
+**Exemple (TP)**
+
+```bash
+defaultconfig -f -r -p -c -L
+```
+
+**Options courantes (rappel)**
+
+| Option | Rôle                                                           |
+| ------ | -------------------------------------------------------------- |
+| `-f`   | Force l’opération                                              |
+| `-r`   | Redémarre après exécution                                      |
+| `-D`   | Restaure uniquement la partition de données                    |
+| `-p`   | Réinitialise les mots de passe                                 |
+| `-k`   | Conserve certains éléments (données d’auto-update, clés, etc.) |
+| `-l`   | Conserve le fichier de configuration réseau                    |
+| `-c`   | Pas de fichiers « .old »                                       |
+| `-L`   | Supprime les journaux                                          |
+
+### `halt`
+
+Arrête la machine.
+
+| Élément | Rôle                           |
+| ------- | ------------------------------ |
+| `halt`  | Extinction du système (arrêt). |
+
+### `reboot`
+
+Redémarre la machine.
+
+| Élément  | Rôle                    |
+| -------- | ----------------------- |
+| `reboot` | Redémarrage du système. |
+
+### `portinfo`
+
+Affiche un résumé des paramètres des interfaces (pratique pour vérifier rapidement l’état des ports).
+
+| Élément    | Rôle                                                                           |
+| ---------- | ------------------------------------------------------------------------------ |
+| `portinfo` | Affiche les informations principales des interfaces réseau (état, paramètres). |
+
+[IMAGE : Exemple de sortie de portinfo affichant les interfaces]
+
+---
+
+## Ce que vous devez retenir
+
+* La remise à zéro avec `defaultconfig` permet de repartir d’un état propre et reproductible.
+* Les facilités de TP (mots de passe simples, administration sur OUT, *DHCP*) doivent être vues comme des **exceptions encadrées**.
+* En production, on privilégie : réseau d’administration dédié, authentification forte, configuration IP maîtrisée, et conservation des journaux.
+

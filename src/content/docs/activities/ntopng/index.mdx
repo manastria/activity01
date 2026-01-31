@@ -31,23 +31,29 @@ description: Activité pratique de déploiement et configuration d'une solution 
 
 **Configuration requise par étudiant (1 machine physique) :**
 ```
-Internet simulé (OUT: 172.25.0.0/16)
-         |
-    [SNS EVA1]
-    OUT: 172.25.X.254
-    IN:  192.168.X.254
-         |
-         | NetFlow (UDP 2055)
-         |
-    [Réseau LAN]──────────────────────────> [VM ntopng]
-    192.168.X.0/24                          192.168.X.50
-         |
-    +----+----+
-    |         |
-[VM Client 1] [VM Client 2]
-(Xubuntu)     (Xubuntu)
-192.168.X.10  192.168.X.11
+                    Internet (réseau du labo 172.25.0.0/16)
+                                   |
+                              [SNS EVA1]
+                         OUT: 172.25.X.254/16
+                         IN:  192.168.X.254/24
+                                   |
+                    +--------------+---------------+
+                    |                              |
+              [Réseau LAN]                   Export IPFIX
+           192.168.X.0/24                    UDP 4739
+                    |                              |
+        +-----------+-----------+                  ↓
+        |           |           |            [VM ntopng]
+   [VM Client1] [VM Client2]  ...        192.168.X.50
+   192.168.X.10 192.168.X.11              - nProbe (collecte IPFIX)
+                                          - ntopng (analyse web)
 ```
+
+**Flux de données :**
+1. Les VMs clientes → SNS → Internet (trafic normal)
+2. SNS envoie une **copie** des métadonnées de flux → nProbe (IPFIX)
+3. nProbe → ntopng (via ZMQ)
+4. L'administrateur consulte ntopng via navigateur web
 
 **Machines virtuelles nécessaires (sur 1 seul PC) :**
 
@@ -89,6 +95,18 @@ Internet simulé (OUT: 172.25.0.0/16)
 3. Configuration initiale du SNS EVA1 avec la configuration IP suivante :
    - OUT : 172.25.X.254/16 (simule la connexion Internet)
    - IN : 192.168.X.254/24 (réseau LAN interne)
+4. Filtrage et NAT
+   - Politique « PASS ALL » pour l'instant
+   - Activer le NAT sortant
+
+5. Création de l'objet collecteur ntopng :
+   - Allez dans CONFIGURATION → OBJETS → OBJETS RÉSEAU
+   - Cliquez sur Nouveau → Machine
+   - Remplissez :
+      - Nom : ntopng_collector
+      - Type : Machine
+      - Adresse IPv4 : 192.168.X.50
+   - Cliquez sur Créer
 
 ## PHASE 1 : Installation et configuration de ntopng
 
@@ -102,90 +120,151 @@ Internet simulé (OUT: 172.25.0.0/16)
    - Réseau : Carte 1 en "Internal Network" (nom : `LAN_IN_X` où X = votre numéro d'étudiant)
 
 3. Démarrez la VM et connectez-vous (identifiants fournis par l'enseignant)
-4. Configurez l'adresse IP de la VM : `192.168.X.50/24` avec comme passerelle `192.168.X.254`
+4. Configurez l'adresse IP de la VM : `192.168.X.50/24` avec comme passerelle et DNS `192.168.X.254`
 
 :::tip[Checkpoint 1]
-La VM ntopng doit pouvoir joindre la passerelle SNS (192.168.X.254). Testez avec `ping`.
+- La VM ntopng doit pouvoir joindre la passerelle SNS (192.168.X.254). Testez avec `ping`.
+- La VM ntopng doit pouvoir joindre une machine sur internet (`ping`) et résoudre un nom de domaine publique (`dig`).
 :::
+
+
 
 ### Étape 1.2 : Installation de ntopng
 
-:::note[Pourquoi ntopng ?]
-ntopng est un outil open-source de monitoring réseau qui permet d'analyser en temps réel le trafic réseau. Contrairement à la simple consultation des logs du firewall, ntopng offre une vue graphique, des statistiques détaillées et une analyse comportementale du réseau.
 :::
+ ntopng est un outil open-source de monitoring réseau qui permet d'analyser en temps réel le trafic réseau. Contrairement à la simple consultation des logs du firewall, ntopng offre une vue graphique, des statistiques détaillées et une analyse comportementale du réseau.
+ :::
 
 #### Préparation du système
 
 1. Mettez à jour le système et installez les dépendances :
-```bash
+
+```
 sudo apt update && sudo apt upgrade -y
 sudo apt install wget gnupg software-properties-common -y
 ```
 
 #### Ajout du dépôt officiel ntop
 
-2. Téléchargez et installez le paquet de configuration du dépôt ntop :
-```bash
+1. Téléchargez et installez le paquet de configuration du dépôt ntop :
+
+```
 wget https://packages.ntop.org/apt/bookworm/all/apt-ntop.deb
 sudo dpkg -i apt-ntop.deb
 ```
 
-3. Mettez à jour la liste des paquets :
-```bash
+1. Mettez à jour la liste des paquets :
+
+```
 sudo apt update
 ```
 
-#### Installation de ntopng
+#### Installation de ntopng et nprobe
 
-4. Installez ntopng et ses dépendances (Redis sera installé automatiquement) :
-```bash
-sudo apt install ntopng ntopng-data -y
+1. Installez ntopng, nProbe et leurs dépendances (Redis sera installé automatiquement) :
+
 ```
+sudo apt install ntopng ntopng-data nprobe -y
+```
+
+:::
+ Dans la version Community, ntopng ne collecte pas directement les flux NetFlow/IPFIX reçus en UDP.
+ nProbe joue le rôle de **collecteur de flux** (UDP 4739 par exemple) et les expose ensuite à ntopng via ZMQ.
+ :::
+
+#### Sauvegarde des fichiers de configuration
+
+1. Avant toute modification, sauvegardez les fichiers de configuration :
+
+```
+sudo cp -a /etc/ntopng/ntopng.conf /etc/ntopng/ntopng.conf.bak.$(date +%F)
+sudo cp -a /etc/nprobe/nprobe.conf /etc/nprobe/nprobe.conf.bak.$(date +%F)
+```
+
+#### Configuration de nProbe (collecte IPFIX/NetFlow)
+
+1. Éditez le fichier de configuration de nProbe :
+
+```
+sudo nano /etc/nprobe/nprobe.conf
+```
+
+Remplacez le contenu par une configuration minimale :
+
+```
+# Collecte des flux reçus du firewall (IPFIX/NetFlow) sur UDP/4739
+--collector-port=4739
+
+# Exposition des flux vers ntopng via ZMQ (ntopng se connecte sur ce port)
+--zmq=tcp://*:5556
+
+# Template recommandé pour une bonne compatibilité avec ntopng
+-T=@NTOPNG@
+```
+
+:::
+ Dans ce TP, le firewall SNS exporte les flux en IPFIX vers le port UDP **4739**.
+ Si vous utilisez un autre port (ex. 2055), adaptez `--collector-port` et la règle de filtrage côté SNS.
+ :::
 
 #### Configuration de ntopng
 
-5. Éditez le fichier de configuration :
-```bash
+1. Éditez le fichier de configuration :
+
+```
 sudo nano /etc/ntopng/ntopng.conf
 ```
 
 Ajoutez/modifiez les lignes suivantes :
-```text
--i=none
+
+```
+-G=/var/run/ntopng.pid
 --http-port=3000
 --community
 --disable-login=1
+# Interface de flux fournie par nProbe (ZMQ)
+-i=tcp://127.0.0.1:5556
 ```
 
 **Explications :**
 
-- `-i=none` : ntopng n'écoute pas directement une interface mais attend des flux NetFlow
-- `--http-port=3000` : interface web accessible sur le port 3000
-- `--community` : version communautaire (gratuite)
-- `--disable-login=1` : désactive l'authentification (pour simplifier le TP)
+- `--collector-port=4739` (nProbe) : nProbe écoute les flux IPFIX/NetFlow envoyés par le firewall sur le port UDP 4739.
+- `--zmq=tcp://*:5556` (nProbe) : nProbe met à disposition une interface ZMQ.
+- `-i=tcp://127.0.0.1:5556` (ntopng) : ntopng se connecte à nProbe pour afficher les flux.
 
-:::caution[Attention]
-Dans un environnement de production, il ne faut **jamais** désactiver l'authentification. Cette option n'est utilisée ici que dans un cadre pédagogique sur un réseau isolé.
 :::
+ Dans un environnement de production, il ne faut **jamais** désactiver l'authentification. Cette option n'est utilisée ici que dans un cadre pédagogique sur un réseau isolé.
+ :::
 
 #### Démarrage des services
 
-6. Activez et démarrez les services Redis et ntopng :
-```bash
+1. Activez et démarrez les services Redis, nProbe et ntopng :
+
+```
 sudo systemctl enable redis-server
 sudo systemctl start redis-server
+
+sudo systemctl enable nprobe
+sudo systemctl start nprobe
+
 sudo systemctl enable ntopng
 sudo systemctl start ntopng
 ```
 
-7. Vérifiez le statut du service :
-```bash
-sudo systemctl status ntopng
+1. Vérifiez le statut des services :
+
+```
+sudo systemctl status redis-server --no-pager
+sudo systemctl status nprobe --no-pager
+sudo systemctl status ntopng --no-pager
 ```
 
-:::tip[Checkpoint 2]
-Le service ntopng doit être actif (running). Prenez une capture d'écran du résultat de `systemctl status ntopng`.
 :::
+ Le service ntopng doit être actif (running). Prenez une capture d'écran du résultat de `systemctl status ntopng`.
+ :::
+
+
+
 
 ### Étape 1.3 : Accès à l'interface web
 
@@ -202,89 +281,177 @@ Prenez une capture d'écran de la page d'accueil de ntopng (qui sera encore vide
 ### Étape 2.1 : Activation de NetFlow sur SNS
 
 :::note[Qu'est-ce que NetFlow ?]
-NetFlow est un protocole développé par Cisco qui permet d'exporter des informations sur les flux réseau vers un collecteur (ici, ntopng). Au lieu d'analyser chaque paquet, NetFlow envoie des résumés de connexions (qui parle à qui, sur quel port, combien de données, etc.).
+ NetFlow (Cisco) et IPFIX (standard IETF) permettent d'exporter des **informations sur les flux réseau** vers un collecteur (ici, nProbe). Au lieu d'analyser chaque paquet, le firewall envoie des résumés de connexions (qui parle à qui, sur quel port, combien de données, etc.).
 :::
 
 1. Connectez-vous à l'interface web du SNS EVA1 depuis une VM cliente : `https://192.168.X.254`
-2. Allez dans **CONFIGURATION → SYSTÈME → CONFIGURATION**
-3. Dans l'onglet **NetFlow**, activez l'export :
-   - État : **Activé**
-   - Version NetFlow : **v5** (la plus compatible)
-   - Collecteur 1 :
-     - Adresse IP : `192.168.X.50`
-     - Port : `2055` (port par défaut NetFlow)
-   - Interfaces à exporter : Cochez **"out"** et **"in"** (pour capturer le trafic entrant et sortant)
-
+2. Naviguez vers CONFIGURATION → NOTIFICATIONS → TRACES - SYSLOG - IPFIX
+3. Cliquez sur l'onglet IPFIX
+3. Configuration IPFIX
+    - État : **Activé**
+    - Version : **IPFIX** (recommandé pour ce TP)
+    - Collecteur 1 :
+    - Adresse IP : `192.168.X.50`
+    - Port : `4739` (port utilisé par nProbe dans ce TP)
 4. Cliquez sur **Appliquer**
 
 :::tip[Checkpoint 4]
-Prenez une capture d'écran de la configuration NetFlow.
+Prenez une capture d'écran de la configuration d'export de flux (NetFlow/IPFIX).
 :::
 
-### Étape 2.2 : Création d'une règle de filtrage pour NetFlow
+### Étape 2.2 : Activation de l’exportation des flux sur le SNS
 
-Pour que SNS puisse envoyer les données à ntopng, il faut autoriser ce flux dans le firewall.
+Pour que le *SNS* (*Stormshield Network Security*) alimente `ntopng`, la configuration du collecteur (adresse IP et port) est une condition nécessaire, mais insuffisante. L’exportation des données doit être activée manuellement sur les règles de filtrage pertinentes.
 
-1. Allez dans **CONFIGURATION → POLITIQUE DE SÉCURITÉ → FILTRAGE ET NAT**
-2. Créez une nouvelle règle (avant la règle de blocage par défaut) :
-   - Nom : `Autoriser_NetFlow_vers_ntopng`
-   - Source : `Firewall_in`
-   - Destination : Créez un objet "ntopng_server" avec l'IP `192.168.X.50`
-   - Service : `UDP 2055`
-   - Action : **PASS**
-   - Logs : Niveau normal
+### La manipulation
 
-3. Cliquez sur **Appliquer** puis **Activer**
+Dans la politique de sécurité du *firewall* (pare-feu), pour chaque règle devant être supervisée :
 
-:::tip[Checkpoint 5]
-Vérifiez dans **MONITORING → LOGS** que des connexions NetFlow apparaissent vers `192.168.X.50:2055`.
+1. Éditez la règle de filtrage.
+2. Allez dans l'onglet **« Action »**, puis dans la section **« Configuration avancée »**.
+3. Cochez la case **« Collecteur IPFIX »** (*Internet Protocol Flow Information Export*).
+4. **Appliquez** la politique de sécurité pour rendre la modification effective.
+
+### Pourquoi cette étape est-elle indispensable ?
+
+* **Sélectivité des données :** Le *SNS* n'exporte pas l'intégralité du trafic par défaut afin de ne pas saturer le lien réseau vers le collecteur avec des flux inutiles (ex: *broadcast* - diffusion, flux techniques internes).
+* **Optimisation des performances :** La génération de paquets *IPFIX* consomme des ressources *CPU* (*Central Processing Unit*). En activant l'option uniquement sur des règles spécifiques (ex: accès Internet, zones sensibles), on préserve les performances du moteur de filtrage.
+* **Génération des métadonnées :** C'est cette case qui ordonne au pare-feu d'extraire les *metadata* (métadonnées) du flux (IP source/destination, ports, drapeaux *TCP* - *Transmission Control Protocol*, volume) pour les encapsuler dans un datagramme *UDP* (*User Datagram Protocol*) à destination de `ntopng`.
+
+> [!IMPORTANT]
+> **Rappel pédagogique :** Si un flux traverse le pare-feu mais n'apparaît pas dans `ntopng`, le premier réflexe est de vérifier si la case « Collecteur IPFIX » est bien cochée dans l'*ACL* (*Access Control List*) correspondante.
+
+#### Vérification de l'installation
+
+7. Vérifiez que nProbe et ntopng sont bien installés :
+```bash
+# Vérifier les versions installées
+nprobe --version
+ntopng --version
+
+# Vérifier que nProbe écoute sur le port 4739 (après démarrage)
+sudo ss -ulnp | grep 4739
+
+# Vérifier que nProbe expose ZMQ sur le port 5556
+sudo ss -ltnp | grep 5556
+
+# Vérifier que ntopng écoute sur le port 3000
+sudo ss -ltnp | grep 3000
+```
+
+**Résultats attendus :**
+```
+# nProbe écoute UDP 4739 pour collecter IPFIX
+UNCONN 0 0 0.0.0.0:4739 0.0.0.0:* users:(("nprobe",pid=XXXX,fd=X))
+
+# nProbe expose ZMQ sur TCP 5556
+LISTEN 0 128 0.0.0.0:5556 0.0.0.0:* users:(("nprobe",pid=XXXX,fd=X))
+
+# ntopng interface web sur TCP 3000
+LISTEN 0 128 0.0.0.0:3000 0.0.0.0:* users:(("ntopng",pid=XXXX,fd=X))
+```
+
+:::tip[Checkpoint 2bis]
+Si les trois ports sont bien en écoute, l'installation est correcte. Prenez une capture d'écran des résultats.
+:::
+
+:::note[nProbe Community vs Professional]
+**nProbe Community** (gratuit) est suffisant pour ce TP. Il permet de :
+- Collecter des flux IPFIX/NetFlow
+- Les transmettre à ntopng via ZMQ
+- Gérer les templates IPFIX basiques
+
+**nProbe Professional** (payant) offre des fonctionnalités avancées :
+- Export des flux vers plusieurs collecteurs
+- DPI (Deep Packet Inspection) pour identifier les applications chiffrées
+- Agrégation de flux multiples
+- Support de protocoles propriétaires
+
+Pour un usage en production, évaluez vos besoins avant de choisir la version.
 :::
 
 ## PHASE 3 : Génération de trafic et analyse
 
 ### Étape 3.1 : Génération de trafic varié
 
-**Objectif :** Simuler différents types d'utilisation réseau pour que ntopng ait des données à analyser.
+**Objectif :** Simuler différents types d'utilisation réseau pour que ntopng ait des données à analyser, en utilisant les ressources disponibles sur le réseau du laboratoire.
+
+:::caution[Attention à la bande passante]
+Le réseau du laboratoire est partagé par tous les étudiants. Évitez les téléchargements massifs simultanés qui satureraient la connexion Internet. Privilégiez les ressources locales (serveur du labo, torrents locaux).
+:::
 
 **Répartition des tâches sur les 2 VMs Xubuntu :**
 
 #### Sur VM Xubuntu Client 1 (192.168.X.10)
 
-**Navigation web classique (10 minutes) :**
-
-- Visitez plusieurs sites : sites d'actualités, Wikipedia, sites professionnels
-- Ouvrez plusieurs onglets simultanément
-- Téléchargez quelques fichiers PDF (5-10 Mo chacun)
-
-**Utilisation de services en ligne :**
-
+**Navigation web légère (10 minutes) :**
+- Visitez plusieurs sites : Wikipedia, sites d'actualités
+- Ouvrez 5-6 onglets simultanément
 - Consultez votre messagerie web (Gmail, Outlook.com)
-- Regardez une vidéo YouTube (2-3 minutes)
+- **Évitez** les téléchargements volumineux depuis Internet
 
-**Transferts de fichiers :**
+**Services locaux du laboratoire :**
+- Si un serveur FTP/HTTP est disponible sur le réseau du labo (`172.25.X.X`), téléchargez quelques fichiers de test (50-100 Mo)
+- Utilisez les services réseau mis à disposition par l'enseignant
 
-- Si un serveur FTP est disponible en DMZ, téléchargez un fichier volumineux
-- Sinon, téléchargez une distribution Linux ISO (Ubuntu/Debian)
+**Streaming vidéo modéré :**
+- Regardez **une seule** vidéo YouTube de 2-3 minutes en qualité standard (pas HD)
+- Ou utilisez un serveur de streaming local si disponible
 
 #### Sur VM Xubuntu Client 2 (192.168.X.11)
 
-**Streaming vidéo (15 minutes) :**
-
-- Lancez plusieurs vidéos YouTube en qualité HD
-- Utilisez des services de streaming (si accessible)
-
-**Téléchargements simultanés :**
-
-- Téléchargez plusieurs fichiers volumineux en même temps
-- Utilisez des sites de partage de fichiers
+**Téléchargement BitTorrent (local) :**
+- Connectez-vous au tracker BitTorrent du laboratoire (si disponible)
+- Téléchargez une distribution Linux hébergée localement (Ubuntu/Debian ISO)
+- **Ne pas** utiliser des torrents publics qui consommeraient trop de bande passante
 
 **Trafic DNS intensif :**
+- Naviguez sur de nombreux sites différents (Wikipedia, sites universitaires)
+- Utilisez `nslookup` pour faire des requêtes DNS variées :
+```bash
+for domain in wikipedia.org github.com stackoverflow.com gnu.org debian.org ubuntu.com; do
+  nslookup $domain
+  sleep 1
+done
+```
 
-- Naviguez sur de nombreux sites différents rapidement
-- Utilisez des outils comme `nslookup` pour faire des requêtes DNS variées
+**Accès aux serveurs du labo :**
+- Si un serveur web est disponible sur `172.25.X.X`, effectuez plusieurs requêtes HTTP
+- Testez les différents services réseau mis à disposition
+
+#### Utilisation des ressources communes
+
+**Serveur de simulation du laboratoire** (si configuré par l'enseignant) :
+
+Si un serveur Docker/VM est disponible sur le réseau du labo (`172.25.X.Y`), utilisez-le pour :
+- Télécharger des fichiers de test de tailles variées (1 Mo, 10 Mo, 50 Mo)
+- Tester différents protocoles (HTTP, FTP, SSH)
+- Générer du trafic contrôlé sans saturer la connexion Internet
+
+**Commandes de test depuis les VMs clientes :**
+```bash
+# Test HTTP vers serveur du labo (adapter l'IP)
+for i in {1..20}; do
+  curl -o /dev/null http://172.25.X.Y/testfile_10M.bin
+done
+
+# Test FTP vers serveur du labo
+wget ftp://172.25.X.Y/fichier_test.iso
+
+# Génération de trafic DNS
+for i in {1..50}; do
+  dig @172.25.254.15 site$i.example.com
+done
+```
 
 :::tip[Checkpoint 6]
-Laissez tourner ce trafic pendant 15-20 minutes pour accumuler des données.
+Laissez tourner ce trafic pendant **15-20 minutes** pour accumuler suffisamment de données.
+
+**Bonnes pratiques :**
+- Évitez les téléchargements simultanés de tous les étudiants
+- Si le réseau devient lent, réduisez votre trafic
+- Privilégiez les ressources locales du laboratoire
+- Alternez les activités entre les binômes
 :::
 
 ### Étape 3.2 : Analyse dans ntopng
@@ -489,3 +656,239 @@ Comparez les logs du firewall SNS avec les données ntopng :
 - Exportez les données ntopng au format CSV
 - Créez des graphiques dans LibreOffice Calc pour le rapport
 - Réfléchissez à une politique d'archivage des données de supervision
+
+
+## Annexe : Vérifications et dépannage (enseignant)
+
+Cette annexe regroupe les commandes utiles pour diagnostiquer rapidement un problème de collecte de flux.
+
+### 1) Statut des services
+
+```
+sudo systemctl status redis-server --no-pager
+sudo systemctl status nprobe --no-pager
+sudo systemctl status ntopng --no-pager
+```
+
+### 2) Logs (les erreurs de configuration sont souvent explicites)
+
+```
+sudo journalctl -u nprobe -n 200 --no-pager
+sudo journalctl -u ntopng -n 200 --no-pager
+```
+
+### 3) Vérifier les ports (écoute et connexions)
+
+```
+# nProbe doit écouter en UDP sur le port de collecte (ici 4739)
+sudo ss -lunp | grep 4739
+
+# nProbe doit exposer ZMQ (ici 5556) et ntopng doit pouvoir s'y connecter
+sudo ss -ltnp | grep 5556
+```
+
+### 4) Vérifier l'arrivée des flux côté Debian
+
+```
+# Voir si le firewall envoie bien des paquets vers le collecteur
+sudo tcpdump -ni any udp port 4739
+```
+
+### 5) Vérifier la cohérence configuration nProbe/ntopng
+
+```
+sudo grep -E "collector-port|zmq|@NTOPNG@" /etc/nprobe/nprobe.conf
+sudo grep -E "^-i=|--http-port|--community|--disable-login" /etc/ntopng/ntopng.conf
+```
+
+### 6) Symptômes fréquents
+
+- **Paquets visibles avec tcpdump, mais aucun trafic dans ntopng** :
+  - vérifier que nProbe écoute bien sur le bon port UDP (`ss -lunp | grep 4739`)
+  - vérifier que ntopng pointe sur le bon endpoint ZMQ (`-i=tcp://127.0.0.1:5556`)
+  - vérifier les logs nProbe/ntopng (erreur ZMQ, option inconnue, etc.)
+- **Interface ntopng vide (pas d'interface ZMQ)** :
+  - vérifier que nProbe expose bien ZMQ (`ss -ltnp | grep 5556`)
+  - vérifier un éventuel pare-feu local (rare sur VM de TP)
+
+### 7) Scénarios de dépannage courants
+
+#### Scénario A : nProbe ne démarre pas
+
+**Symptôme :** `sudo systemctl status nprobe` montre "failed"
+
+**Diagnostic :**
+```bash
+sudo journalctl -u nprobe -n 50 --no-pager
+```
+
+**Causes fréquentes :**
+- Port 4739 déjà utilisé par un autre processus
+- Erreur de syntaxe dans `/etc/nprobe/nprobe.conf`
+- Problème de permissions
+
+**Solution :**
+```bash
+# Vérifier si le port est occupé
+sudo ss -ulnp | grep 4739
+
+# Tester la configuration manuellement
+sudo nprobe --collector-port=4739 --zmq=tcp://*:5556 -T=@NTOPNG@
+# Si erreur → corriger la config
+```
+
+#### Scénario B : ntopng ne voit aucune interface ZMQ
+
+**Symptôme :** Interface ntopng vide, aucun trafic visible
+
+**Diagnostic :**
+```bash
+# Vérifier que nProbe expose bien ZMQ
+sudo ss -ltnp | grep 5556
+
+# Vérifier la config ntopng
+grep "^-i=" /etc/ntopng/ntopng.conf
+```
+
+**Causes fréquentes :**
+- nProbe n'a pas démarré correctement
+- Configuration ZMQ incorrecte dans ntopng.conf
+- Mauvaise syntaxe : `-i=tcp://127.0.0.1:5556` (correct) vs `-i=tcp://localhost:5556` (parfois problématique)
+
+**Solution :**
+```bash
+# Redémarrer dans l'ordre
+sudo systemctl restart nprobe
+sleep 5
+sudo systemctl restart ntopng
+```
+
+#### Scénario C : Flux IPFIX reçus mais pas affichés dans ntopng
+
+**Symptôme :** `tcpdump` montre des paquets UDP 4739, mais ntopng reste vide
+
+**Diagnostic :**
+```bash
+# Vérifier que nProbe reçoit et traite les flux
+sudo journalctl -u nprobe -f
+# On doit voir : "Received X flow packets"
+
+# Vérifier que ntopng se connecte à ZMQ
+sudo journalctl -u ntopng -f
+# On doit voir : "ZMQ interface tcp://127.0.0.1:5556"
+```
+
+**Causes fréquentes :**
+- Template IPFIX non reconnu par nProbe
+- Version incompatible nProbe/ntopng
+- Problème de décodage des flux
+
+**Solution :**
+```bash
+# Vérifier la version de nProbe et ntopng
+nprobe --version
+ntopng --version
+
+# Forcer le template NTOPNG dans nProbe
+sudo nano /etc/nprobe/nprobe.conf
+# S'assurer que -T=@NTOPNG@ est présent
+```
+
+## Annexe : Préparation du serveur de simulation (enseignant)
+
+Pour permettre aux étudiants de générer du trafic sans saturer la connexion Internet, vous pouvez déployer un serveur de test sur le réseau du laboratoire.
+
+### Option 1 : Serveur web simple avec Nginx (VM ou Docker)
+
+**VM Debian/Ubuntu sur le réseau du labo (ex: 172.25.100.50) :**
+```bash
+# Installation Nginx
+sudo apt update && sudo apt install nginx -y
+
+# Création de fichiers de test de différentes tailles
+cd /var/www/html
+sudo dd if=/dev/urandom of=testfile_1M.bin bs=1M count=1
+sudo dd if=/dev/urandom of=testfile_10M.bin bs=1M count=10
+sudo dd if=/dev/urandom of=testfile_50M.bin bs=1M count=50
+sudo dd if=/dev/urandom of=testfile_100M.bin bs=1M count=100
+
+# Page d'accueil simple
+echo "<html><body><h1>Serveur de test - Labo BTS SIO</h1>
+<ul>
+  <li><a href='testfile_1M.bin'>Fichier 1 Mo</a></li>
+  <li><a href='testfile_10M.bin'>Fichier 10 Mo</a></li>
+  <li><a href='testfile_50M.bin'>Fichier 50 Mo</a></li>
+  <li><a href='testfile_100M.bin'>Fichier 100 Mo</a></li>
+</ul></body></html>" | sudo tee /var/www/html/index.html
+```
+
+**Les étudiants pourront alors :**
+```bash
+# Télécharger depuis leurs VMs clientes
+wget http://172.25.100.50/testfile_10M.bin
+curl -o /dev/null http://172.25.100.50/testfile_50M.bin
+```
+
+### Option 2 : Serveur FTP
+```bash
+# Installation vsftpd
+sudo apt install vsftpd -y
+
+# Configuration basique
+sudo nano /etc/vsftpd.conf
+# Décommenter : anonymous_enable=YES
+
+# Créer des fichiers dans /srv/ftp
+sudo mkdir -p /srv/ftp
+cd /srv/ftp
+sudo dd if=/dev/urandom of=debian.iso bs=1M count=500
+```
+
+### Option 3 : Container Docker multi-services
+```bash
+# Docker Compose avec Nginx + FTP + serveur de fichiers
+version: '3'
+services:
+  webserver:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./files:/usr/share/nginx/html
+  ftpserver:
+    image: fauria/vsftpd
+    ports:
+      - "20:20"
+      - "21:21"
+      - "21100-21110:21100-21110"
+    environment:
+      FTP_USER: student
+      FTP_PASS: student
+      PASV_ADDRESS: 172.25.100.50
+```
+
+### Tracker BitTorrent local (recommandé)
+
+Utilisez le tracker BitTorrent déjà existant sur le réseau du labo avec des fichiers ISO Linux pré-seedés.
+
+**Avantages :**
+- Génère beaucoup de connexions simultanées (bon pour l'analyse ntopng)
+- Consomme la bande passante localement (pas sur Internet)
+- Simule du trafic P2P réaliste
+
+**Fichiers à proposer :**
+- Ubuntu 24.04 LTS (ISO ~4 Go)
+- Debian 12 (ISO ~3 Go)
+- Fichiers de test plus petits (100-500 Mo)
+
+### Planification des téléchargements
+
+Pour éviter la saturation du réseau :
+
+**Planning suggéré :**
+- **Binômes 1-5** : Génération de trafic de 14h00 à 14h20
+- **Binômes 6-10** : Génération de trafic de 14h25 à 14h45
+- **Binômes 11-15** : Génération de trafic de 14h50 à 15h10
+
+Ou bien :
+- Alternance : pendant qu'un binôme génère du trafic lourd, les autres font de l'analyse
