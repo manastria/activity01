@@ -1,0 +1,70 @@
+---
+title: Phase 3 - Configuration de l'export IPFIX
+description: Activation et configuration de l'exportation des flux réseau depuis le firewall SNS vers ntopng
+sidebar:
+  order: 4
+---
+
+Cette phase consiste à activer l'export IPFIX sur le firewall SNS et à configurer les règles de filtrage pour que les métadonnées des flux réseau soient envoyées vers le collecteur nProbe. C'est l'étape qui relie le firewall à la solution de supervision.
+
+**Durée estimée :** 30 minutes
+
+**Prérequis :** Les [Phase 1](/supervision-ntopng/phase1-config-sns/) et [Phase 2](/supervision-ntopng/phase2-installation-ntopng/) doivent être terminées.
+
+---
+
+## PHASE 3 : Configuration du firewall SNS pour l'export IPFIX
+
+### Étape 3.1 : Activation de l'export IPFIX sur SNS
+
+:::note[Qu'est-ce que IPFIX ?]
+NetFlow (Cisco) et IPFIX (standard IETF) permettent d'exporter des **informations sur les flux réseau** vers un collecteur (ici, nProbe). Au lieu d'analyser chaque paquet, le firewall envoie des résumés de connexions (qui parle à qui, sur quel port, combien de données, etc.).
+:::
+
+1. Connectez-vous à l'interface web du SNS EVA1 depuis une VM cliente : `https://192.168.X.254`
+2. Naviguez vers **CONFIGURATION → NOTIFICATIONS → TRACES - SYSLOG - IPFIX**
+3. Cliquez sur l'onglet **IPFIX**
+4. Configuration IPFIX :
+   - État : **Activé**
+   - Version : **IPFIX** (recommandé pour ce TP)
+   - Collecteur 1 :
+     - Adresse IP : `ntopng_vm`
+     - Port : `4739` (port utilisé par nProbe dans ce TP)
+5. Cliquez sur **Appliquer**
+
+:::tip[Checkpoint 5]
+Prenez une capture d'écran de la configuration d'export de flux IPFIX.
+:::
+
+### Étape 3.2 : Activation de l'exportation des flux sur les règles de filtrage
+
+Pour que le SNS (_Stormshield Network Security_) alimente ntopng, la configuration du collecteur (adresse IP et port) est une condition nécessaire, mais insuffisante. L'exportation des données doit être activée manuellement sur les règles de filtrage pertinentes.
+
+#### Manipulation
+
+Dans la politique de sécurité du firewall, pour chaque règle devant être supervisée :
+
+1. Éditez la règle de filtrage
+2. Allez dans l'onglet **« Action »**, puis dans la section **« Configuration avancée »**
+3. Cochez la case **« Collecteur IPFIX »** (Internet Protocol Flow Information Export)
+4. **Appliquez** la politique de sécurité pour rendre la modification effective
+
+:::tip[Checkpoint 6]
+Prenez une capture d'écran montrant une règle de filtrage avec la case « Collecteur IPFIX » cochée.
+:::
+
+#### Pourquoi cette étape est-elle indispensable ?
+
+* **Sélectivité des données :** Le SNS n'exporte pas l'intégralité du trafic par défaut afin de ne pas saturer le lien réseau vers le collecteur avec des flux inutiles (ex: broadcast, flux techniques internes).
+* **Optimisation des performances :** La génération de paquets IPFIX consomme des ressources CPU. En activant l'option uniquement sur des règles spécifiques (ex: accès Internet, zones sensibles), on préserve les performances du moteur de filtrage.
+* **Génération des métadonnées :** C'est cette case qui ordonne au pare-feu d'extraire les métadonnées du flux (IP source/destination, ports, drapeaux TCP, volume) pour les encapsuler dans un datagramme UDP à destination de ntopng.
+
+:::caution[Rappel pédagogique]
+Si un flux traverse le pare-feu mais n'apparaît pas dans ntopng, le premier réflexe est de vérifier si la case « Collecteur IPFIX » est bien cochée dans l'ACL (Access Control List) correspondante.
+:::
+
+---
+
+:::tip[Prochaine étape]
+L'export IPFIX est maintenant configuré. Générez du trafic pour visualiser les données dans la [Phase 4](/supervision-ntopng/phase4-analyse-trafic/).
+:::

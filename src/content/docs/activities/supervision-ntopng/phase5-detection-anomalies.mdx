@@ -1,0 +1,83 @@
+---
+title: Phase 5 - Détection d'anomalies
+description: Simulation et identification de comportements réseau suspects (scans de ports, trafic P2P excessif, requêtes DNS anormales)
+sidebar:
+  order: 6
+---
+
+Cette phase consiste à simuler des comportements réseau anormaux pour apprendre à les identifier dans ntopng. Vous allez générer des scans de ports, du trafic P2P excessif et des requêtes DNS massives, puis analyser comment ces anomalies apparaissent dans l'outil de supervision.
+
+**Durée estimée :** 1h
+
+**Prérequis :** La [Phase 4](/supervision-ntopng/phase4-analyse-trafic/) doit être terminée.
+
+---
+
+## PHASE 5 : Détection d'anomalies
+
+### Étape 5.1 : Simulation de comportements anormaux
+
+**Objectif :** Apprendre à détecter des usages réseau problématiques.
+
+#### Scénario 1 : Scan de ports
+
+1. Sur une VM Xubuntu cliente, installez nmap :
+```bash
+sudo apt install nmap
+```
+
+2. Lancez un scan de ports sur le réseau LAN :
+```bash
+nmap -sS 192.168.X.0/24
+```
+
+3. Dans ntopng, allez dans **Alerts**
+4. Observez si une alerte de scan de ports a été générée
+
+#### Scénario 2 : Trafic P2P excessif (simulation)
+
+Si vous avez un client BitTorrent :
+
+1. Téléchargez un fichier Linux via BitTorrent
+2. Observez dans ntopng :
+   - Le nombre important de connexions simultanées
+   - Les ports non standard utilisés
+   - Le volume de trafic généré
+
+#### Scénario 3 : Connexion DNS anormale
+
+1. Générez des requêtes DNS massives :
+```bash
+for i in {1..100}; do nslookup site$i.example.com; done
+```
+
+2. Vérifiez dans ntopng si ce comportement est visible dans les statistiques DNS
+
+:::tip[Checkpoint 10]
+Pour chaque scénario, prenez une capture d'écran montrant l'anomalie détectée et expliquez comment vous l'avez identifiée.
+:::
+
+### Étape 5.2 : Analyse comportementale
+
+**Questions de réflexion :**
+
+1. Quels indicateurs permettent de différencier :
+   - Une utilisation normale d'Internet ?
+   - Un téléchargement massif de fichiers ?
+   - Un comportement potentiellement malveillant (scan, exfiltration de données) ?
+
+2. Quelles limites voyez-vous à ntopng ?
+   - Peut-il voir le contenu des flux chiffrés (HTTPS) ?
+   - Comment pourrait-on compléter cette supervision ?
+
+3. Dans un contexte d'entreprise réel :
+   - Combien de temps devrait-on conserver les données ntopng ?
+   - Qui devrait y avoir accès ?
+   - Quelles règles éthiques et légales faut-il respecter (RGPD) ?
+
+
+---
+
+:::tip[Prochaine étape]
+Vous avez maintenant toutes les données nécessaires pour rédiger le rapport d'analyse dans la [Phase 6](/supervision-ntopng/phase6-rapport/).
+:::

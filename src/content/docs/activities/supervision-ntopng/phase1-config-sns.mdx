@@ -1,0 +1,103 @@
+---
+title: Phase 1 - Configuration du SNS
+description: Configuration initiale du firewall Stormshield et création des objets réseau nécessaires
+sidebar:
+  order: 2
+---
+
+Cette phase consiste à préparer le firewall _Stormshield Network Security_ (SNS) pour qu'il puisse exporter les flux réseau vers le collecteur ntopng. Vous allez configurer les interfaces réseau, créer les objets nécessaires et mettre en place les règles de NAT.
+
+**Durée estimée :** 45 minutes
+
+---
+
+## PHASE 1 : Configuration du SNS
+### Étape 1.1 : Import et configuration de base
+
+1. Importez l'OVA _SNS EVA1_ dans _VirtualBox_. Les machines virtuelles « _**Debian-Training-Webmail**_ » et « **Graphical_client** » incluses dans le fichier OVA ne seront pas utilisées : elles peuvent être supprimées.
+
+2. Renommer la VM en « **FW_IPFIX** »
+
+3. Configurez les interfaces réseau de la VM _FW_IPFIX_ :
+   - **Adapter 1** : Mode « _Bridged Adapter_ » (connexion Internet via le réseau du labo)
+   - **Adapter 2** : Mode « _Internal Network_ » (nom : `LAN_IN_X` où X = votre numéro d'étudiant)
+
+4. Démarrez la VM _SNS EVA1_ et effectuez la configuration initiale sans oublier le NAT (politique de sécurité n°10 « PASS ALL ») sortant avec les paramètres IP suivants :
+   - **Interface OUT** : `172.25.X.254/16` (connexion vers le réseau du labo)
+   - **Interface IN** : `192.168.X.254/24` (réseau LAN interne)
+
+:::tip[Checkpoint 1]
+Vérifiez la connectivité réseau depuis le _SNS_ :
+
+- Testez la connectivité vers la passerelle du labo : `ping 172.25.254.254`
+- Testez la connectivité vers Internet : `ping 8.8.8.8`
+- Testez la résolution DNS : `nslookup www.google.com`
+
+Les trois tests doivent réussir.
+:::
+
+### Étape 1.2 : Création des objets réseau
+
+Avant de configurer le filtrage et le _NAT_ (_Network Address Translation_), créez les objets réseau nécessaires dans le _SNS_.
+
+Allez dans **CONFIGURATION → OBJETS → OBJETS RÉSEAU** et créez les objets suivants :
+
+| Nom de l'objet | Type | Valeur | Description |
+|----------------|------|--------|-------------|
+| `ntopng_vm` | Machine | `192.168.X.50` | VM Debian hébergeant ntopng et nProbe |
+| `ssh_ntopng` | Port | TCP/22 | Accès SSH à la VM ntopng |
+| `ssh_ntopng_nat` | Port | TCP/2222 | Accès SSH à la VM ntopng via les réseaux publiques |
+| `web_ntopng` | Port | TCP/3000 | Interface web de ntopng |
+
+:::tip[Checkpoint 2]
+Prenez une capture d'écran montrant les trois objets créés dans la liste des objets réseau.
+:::
+
+### Étape 1.3 : Configuration du filtrage et du NAT
+
+#### Configuration de la politique de filtrage
+
+1. Allez dans **CONFIGURATION → POLITIQUE DE SÉCURITÉ → FILTRAGE ET NAT**
+
+2. Vérifier que la politique de sécurité est bien « **(10) PASS ALL** » (autorisation temporaire pour la phase de test)
+
+3. Cliquez sur **Appliquer** puis **Activer la politique**
+
+:::caution[Attention]
+Cette règle « **PASS ALL** » est **uniquement pour la phase de test**. Dans un contexte de production, il faut appliquer le principe de moindre privilège et n'autoriser que les flux strictement nécessaires.
+:::
+
+#### Configuration du NAT entrant
+
+5. Créez deux règles de **NAT entrant** (_port forwarding_) pour permettre l'accès depuis le réseau du labo vers la VM ntopng :
+
+**Règle 1 : Accès SSH**
+- **Nom** : `NAT_SSH_ntopng`
+- **Interface d'entrée** : `out`
+- **Machine destination** : `Firewall_out`
+- **Port destination** : `ssh_ntopng_nat`
+- **Machine destination translatée** : `ntopng_vm`
+- **Port destination translatée** : `ssh`
+
+**Règle 2 : Accès interface web ntopng**
+- **Nom** : `NAT_Web_ntopng`
+- **Interface d'entrée** : `out`
+- **Machine destination** : `Firewall_out`
+- **Port destination** : `web_ntopng`
+- **Machine destination translatée** : `ntopng_vm`
+- **Port destination translatée** : `web_ntopng`
+
+6. Cliquez sur **Appliquer** puis **Activer la politique**
+
+:::tip[Checkpoint 3]
+Prenez une capture d'écran montrant :
+- La règle de filtrage « PASS ALL »
+- Les deux règles de NAT entrant (SSH et Web)
+:::
+
+
+---
+
+:::tip[Prochaine étape]
+Une fois le firewall SNS configuré, passez à la [Phase 2 : Installation de ntopng](/supervision-ntopng/phase2-installation-ntopng/).
+:::

@@ -1,0 +1,116 @@
+---
+title: Annexe - Préparation du serveur de simulation
+description: Guide pour déployer un serveur de test sur le réseau du laboratoire afin d'éviter la saturation de la connexion Internet
+sidebar:
+  order: 10
+  badge:
+    text: Enseignant
+    variant: tip
+---
+
+Pour permettre aux étudiants de générer du trafic sans saturer la connexion Internet, cette annexe explique comment déployer un serveur de test sur le réseau du laboratoire. Plusieurs options sont proposées selon l'infrastructure disponible.
+
+**Public :** Enseignant uniquement
+
+**Objectif :** Fournir aux étudiants des ressources locales (fichiers, services) pour générer du trafic réseau contrôlé.
+
+---
+
+## Annexe : Préparation du serveur de simulation (enseignant)
+
+Pour permettre aux étudiants de générer du trafic sans saturer la connexion Internet, vous pouvez déployer un serveur de test sur le réseau du laboratoire.
+
+### Option 1 : Serveur web simple avec Nginx (VM ou Docker)
+
+**VM Debian/Ubuntu sur le réseau du labo (ex: 172.25.100.50) :**
+```bash
+# Installation Nginx
+sudo apt update && sudo apt install nginx -y
+
+# Création de fichiers de test de différentes tailles
+cd /var/www/html
+sudo dd if=/dev/urandom of=testfile_1M.bin bs=1M count=1
+sudo dd if=/dev/urandom of=testfile_10M.bin bs=1M count=10
+sudo dd if=/dev/urandom of=testfile_50M.bin bs=1M count=50
+sudo dd if=/dev/urandom of=testfile_100M.bin bs=1M count=100
+
+# Page d'accueil simple
+echo "<html><body><h1>Serveur de test - Labo BTS SIO</h1>
+<ul>
+  <li><a href='testfile_1M.bin'>Fichier 1 Mo</a></li>
+  <li><a href='testfile_10M.bin'>Fichier 10 Mo</a></li>
+  <li><a href='testfile_50M.bin'>Fichier 50 Mo</a></li>
+  <li><a href='testfile_100M.bin'>Fichier 100 Mo</a></li>
+</ul></body></html>" | sudo tee /var/www/html/index.html
+```
+
+**Les étudiants pourront alors :**
+```bash
+# Télécharger depuis leurs VMs clientes
+wget http://172.25.100.50/testfile_10M.bin
+curl -o /dev/null http://172.25.100.50/testfile_50M.bin
+```
+
+### Option 2 : Serveur FTP
+```bash
+# Installation vsftpd
+sudo apt install vsftpd -y
+
+# Configuration basique
+sudo nano /etc/vsftpd.conf
+# Décommenter : anonymous_enable=YES
+
+# Créer des fichiers dans /srv/ftp
+sudo mkdir -p /srv/ftp
+cd /srv/ftp
+sudo dd if=/dev/urandom of=debian.iso bs=1M count=500
+```
+
+### Option 3 : Container Docker multi-services
+```yaml
+# Docker Compose avec Nginx + FTP + serveur de fichiers
+version: '3'
+services:
+  webserver:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./files:/usr/share/nginx/html
+  ftpserver:
+    image: fauria/vsftpd
+    ports:
+      - "20:20"
+      - "21:21"
+      - "21100-21110:21100-21110"
+    environment:
+      FTP_USER: student
+      FTP_PASS: student
+      PASV_ADDRESS: 172.25.100.50
+```
+
+### Tracker BitTorrent local (recommandé)
+
+Utilisez le tracker BitTorrent déjà existant sur le réseau du labo avec des fichiers ISO Linux pré-seedés.
+
+**Avantages :**
+- Génère beaucoup de connexions simultanées (bon pour l'analyse ntopng)
+- Consomme la bande passante localement (pas sur Internet)
+- Simule du trafic P2P réaliste
+
+**Fichiers à proposer :**
+- Ubuntu 24.04 LTS (ISO ~4 Go)
+- Debian 12 (ISO ~3 Go)
+- Fichiers de test plus petits (100-500 Mo)
+
+### Planification des téléchargements
+
+Pour éviter la saturation du réseau :
+
+**Planning suggéré :**
+- **Binômes 1-5** : Génération de trafic de 14h00 à 14h20
+- **Binômes 6-10** : Génération de trafic de 14h25 à 14h45
+- **Binômes 11-15** : Génération de trafic de 14h50 à 15h10
+
+Ou bien :
+- Alternance : pendant qu'un binôme génère du trafic lourd, les autres font de l'analyse
