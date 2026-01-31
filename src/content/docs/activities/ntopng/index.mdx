@@ -22,7 +22,7 @@ description: Activité pratique de déploiement et configuration d'une solution 
 
 - Comprendre l'intérêt d'un outil de supervision réseau dans un contexte professionnel
 - Installer et configurer ntopng sur une VM Linux
-- Configurer l'export NetFlow sur un firewall Stormshield SNS
+- Configurer l'export IPFIX sur un firewall Stormshield SNS
 - Analyser le trafic réseau et identifier les flux principaux
 - Détecter des comportements réseau anormaux ou suspects
 - Produire un rapport d'analyse pour la direction
@@ -87,38 +87,101 @@ description: Activité pratique de déploiement et configuration d'une solution 
 - **Niveau normal :** 6 heures
 - **Étudiants rapides :** Activités bonus disponibles (analyse avancée, alertes)
 
-## PHASE 0 : Configuration du SNS.
-1. Importez l'OVA SNS EVA1 dans VirtualBox
-2. Configurez les interfaces réseau :
-   - Carte 1 : Mode "Bridged Adapter" (connexion Internet simulée)
-   - Carte 2 : Mode "Internal Network" (nom : `LAN_IN_X` où X = votre numéro d'étudiant)
-3. Configuration initiale du SNS EVA1 avec la configuration IP suivante :
-   - OUT : 172.25.X.254/16 (simule la connexion Internet)
-   - IN : 192.168.X.254/24 (réseau LAN interne)
-4. Filtrage et NAT
-   - Politique « PASS ALL » pour l'instant
-   - Activer le NAT sortant
+## PHASE 1 : Configuration du SNS
+### Étape 1.1 : Import et configuration de base
 
-5. Création de l'objet collecteur ntopng :
-   - Allez dans CONFIGURATION → OBJETS → OBJETS RÉSEAU
-   - Cliquez sur Nouveau → Machine
-   - Remplissez :
-      - Nom : ntopng_collector
-      - Type : Machine
-      - Adresse IPv4 : 192.168.X.50
-   - Cliquez sur Créer
+1. Importez l'OVA _SNS EVA1_ dans _VirtualBox_. Les machines virtuelles « _**Debian-Training-Webmail**_ » et « **Graphical_client** » incluses dans le fichier OVA ne seront pas utilisées : elles peuvent être supprimées.
 
-## PHASE 1 : Installation et configuration de ntopng
+2. Renommer la VM en « **FW_IPFIX** »
 
-### Étape 1.1 : Déploiement de la VM ntopng
+3. Configurez les interfaces réseau de la VM _FW_IPFIX_ :
+   - **Adapter 1** : Mode « _Bridged Adapter_ » (connexion Internet via le réseau du labo)
+   - **Adapter 2** : Mode « _Internal Network_ » (nom : `LAN_IN_X` où X = votre numéro d'étudiant)
+
+4. Démarrez la VM _SNS EVA1_ et effectuez la configuration initiale sans oublier le NAT (politique de sécurité n°10 « PASS ALL ») sortant avec les paramètres IP suivants :
+   - **Interface OUT** : `172.25.X.254/16` (connexion vers le réseau du labo)
+   - **Interface IN** : `192.168.X.254/24` (réseau LAN interne)
+
+:::tip[Checkpoint 1]
+Vérifiez la connectivité réseau depuis le _SNS_ :
+
+- Testez la connectivité vers la passerelle du labo : `ping 172.25.254.254`
+- Testez la connectivité vers Internet : `ping 8.8.8.8`
+- Testez la résolution DNS : `nslookup www.google.com`
+
+Les trois tests doivent réussir.
+:::
+
+### Étape 1.2 : Création des objets réseau
+
+Avant de configurer le filtrage et le _NAT_ (_Network Address Translation_), créez les objets réseau nécessaires dans le _SNS_.
+
+Allez dans **CONFIGURATION → OBJETS → OBJETS RÉSEAU** et créez les objets suivants :
+
+| Nom de l'objet | Type | Valeur | Description |
+|----------------|------|--------|-------------|
+| `ntopng_vm` | Machine | `192.168.X.50` | VM Debian hébergeant ntopng et nProbe |
+| `ssh_ntopng` | Port | TCP/22 | Accès SSH à la VM ntopng |
+| `ssh_ntopng_nat` | Port | TCP/2222 | Accès SSH à la VM ntopng via les réseaux publiques |
+| `web_ntopng` | Port | TCP/3000 | Interface web de ntopng |
+
+:::tip[Checkpoint 2]
+Prenez une capture d'écran montrant les trois objets créés dans la liste des objets réseau.
+:::
+
+### Étape 1.3 : Configuration du filtrage et du NAT
+
+#### Configuration de la politique de filtrage
+
+1. Allez dans **CONFIGURATION → POLITIQUE DE SÉCURITÉ → FILTRAGE ET NAT**
+
+2. Vérifier que la politique de sécurité est bien « **(10) PASS ALL** » (autorisation temporaire pour la phase de test)
+
+3. Cliquez sur **Appliquer** puis **Activer la politique**
+
+:::caution[Attention]
+Cette règle « **PASS ALL** » est **uniquement pour la phase de test**. Dans un contexte de production, il faut appliquer le principe de moindre privilège et n'autoriser que les flux strictement nécessaires.
+:::
+
+#### Configuration du NAT entrant
+
+5. Créez deux règles de **NAT entrant** (_port forwarding_) pour permettre l'accès depuis le réseau du labo vers la VM ntopng :
+
+**Règle 1 : Accès SSH**
+- **Nom** : `NAT_SSH_ntopng`
+- **Interface d'entrée** : `out`
+- **Machine destination** : `Firewall_out`
+- **Port destination** : `ssh_ntopng_nat`
+- **Machine destination translatée** : `ntopng_vm`
+- **Port destination translatée** : `ssh`
+
+**Règle 2 : Accès interface web ntopng**
+- **Nom** : `NAT_Web_ntopng`
+- **Interface d'entrée** : `out`
+- **Machine destination** : `Firewall_out`
+- **Port destination** : `web_ntopng`
+- **Machine destination translatée** : `ntopng_vm`
+- **Port destination translatée** : `web_ntopng`
+
+6. Cliquez sur **Appliquer** puis **Activer la politique**
+
+:::tip[Checkpoint 3]
+Prenez une capture d'écran montrant :
+- La règle de filtrage « PASS ALL »
+- Les deux règles de NAT entrant (SSH et Web)
+:::
+
+
+
+
+## PHASE 2 : Installation et configuration de ntopng
+
+### Étape 2.1 : Déploiement de la VM ntopng
 
 1. Récupérez l'OVA Debian 12 et importez-la dans VirtualBox
 2. Configurez la VM avec les paramètres suivants :
-   - Nom : `ntopng_superviseur`
-   - RAM : 2 Go minimum
-   - CPU : 2 cœurs
-   - Réseau : Carte 1 en "Internal Network" (nom : `LAN_IN_X` où X = votre numéro d'étudiant)
-
+   - **Nom** : `ntopng_superviseur`
+   - **Réseau** : **Adapter 1** en "Internal Network" (nom : `LAN_IN_X` où X = votre numéro d'étudiant)
 3. Démarrez la VM et connectez-vous (identifiants fournis par l'enseignant)
 4. Configurez l'adresse IP de la VM : `192.168.X.50/24` avec comme passerelle et DNS `192.168.X.254`
 
@@ -127,97 +190,110 @@ description: Activité pratique de déploiement et configuration d'une solution 
 - La VM ntopng doit pouvoir joindre une machine sur internet (`ping`) et résoudre un nom de domaine publique (`dig`).
 :::
 
+### Étape 2.2 : Installation de ntopng et nProbe
 
-
-### Étape 1.2 : Installation de ntopng
-
+:::note[Pourquoi ntopng ?]
+ntopng est un outil open-source de monitoring réseau qui permet d'analyser en temps réel le trafic réseau. Contrairement à la simple consultation des logs du firewall, ntopng offre une vue graphique, des statistiques détaillées et une analyse comportementale du réseau.
 :::
- ntopng est un outil open-source de monitoring réseau qui permet d'analyser en temps réel le trafic réseau. Contrairement à la simple consultation des logs du firewall, ntopng offre une vue graphique, des statistiques détaillées et une analyse comportementale du réseau.
- :::
 
 #### Préparation du système
 
 1. Mettez à jour le système et installez les dépendances :
+   ```bash
+   sudo apt update && sudo apt upgrade -y
+   ```
 
-```
-sudo apt update && sudo apt upgrade -y
-sudo apt install wget gnupg software-properties-common -y
-```
+2. Installer les dépendances :
+
+   ```bash
+   sudo apt install wget gnupg software-properties-common -y
+   ```
 
 #### Ajout du dépôt officiel ntop
 
-1. Téléchargez et installez le paquet de configuration du dépôt ntop :
+3. Téléchargez le paquet de configuration du dépôt ntop :
+   ```bash
+   wget https://packages.ntop.org/apt/bookworm/all/apt-ntop.deb
+   ```
 
-```
-wget https://packages.ntop.org/apt/bookworm/all/apt-ntop.deb
-sudo dpkg -i apt-ntop.deb
-```
+4. Installez le paquet téléchargé :
+   ```bash
+   sudo dpkg -i apt-ntop.deb
+   ```
 
-1. Mettez à jour la liste des paquets :
-
-```
-sudo apt update
-```
+5. Mettez à jour la liste des paquets :
+   ```bash
+   sudo apt update
+   ```
 
 #### Installation de ntopng et nprobe
 
-1. Installez ntopng, nProbe et leurs dépendances (Redis sera installé automatiquement) :
+6. Installez ntopng, nProbe et leurs dépendances (Redis sera installé automatiquement) :
+   ```bash
+   sudo apt install ntopng ntopng-data nprobe -y
+   ```
 
-```
-sudo apt install ntopng ntopng-data nprobe -y
-```
+   :::note[Rôle de nProbe]
+   Dans la version Community, ntopng ne collecte pas directement les flux NetFlow/IPFIX reçus en UDP.
+   nProbe joue le rôle de **collecteur de flux** (UDP 4739 par exemple) et les expose ensuite à ntopng via ZMQ.
+   :::
 
-:::
- Dans la version Community, ntopng ne collecte pas directement les flux NetFlow/IPFIX reçus en UDP.
- nProbe joue le rôle de **collecteur de flux** (UDP 4739 par exemple) et les expose ensuite à ntopng via ZMQ.
- :::
+   :::note[nProbe Community vs Professional]
+   **nProbe Community** (gratuit) est suffisant pour ce TP. Il permet de :
+   - Collecter des flux IPFIX/NetFlow
+   - Les transmettre à ntopng via ZMQ
+   - Gérer les templates IPFIX basiques
+
+   **nProbe Professional** (payant) offre des fonctionnalités avancées :
+   - Export des flux vers plusieurs collecteurs
+   - DPI (Deep Packet Inspection) pour identifier les applications chiffrées
+   - Agrégation de flux multiples
+   - Support de protocoles propriétaires
+
+   Pour un usage en production, évaluez vos besoins avant de choisir la version.
+   :::
 
 #### Sauvegarde des fichiers de configuration
 
-1. Avant toute modification, sauvegardez les fichiers de configuration :
+7. Avant toute modification, sauvegardez les fichiers de configuration :
+   ```bash
+   sudo cp -a /etc/ntopng/ntopng.conf /etc/ntopng/ntopng.conf.bak.$(date +%F)
+   sudo cp -a /etc/nprobe/nprobe.conf /etc/nprobe/nprobe.conf.bak.$(date +%F)
+   ```
 
-```
-sudo cp -a /etc/ntopng/ntopng.conf /etc/ntopng/ntopng.conf.bak.$(date +%F)
-sudo cp -a /etc/nprobe/nprobe.conf /etc/nprobe/nprobe.conf.bak.$(date +%F)
-```
-
-#### Configuration de nProbe (collecte IPFIX/NetFlow)
+### Étape 2.3 : Configuration de nProbe (collecte IPFIX/NetFlow)
 
 1. Éditez le fichier de configuration de nProbe :
+   ```bash
+   sudo nano /etc/nprobe/nprobe.conf
+   ```
 
-```
-sudo nano /etc/nprobe/nprobe.conf
-```
+   Remplacez le contenu par une configuration minimale :
+   ```text
+   # Collecte des flux reçus du firewall (IPFIX/NetFlow) sur UDP/4739
+   --collector-port=4739
 
-Remplacez le contenu par une configuration minimale :
+   # Exposition des flux vers ntopng via ZMQ (ntopng se connecte sur ce port)
+   --zmq=tcp://*:5556
 
-```
-# Collecte des flux reçus du firewall (IPFIX/NetFlow) sur UDP/4739
---collector-port=4739
+   # Template recommandé pour une bonne compatibilité avec ntopng
+   -T=@NTOPNG@
+   ```
 
-# Exposition des flux vers ntopng via ZMQ (ntopng se connecte sur ce port)
---zmq=tcp://*:5556
+   :::note[Port de collecte IPFIX]
+   Dans ce TP, le firewall SNS exporte les flux en IPFIX vers le port UDP **4739**.
+   Si vous utilisez un autre port (ex. 2055), adaptez `--collector-port` et la règle de filtrage côté SNS.
+   :::
 
-# Template recommandé pour une bonne compatibilité avec ntopng
--T=@NTOPNG@
-```
-
-:::
- Dans ce TP, le firewall SNS exporte les flux en IPFIX vers le port UDP **4739**.
- Si vous utilisez un autre port (ex. 2055), adaptez `--collector-port` et la règle de filtrage côté SNS.
- :::
-
-#### Configuration de ntopng
+### Étape 2.4 : Configuration de ntopng
 
 1. Éditez le fichier de configuration :
-
-```
+```bash
 sudo nano /etc/ntopng/ntopng.conf
 ```
 
 Ajoutez/modifiez les lignes suivantes :
-
-```
+```text
 -G=/var/run/ntopng.pid
 --http-port=3000
 --community
@@ -232,15 +308,14 @@ Ajoutez/modifiez les lignes suivantes :
 - `--zmq=tcp://*:5556` (nProbe) : nProbe met à disposition une interface ZMQ.
 - `-i=tcp://127.0.0.1:5556` (ntopng) : ntopng se connecte à nProbe pour afficher les flux.
 
+:::caution[Sécurité en production]
+Dans un environnement de production, il ne faut **jamais** désactiver l'authentification. Cette option n'est utilisée ici que dans un cadre pédagogique sur un réseau isolé.
 :::
- Dans un environnement de production, il ne faut **jamais** désactiver l'authentification. Cette option n'est utilisée ici que dans un cadre pédagogique sur un réseau isolé.
- :::
 
-#### Démarrage des services
+### Étape 2.5 : Démarrage des services
 
 1. Activez et démarrez les services Redis, nProbe et ntopng :
-
-```
+```bash
 sudo systemctl enable redis-server
 sudo systemctl start redis-server
 
@@ -251,79 +326,20 @@ sudo systemctl enable ntopng
 sudo systemctl start ntopng
 ```
 
-1. Vérifiez le statut des services :
-
-```
+2. Vérifiez le statut des services :
+```bash
 sudo systemctl status redis-server --no-pager
 sudo systemctl status nprobe --no-pager
 sudo systemctl status ntopng --no-pager
 ```
 
-:::
- Le service ntopng doit être actif (running). Prenez une capture d'écran du résultat de `systemctl status ntopng`.
- :::
-
-
-
-
-### Étape 1.3 : Accès à l'interface web
-
-1. Depuis une VM Xubuntu cliente, ouvrez un navigateur
-2. Accédez à : `http://192.168.X.50:3000`
-3. L'interface ntopng doit s'afficher
-
-:::tip[Checkpoint 3]
-Prenez une capture d'écran de la page d'accueil de ntopng (qui sera encore vide pour l'instant).
+:::tip[Checkpoint 2]
+Les trois services doivent être actifs (running). Prenez une capture d'écran du résultat de `systemctl status ntopng`.
 :::
 
-## PHASE 2 : Configuration du firewall SNS pour l'export NetFlow
+### Étape 2.6 : Vérification de l'installation
 
-### Étape 2.1 : Activation de NetFlow sur SNS
-
-:::note[Qu'est-ce que NetFlow ?]
- NetFlow (Cisco) et IPFIX (standard IETF) permettent d'exporter des **informations sur les flux réseau** vers un collecteur (ici, nProbe). Au lieu d'analyser chaque paquet, le firewall envoie des résumés de connexions (qui parle à qui, sur quel port, combien de données, etc.).
-:::
-
-1. Connectez-vous à l'interface web du SNS EVA1 depuis une VM cliente : `https://192.168.X.254`
-2. Naviguez vers CONFIGURATION → NOTIFICATIONS → TRACES - SYSLOG - IPFIX
-3. Cliquez sur l'onglet IPFIX
-3. Configuration IPFIX
-    - État : **Activé**
-    - Version : **IPFIX** (recommandé pour ce TP)
-    - Collecteur 1 :
-    - Adresse IP : `192.168.X.50`
-    - Port : `4739` (port utilisé par nProbe dans ce TP)
-4. Cliquez sur **Appliquer**
-
-:::tip[Checkpoint 4]
-Prenez une capture d'écran de la configuration d'export de flux (NetFlow/IPFIX).
-:::
-
-### Étape 2.2 : Activation de l’exportation des flux sur le SNS
-
-Pour que le *SNS* (*Stormshield Network Security*) alimente `ntopng`, la configuration du collecteur (adresse IP et port) est une condition nécessaire, mais insuffisante. L’exportation des données doit être activée manuellement sur les règles de filtrage pertinentes.
-
-### La manipulation
-
-Dans la politique de sécurité du *firewall* (pare-feu), pour chaque règle devant être supervisée :
-
-1. Éditez la règle de filtrage.
-2. Allez dans l'onglet **« Action »**, puis dans la section **« Configuration avancée »**.
-3. Cochez la case **« Collecteur IPFIX »** (*Internet Protocol Flow Information Export*).
-4. **Appliquez** la politique de sécurité pour rendre la modification effective.
-
-### Pourquoi cette étape est-elle indispensable ?
-
-* **Sélectivité des données :** Le *SNS* n'exporte pas l'intégralité du trafic par défaut afin de ne pas saturer le lien réseau vers le collecteur avec des flux inutiles (ex: *broadcast* - diffusion, flux techniques internes).
-* **Optimisation des performances :** La génération de paquets *IPFIX* consomme des ressources *CPU* (*Central Processing Unit*). En activant l'option uniquement sur des règles spécifiques (ex: accès Internet, zones sensibles), on préserve les performances du moteur de filtrage.
-* **Génération des métadonnées :** C'est cette case qui ordonne au pare-feu d'extraire les *metadata* (métadonnées) du flux (IP source/destination, ports, drapeaux *TCP* - *Transmission Control Protocol*, volume) pour les encapsuler dans un datagramme *UDP* (*User Datagram Protocol*) à destination de `ntopng`.
-
-> [!IMPORTANT]
-> **Rappel pédagogique :** Si un flux traverse le pare-feu mais n'apparaît pas dans `ntopng`, le premier réflexe est de vérifier si la case « Collecteur IPFIX » est bien cochée dans l'*ACL* (*Access Control List*) correspondante.
-
-#### Vérification de l'installation
-
-7. Vérifiez que nProbe et ntopng sont bien installés :
+1. Vérifiez que nProbe et ntopng sont bien installés et écoutent sur les bons ports :
 ```bash
 # Vérifier les versions installées
 nprobe --version
@@ -339,8 +355,17 @@ sudo ss -ltnp | grep 5556
 sudo ss -ltnp | grep 3000
 ```
 
-**Résultats attendus :**
+:::note[Comportement de ZMQ et sockets UDP]
+Il est possible que la commande `ss` ne montre pas les ports 5556 (ZMQ) et 4739 (UDP IPFIX) selon la façon dont nProbe configure ses sockets. Ce comportement est normal. Si les services sont **actifs** (`systemctl status`) et que l'interface web ntopng affiche une interface ZMQ, tout fonctionne correctement.
+
+Pour vérifier manuellement la réception de flux IPFIX, utilisez :
+```bash
+sudo tcpdump -ni any udp port 4739 -c 5
 ```
+:::
+
+**Résultats attendus :**
+```text
 # nProbe écoute UDP 4739 pour collecter IPFIX
 UNCONN 0 0 0.0.0.0:4739 0.0.0.0:* users:(("nprobe",pid=XXXX,fd=X))
 
@@ -351,28 +376,73 @@ LISTEN 0 128 0.0.0.0:5556 0.0.0.0:* users:(("nprobe",pid=XXXX,fd=X))
 LISTEN 0 128 0.0.0.0:3000 0.0.0.0:* users:(("ntopng",pid=XXXX,fd=X))
 ```
 
-:::tip[Checkpoint 2bis]
+:::tip[Checkpoint 3]
 Si les trois ports sont bien en écoute, l'installation est correcte. Prenez une capture d'écran des résultats.
 :::
 
-:::note[nProbe Community vs Professional]
-**nProbe Community** (gratuit) est suffisant pour ce TP. Il permet de :
-- Collecter des flux IPFIX/NetFlow
-- Les transmettre à ntopng via ZMQ
-- Gérer les templates IPFIX basiques
+### Étape 2.7 : Accès à l'interface web
 
-**nProbe Professional** (payant) offre des fonctionnalités avancées :
-- Export des flux vers plusieurs collecteurs
-- DPI (Deep Packet Inspection) pour identifier les applications chiffrées
-- Agrégation de flux multiples
-- Support de protocoles propriétaires
+1. Depuis une VM Xubuntu cliente, ouvrez un navigateur
+2. Accédez à : `http://192.168.X.50:3000`
+3. L'interface ntopng doit s'afficher
 
-Pour un usage en production, évaluez vos besoins avant de choisir la version.
+:::tip[Checkpoint 4]
+Prenez une capture d'écran de la page d'accueil de ntopng (qui sera encore vide pour l'instant).
 :::
 
-## PHASE 3 : Génération de trafic et analyse
+## PHASE 3 : Configuration du firewall SNS pour l'export IPFIX
 
-### Étape 3.1 : Génération de trafic varié
+### Étape 3.1 : Activation de l'export IPFIX sur SNS
+
+:::note[Qu'est-ce que IPFIX ?]
+NetFlow (Cisco) et IPFIX (standard IETF) permettent d'exporter des **informations sur les flux réseau** vers un collecteur (ici, nProbe). Au lieu d'analyser chaque paquet, le firewall envoie des résumés de connexions (qui parle à qui, sur quel port, combien de données, etc.).
+:::
+
+1. Connectez-vous à l'interface web du SNS EVA1 depuis une VM cliente : `https://192.168.X.254`
+2. Naviguez vers **CONFIGURATION → NOTIFICATIONS → TRACES - SYSLOG - IPFIX**
+3. Cliquez sur l'onglet **IPFIX**
+4. Configuration IPFIX :
+   - État : **Activé**
+   - Version : **IPFIX** (recommandé pour ce TP)
+   - Collecteur 1 :
+     - Adresse IP : `ntopng_vm`
+     - Port : `4739` (port utilisé par nProbe dans ce TP)
+5. Cliquez sur **Appliquer**
+
+:::tip[Checkpoint 5]
+Prenez une capture d'écran de la configuration d'export de flux IPFIX.
+:::
+
+### Étape 3.2 : Activation de l'exportation des flux sur les règles de filtrage
+
+Pour que le SNS (_Stormshield Network Security_) alimente ntopng, la configuration du collecteur (adresse IP et port) est une condition nécessaire, mais insuffisante. L'exportation des données doit être activée manuellement sur les règles de filtrage pertinentes.
+
+#### Manipulation
+
+Dans la politique de sécurité du firewall, pour chaque règle devant être supervisée :
+
+1. Éditez la règle de filtrage
+2. Allez dans l'onglet **« Action »**, puis dans la section **« Configuration avancée »**
+3. Cochez la case **« Collecteur IPFIX »** (Internet Protocol Flow Information Export)
+4. **Appliquez** la politique de sécurité pour rendre la modification effective
+
+:::tip[Checkpoint 6]
+Prenez une capture d'écran montrant une règle de filtrage avec la case « Collecteur IPFIX » cochée.
+:::
+
+#### Pourquoi cette étape est-elle indispensable ?
+
+* **Sélectivité des données :** Le SNS n'exporte pas l'intégralité du trafic par défaut afin de ne pas saturer le lien réseau vers le collecteur avec des flux inutiles (ex: broadcast, flux techniques internes).
+* **Optimisation des performances :** La génération de paquets IPFIX consomme des ressources CPU. En activant l'option uniquement sur des règles spécifiques (ex: accès Internet, zones sensibles), on préserve les performances du moteur de filtrage.
+* **Génération des métadonnées :** C'est cette case qui ordonne au pare-feu d'extraire les métadonnées du flux (IP source/destination, ports, drapeaux TCP, volume) pour les encapsuler dans un datagramme UDP à destination de ntopng.
+
+:::caution[Rappel pédagogique]
+Si un flux traverse le pare-feu mais n'apparaît pas dans ntopng, le premier réflexe est de vérifier si la case « Collecteur IPFIX » est bien cochée dans l'ACL (Access Control List) correspondante.
+:::
+
+## PHASE 4 : Génération de trafic et analyse
+
+### Étape 4.1 : Génération de trafic varié
 
 **Objectif :** Simuler différents types d'utilisation réseau pour que ntopng ait des données à analyser, en utilisant les ressources disponibles sur le réseau du laboratoire.
 
@@ -395,15 +465,13 @@ Le réseau du laboratoire est partagé par tous les étudiants. Évitez les tél
 - Utilisez les services réseau mis à disposition par l'enseignant
 
 **Streaming vidéo modéré :**
-- Regardez **une seule** vidéo YouTube de 2-3 minutes en qualité standard (pas HD)
-- Ou utilisez un serveur de streaming local si disponible
+- Regardez **une seule** vidéo YouTube de 2-3 minutes
 
 #### Sur VM Xubuntu Client 2 (192.168.X.11)
 
 **Téléchargement BitTorrent (local) :**
 - Connectez-vous au tracker BitTorrent du laboratoire (si disponible)
 - Téléchargez une distribution Linux hébergée localement (Ubuntu/Debian ISO)
-- **Ne pas** utiliser des torrents publics qui consommeraient trop de bande passante
 
 **Trafic DNS intensif :**
 - Naviguez sur de nombreux sites différents (Wikipedia, sites universitaires)
@@ -444,7 +512,7 @@ for i in {1..50}; do
 done
 ```
 
-:::tip[Checkpoint 6]
+:::tip[Checkpoint 7]
 Laissez tourner ce trafic pendant **15-20 minutes** pour accumuler suffisamment de données.
 
 **Bonnes pratiques :**
@@ -454,7 +522,7 @@ Laissez tourner ce trafic pendant **15-20 minutes** pour accumuler suffisamment 
 - Alternez les activités entre les binômes
 :::
 
-### Étape 3.2 : Analyse dans ntopng
+### Étape 4.2 : Analyse dans ntopng
 
 Connectez-vous à l'interface ntopng depuis une VM cliente pour analyser les résultats.
 
@@ -494,7 +562,7 @@ Connectez-vous à l'interface ntopng depuis une VM cliente pour analyser les ré
    - Les téléchargements (connexions longues avec transfert important)
    - La navigation web classique (nombreuses petites connexions)
 
-:::tip[Checkpoint 7]
+:::tip[Checkpoint 8]
 Prenez 5-6 captures d'écran montrant :
 - Le dashboard global
 - Le détail des deux hôtes
@@ -502,7 +570,7 @@ Prenez 5-6 captures d'écran montrant :
 - La répartition des protocoles (HTTP/HTTPS/DNS/etc.)
 :::
 
-### Étape 3.3 : Analyse des applications
+### Étape 4.3 : Analyse des applications
 
 1. Allez dans **Applications**
 2. ntopng catégorise automatiquement le trafic par type d'application
@@ -513,7 +581,7 @@ Prenez 5-6 captures d'écran montrant :
 - Quelle proportion représente le streaming vidéo par rapport au total ?
 - Y a-t-il des applications inattendues ou suspectes ?
 
-:::tip[Checkpoint 8]
+:::tip[Checkpoint 9]
 Complétez un tableau récapitulatif :
 
 | Catégorie d'application | Pourcentage du trafic | Volume de données | Commentaire |
@@ -525,9 +593,9 @@ Complétez un tableau récapitulatif :
 | Autres                  |                       |                   |             |
 :::
 
-## PHASE 4 : Détection d'anomalies
+## PHASE 5 : Détection d'anomalies
 
-### Étape 4.1 : Simulation de comportements anormaux
+### Étape 5.1 : Simulation de comportements anormaux
 
 **Objectif :** Apprendre à détecter des usages réseau problématiques.
 
@@ -565,11 +633,11 @@ for i in {1..100}; do nslookup site$i.example.com; done
 
 2. Vérifiez dans ntopng si ce comportement est visible dans les statistiques DNS
 
-:::tip[Checkpoint 9]
+:::tip[Checkpoint 10]
 Pour chaque scénario, prenez une capture d'écran montrant l'anomalie détectée et expliquez comment vous l'avez identifiée.
 :::
 
-### Étape 4.2 : Analyse comportementale
+### Étape 5.2 : Analyse comportementale
 
 **Questions de réflexion :**
 
@@ -587,7 +655,7 @@ Pour chaque scénario, prenez une capture d'écran montrant l'anomalie détecté
    - Qui devrait y avoir accès ?
    - Quelles règles éthiques et légales faut-il respecter (RGPD) ?
 
-## PHASE 5 : Production du rapport d'analyse
+## PHASE 6 : Production du rapport d'analyse
 
 ### Livrable à rendre
 
@@ -657,29 +725,25 @@ Comparez les logs du firewall SNS avec les données ntopng :
 - Créez des graphiques dans LibreOffice Calc pour le rapport
 - Réfléchissez à une politique d'archivage des données de supervision
 
-
 ## Annexe : Vérifications et dépannage (enseignant)
 
 Cette annexe regroupe les commandes utiles pour diagnostiquer rapidement un problème de collecte de flux.
 
 ### 1) Statut des services
-
-```
+```bash
 sudo systemctl status redis-server --no-pager
 sudo systemctl status nprobe --no-pager
 sudo systemctl status ntopng --no-pager
 ```
 
 ### 2) Logs (les erreurs de configuration sont souvent explicites)
-
-```
+```bash
 sudo journalctl -u nprobe -n 200 --no-pager
 sudo journalctl -u ntopng -n 200 --no-pager
 ```
 
 ### 3) Vérifier les ports (écoute et connexions)
-
-```
+```bash
 # nProbe doit écouter en UDP sur le port de collecte (ici 4739)
 sudo ss -lunp | grep 4739
 
@@ -688,15 +752,13 @@ sudo ss -ltnp | grep 5556
 ```
 
 ### 4) Vérifier l'arrivée des flux côté Debian
-
-```
+```bash
 # Voir si le firewall envoie bien des paquets vers le collecteur
 sudo tcpdump -ni any udp port 4739
 ```
 
 ### 5) Vérifier la cohérence configuration nProbe/ntopng
-
-```
+```bash
 sudo grep -E "collector-port|zmq|@NTOPNG@" /etc/nprobe/nprobe.conf
 sudo grep -E "^-i=|--http-port|--community|--disable-login" /etc/ntopng/ntopng.conf
 ```
@@ -845,7 +907,7 @@ sudo dd if=/dev/urandom of=debian.iso bs=1M count=500
 ```
 
 ### Option 3 : Container Docker multi-services
-```bash
+```yaml
 # Docker Compose avec Nginx + FTP + serveur de fichiers
 version: '3'
 services:
