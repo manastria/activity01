@@ -54,71 +54,57 @@ Chaque niveau inclut le précédent. Visez au minimum le niveau ⭐ pour valider
 ```
 Internet Labo (172.25.0.0/16)
          |
-         | Bridge eno1
+    [fw-crash]
+     ├─ OUT → Réseau labo
+     ├─ DMZ → Réseau interne VirtualBox
+     └─ IN  → Réseau interne VirtualBox
          |
-    [EVA1 - fw-crash]
-     ├─ eth0 (OUT) → 172.25.x.y/16
-     ├─ eth1 (DMZ) → 10.54.0.1/24
-     └─ eth2 (IN)  → 172.17.0.1/16
-         |
-         ├─ [glpi-srv01] → 10.54.0.10/24 (DMZ)
-         └─ [admin-poste] → 172.17.0.100/16 (LAN)
+         ├─ [glpi-srv01] ou [glpi-web01 + glpi-db01]
+         └─ [admin-poste]
 ```
 
 :::note[Architecture modulaire (Mission 1 - Niveau 3)]
-Si vous avez séparé les services web et base de données en Mission 1 (⭐⭐⭐), votre architecture comprendra deux serveurs en DMZ :
-- **glpi-web01** : 10.54.0.10/24 (serveur web + PHP)
-- **glpi-db01** : 10.54.0.11/24 (base de données)
-
-Les règles de pare-feu devront être adaptées en conséquence pour autoriser la communication entre ces deux serveurs.
+Si vous avez séparé les services web et base de données en Mission 1 (⭐⭐⭐), votre architecture comprendra deux serveurs en DMZ plutôt qu'un seul. Les règles de pare-feu devront être adaptées pour autoriser la communication entre ces deux serveurs.
 :::
 
-### Zones de sécurité définies
+### Zones de sécurité
 
-| Zone | Interface | Réseau | Passerelle | Niveau de confiance |
-|------|-----------|--------|------------|---------------------|
-| **OUT** | eth0 | 172.25.x.y/16 | 172.25.0.1 | ❌ Non fiable (Internet) |
-| **DMZ** | eth1 | 10.54.0.0/24 | 10.54.0.1 (EVA1) | ⚠️ Partiellement fiable |
-| **IN** (LAN) | eth2 | 172.17.0.0/16 | 172.17.0.1 (EVA1) | ✅ Fiable (réseau interne) |
+| Zone | Réseau CRASH | Niveau de confiance |
+|------|--------------|---------------------|
+| **OUT** | 172.25.x.y/16 | ❌ Non fiable (Internet) |
+| **DMZ** | 10.54.0.0/24 | ⚠️ Partiellement fiable |
+| **IN** (LAN) | 172.17.0.0/16 | ✅ Fiable (réseau interne) |
 
-### Plan d'adressage
+### Conventions de nommage recommandées
 
-#### Pare-feu EVA1 (`fw-crash`)
+Pour faciliter la gestion de votre infrastructure, adoptez des conventions de nommage cohérentes :
 
-| Interface | IP | Masque | Rôle |
-|-----------|-----|--------|------|
-| eth0 (OUT) | 172.25.x.y | 255.255.0.0 | Vers Internet labo |
-| eth1 (DMZ) | 10.54.0.1 | 255.255.255.0 | Passerelle DMZ |
-| eth2 (IN) | 172.17.0.1 | 255.255.0.0 | Passerelle LAN |
+**Pare-feu :**
+- `fw-crash` : Stormshield SNS EVA 1
 
-:::note[Adresse IP OUT]
-L'adresse IP de l'interface OUT (eth0) vous sera attribuée par votre formateur. Elle correspond à votre numéro d'étudiant dans la plage 172.25.x.y/16.
-:::
+**Serveurs (architecture monolithique) :**
+- `glpi-srv01` : Serveur GLPI complet
 
-#### Serveurs et postes
+**Serveurs (architecture modulaire - Mission 1 ⭐⭐⭐) :**
+- `glpi-web01` : Serveur web + PHP
+- `glpi-db01` : Base de données
 
-| Nom | IP | Zone | Usage |
-|-----|-----|------|-------|
-| **glpi-srv01** | 10.54.0.10 | DMZ | Serveur GLPI complet |
-| **admin-poste** | 172.17.0.100 | LAN | Poste d'administration |
+**Postes de travail :**
+- `admin-poste` : Poste d'administration
 
-**Si architecture modulaire (Mission 1 ⭐⭐⭐) :**
-
-| Nom | IP | Zone | Usage |
-|-----|-----|------|-------|
-| **glpi-web01** | 10.54.0.10 | DMZ | Serveur web + PHP |
-| **glpi-db01** | 10.54.0.11 | DMZ | Base de données |
-| **admin-poste** | 172.17.0.100 | LAN | Poste d'administration |
+**Réseaux internes VirtualBox :**
+- `vboxnet-dmz` : Réseau interne pour la DMZ
+- `vboxnet-lan` : Réseau interne pour le LAN
 
 ---
 
 ## Matrice de flux réseau
 
-Cette matrice définit **qui peut communiquer avec qui** et **sur quels services**.
+Cette matrice définit **qui peut communiquer avec qui** et **sur quels services**. C'est le cahier des charges de votre politique de pare-feu.
 
 | Source | Destination | Services autorisés | Justification |
 |--------|-------------|-------------------|---------------|
-| **Internet** → **DMZ** | HTTPS (443) vers 10.54.0.10 | Accès public au portail GLPI |
+| **Internet** → **DMZ** | HTTPS (443) vers serveur GLPI | Accès public au portail GLPI |
 | **LAN** → **DMZ** | HTTPS (443), SSH (22), MySQL (3306)* | Administration des serveurs |
 | **LAN** → **Internet** | HTTP (80), HTTPS (443), DNS (53), NTP (123), SSH (22) | Navigation, mises à jour, admin distante |
 | **DMZ** → **Internet** | HTTP (80), HTTPS (443), DNS (53), NTP (123) | Mises à jour système |
@@ -126,968 +112,406 @@ Cette matrice définit **qui peut communiquer avec qui** et **sur quels services
 | **DMZ** → **LAN** | ❌ **INTERDIT** | Isolation : un serveur compromis ne doit pas attaquer le LAN |
 | **Internet** → **LAN** | ❌ **INTERDIT** | Pas d'accès direct depuis l'extérieur |
 
-_* MySQL (3306) : uniquement si architecture modulaire avec glpi-web01 et glpi-db01 séparés_
+_* MySQL (3306) : uniquement si architecture modulaire (Mission 1 ⭐⭐⭐)_
+
+:::caution[Règle de sécurité critique]
+Le blocage **DMZ → LAN** est LA règle de sécurité la plus importante de votre architecture. Un serveur compromis en DMZ ne doit JAMAIS pouvoir attaquer le réseau interne. Cette règle doit être testée et validée.
+:::
 
 ---
 
 ## Tâches à réaliser
 
-### Tâche 1 ⭐ : Préparation de l'environnement VirtualBox
+### Tâche 1 ⭐ : Conception de l'architecture réseau
 
-Avant de configurer le pare-feu, vous devez créer l'infrastructure réseau dans VirtualBox.
+Avant toute configuration, concevez votre architecture réseau complète.
 
-#### Étape 1.1 : Création des réseaux internes VirtualBox
+**Travail à effectuer :**
 
-<Steps>
+1. **Dessinez un schéma réseau** incluant :
+   - Le pare-feu `fw-crash` avec ses 3 interfaces
+   - Les zones de sécurité (OUT, DMZ, IN)
+   - Vos serveurs GLPI (un ou deux selon Mission 1)
+   - Le poste d'administration
+   - Les réseaux VirtualBox
 
-1. Ouvrez VirtualBox et allez dans **Fichier > Gestionnaire de réseau hôte**
+2. **Définissez un plan d'adressage IP** pour tous les équipements
 
-2. Créez deux réseaux internes :
-   - **Réseau 1** : Nommez-le `vboxnet-dmz`
-     - Ne pas activer le serveur DHCP
-     - Ne pas configurer d'adaptateur sur l'hôte (pas d'IP)
-   - **Réseau 2** : Nommez-le `vboxnet-lan`
-     - Ne pas activer le serveur DHCP
-     - Ne pas configurer d'adaptateur sur l'hôte (pas d'IP)
+3. **Identifiez les flux réseau** nécessaires pour chaque service
 
-</Steps>
+:::tip[Plan d'adressage à compléter]
+Utilisez ce tableau dans votre portfolio pour documenter votre plan d'adressage :
 
-:::tip[Pourquoi pas de DHCP ?]
-Les serveurs et le pare-feu utilisent des IP fixes. Le DHCP n'est pas nécessaire et pourrait créer des conflits d'adressage.
+| Équipement | Interface/Zone | Adresse IP | Masque | Passerelle | DNS |
+|------------|----------------|------------|--------|------------|-----|
+| fw-crash | eth0 (OUT) | | | | |
+| fw-crash | eth1 (DMZ) | | | - | - |
+| fw-crash | eth2 (IN) | | | - | - |
+| glpi-srv01 (ou glpi-web01) | DMZ | | | | |
+| glpi-db01 (si séparé) | DMZ | | | | |
+| admin-poste | LAN | | | | |
+
+**Note :** L'adresse IP de l'interface OUT sera fournie par votre formateur.
 :::
 
-#### Étape 1.2 : Configuration réseau de la VM EVA1
+---
 
-Configurez **3 adaptateurs réseau** pour la VM `fw-crash` (Stormshield EVA1) :
+### Tâche 2 ⭐ : Mise en place de l'infrastructure VirtualBox
 
-| Adaptateur | Type | Attaché à | Nom/Interface |
-|------------|------|-----------|---------------|
-| **Adapter 1** | Bridged Adapter | `eno1` | Interface physique du labo |
-| **Adapter 2** | Internal Network | `vboxnet-dmz` | Réseau interne DMZ |
-| **Adapter 3** | Internal Network | `vboxnet-lan` | Réseau interne LAN |
+Créez l'environnement réseau dans VirtualBox.
 
-<Aside type="caution">
-Vérifiez que le mode **promiscuous** est sur « Refuser » pour chaque adaptateur (paramètre par défaut).
-</Aside>
+**Vous aurez besoin de :**
 
-#### Étape 1.3 : Configuration réseau de la VM GLPI
+- **Deux réseaux internes VirtualBox** (noms suggérés : `vboxnet-dmz` et `vboxnet-lan`)
+- **Configurer 3 adaptateurs réseau** sur la VM `fw-crash` :
+  - Un adaptateur en _Bridged_ sur l'interface physique du labo
+  - Deux adaptateurs en _Internal Network_ pour DMZ et LAN
+- **Configurer les adaptateurs** de vos VMs GLPI et du poste admin sur les bons réseaux internes
 
-**Si architecture monolithique (Mission 1 ⭐ ou ⭐⭐) :**
-
-Configurez **1 adaptateur réseau** pour la VM `glpi-srv01` :
-
-| Adaptateur | Type | Attaché à |
-|------------|------|-----------|
-| **Adapter 1** | Internal Network | `vboxnet-dmz` |
-
-**Si architecture modulaire (Mission 1 ⭐⭐⭐) :**
-
-Configurez **1 adaptateur réseau** pour chaque VM :
-
-- **glpi-web01** : Internal Network → `vboxnet-dmz`
-- **glpi-db01** : Internal Network → `vboxnet-dmz`
-
-#### Étape 1.4 : Configuration réseau du poste admin
-
-Créez une VM minimale (Debian ou XUbuntu) nommée `admin-poste` avec :
-
-| Adaptateur | Type | Attaché à |
-|------------|------|-----------|
-| **Adapter 1** | Internal Network | `vboxnet-lan` |
-
-Cette VM servira à tester les accès depuis le LAN.
+:::note[Rappel]
+- Les serveurs GLPI doivent être dans la DMZ
+- Le poste d'administration doit être dans le LAN
+:::
 
 ---
 
-### Tâche 2 ⭐ : Configuration initiale de l'EVA1
+### Tâche 3 ⭐ : Configuration du pare-feu Stormshield
 
-Démarrez la VM `fw-crash` et effectuez la configuration de base.
+Configurez le pare-feu avec ses trois interfaces et mettez en place les règles de filtrage.
 
-#### Étape 2.1 : Première connexion
+#### Étape 3.1 : Configuration des interfaces
 
-<Steps>
+Configurez les trois interfaces réseau du pare-feu selon votre plan d'adressage :
 
-1. Démarrez la VM Stormshield EVA1
+- **Interface OUT** : Vers Internet (réseau labo)
+- **Interface DMZ** : Vers la zone démilitarisée
+- **Interface IN** : Vers le réseau interne (LAN)
 
-2. Connectez-vous avec les identifiants par défaut :
-   - **Login** : `admin`
-   - **Password** : `admin`
+N'oubliez pas de définir les zones de sécurité appropriées pour chaque interface.
 
-3. Vous êtes invité à changer le mot de passe → Choisissez un mot de passe robuste et documentez-le
+#### Étape 3.2 : Création des objets réseau
 
-</Steps>
+Pour faciliter la gestion des règles de pare-feu, créez des **objets réseau** réutilisables dans Stormshield.
 
-#### Étape 2.2 : Configuration des interfaces réseau
+**Objets à créer (noms suggérés) :**
 
-Accédez à l'interface web de Stormshield :
+**Réseaux :**
+- `net_lan` : Réseau interne CRASH
+- `net_dmz` : Zone démilitarisée
 
-<Steps>
+**Machines (hôtes) :**
+- `host_glpi_srv01` : Serveur GLPI (ou `host_glpi_web01` et `host_glpi_db01` si séparé)
+- `host_admin_poste` : Poste d'administration
 
-1. **Identifiez l'IP de l'interface OUT** (eth0) :
-   ```bash
-      # En CLI sur EVA1
-      show configuration network
-   ```
+**Groupes de services (optionnel mais recommandé) :**
+- `srv_web_standard` : HTTP + HTTPS
+- `srv_administration` : SSH
+- `srv_updates` : HTTP + HTTPS + DNS + NTP
 
-2. Depuis un navigateur sur votre hôte, accédez à : `https://172.25.x.y` (remplacez par votre IP)
+:::tip[Pourquoi créer des objets ?]
+Les objets réseau rendent vos règles plus lisibles et plus faciles à maintenir. Au lieu d'écrire « 10.54.0.10 », vous écrivez « host_glpi_srv01 ». Si l'IP change, vous ne modifiez que l'objet, pas toutes les règles.
+:::
 
-3. Connectez-vous avec `admin` et votre nouveau mot de passe
+#### Étape 3.3 : Mise en place des règles de pare-feu
 
-4. Allez dans **Configuration > Réseau > Interfaces**
-
-5. Configurez les 3 interfaces :
-
-</Steps>
-
-**Interface OUT (eth0) :**
-```
-Nom : OUT
-Type : Ethernet
-IPv4 : 172.25.x.y/16 (votre IP attribuée)
-Passerelle : 172.25.0.1
-Zone de sécurité : Internet
-```
-
-**Interface DMZ (eth1) :**
-```
-Nom : DMZ
-Type : Ethernet
-IPv4 : 10.54.0.1/24
-Passerelle : (vide)
-Zone de sécurité : DMZ
-```
-
-**Interface IN (eth2) :**
-```
-Nom : IN
-Type : Ethernet
-IPv4 : 172.17.0.1/16
-Passerelle : (vide)
-Zone de sécurité : Internal
-```
-
-<Steps>
-
-6. **Activez le routage** : Configuration > Réseau > Routage > Activer le routage IPv4
-
-7. **Appliquez la configuration** et redémarrez l'EVA1 si nécessaire
-
-</Steps>
-
-#### Étape 2.3 : Vérification de la connectivité
-
-Depuis l'EVA1 (CLI ou interface web), testez :
-```bash
-# Ping vers Internet
-ping -c 3 8.8.8.8
-
-# Ping vers la passerelle labo
-ping -c 3 172.25.0.1
-```
-
-Si les pings échouent, vérifiez la configuration réseau de l'interface OUT.
-
----
-
-### Tâche 3 ⭐ : Configuration réseau des serveurs GLPI
-
-Configurez les adresses IP et passerelles sur vos serveurs GLPI.
-
-#### Configuration de `glpi-srv01` (architecture monolithique)
-
-Connectez-vous à la VM et configurez l'interface réseau :
-
-**Avec Netplan (Ubuntu/Debian récent) :**
-```yaml
-# /etc/netplan/01-netcfg.yaml
-network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    eth0:
-      addresses:
-        - 10.54.0.10/24
-      routes:
-        - to: default
-          via: 10.54.0.1
-      nameservers:
-        addresses:
-          - 172.17.0.1
-          - 8.8.8.8
-```
-```bash
-sudo netplan apply
-```
-
-**Avec interfaces classiques (Debian ancien) :**
-```bash
-# /etc/network/interfaces
-auto eth0
-iface eth0 inet static
-    address 10.54.0.10
-    netmask 255.255.255.0
-    gateway 10.54.0.1
-    dns-nameservers 172.17.0.1 8.8.8.8
-```
-```bash
-sudo systemctl restart networking
-```
-
-#### Configuration architecture modulaire (si Mission 1 ⭐⭐⭐)
-
-**Sur `glpi-web01` :**
-- IP : 10.54.0.10/24
-- Passerelle : 10.54.0.1
-- DNS : 172.17.0.1, 8.8.8.8
-
-**Sur `glpi-db01` :**
-- IP : 10.54.0.11/24
-- Passerelle : 10.54.0.1
-- DNS : 172.17.0.1, 8.8.8.8
-
-#### Vérification
-
-Testez la connectivité depuis `glpi-srv01` (ou glpi-web01) :
-```bash
-# Ping vers la passerelle (EVA1)
-ping -c 3 10.54.0.1
-
-# Ping vers Internet (devrait échouer pour l'instant, pas de règles pare-feu)
-ping -c 3 8.8.8.8
-```
-
----
-
-### Tâche 4 ⭐ : Configuration réseau du poste admin
-
-Configurez l'adresse IP du poste d'administration dans le LAN.
-
-**Sur `admin-poste` :**
-- IP : 172.17.0.100/16
-- Passerelle : 172.17.0.1 (EVA1)
-- DNS : 172.17.0.1, 8.8.8.8
-
-Testez la connectivité :
-```bash
-# Ping vers la passerelle
-ping -c 3 172.17.0.1
-
-# Ping vers Internet (devrait échouer, pas de règles encore)
-ping -c 3 8.8.8.8
-```
-
----
-
-### Tâche 5 ⭐ : Création des objets réseau dans Stormshield
-
-Avant de créer les règles de pare-feu, définissez des objets réseau réutilisables.
-
-Dans l'interface web EVA1 : **Configuration > Objets > Réseau**
-
-<Steps>
-
-1. **Créez les objets réseaux :**
-
-   | Nom | Type | Valeur | Description |
-   |-----|------|--------|-------------|
-   | `net_lan` | Réseau | 172.17.0.0/16 | Réseau interne CRASH |
-   | `net_dmz` | Réseau | 10.54.0.0/24 | Zone démilitarisée |
-   | `host_glpi_srv01` | Hôte | 10.54.0.10 | Serveur GLPI |
-   | `host_admin_poste` | Hôte | 172.17.0.100 | Poste administration |
-
-2. **Si architecture modulaire, ajoutez :**
-
-   | Nom | Type | Valeur | Description |
-   |-----|------|--------|-------------|
-   | `host_glpi_web01` | Hôte | 10.54.0.10 | Serveur web GLPI |
-   | `host_glpi_db01` | Hôte | 10.54.0.11 | Base de données GLPI |
-
-3. **Créez des groupes de services (optionnel mais recommandé) :**
-
-</Steps>
-
-**Configuration > Objets > Protocoles et services**
-
-| Nom | Type | Ports | Description |
-|-----|------|-------|-------------|
-| `srv_web_standard` | Groupe | HTTP (80), HTTPS (443) | Services web |
-| `srv_administration` | Groupe | SSH (22) | Administration serveurs |
-| `srv_updates` | Groupe | HTTP, HTTPS, DNS (53), NTP (123) | Mises à jour système |
-
----
-
-### Tâche 6 ⭐ : Configuration des règles de pare-feu de base
-
-Créez la politique de filtrage dans **Configuration > Pare-feu > Règles de filtrage**.
+Créez les règles de filtrage en respectant la **matrice de flux réseau** définie plus haut.
 
 :::caution[Ordre des règles]
-L'ordre des règles est **CRUCIAL**. Stormshield applique les règles de haut en bas et s'arrête à la première correspondance. Placez les règles spécifiques avant les règles générales.
+L'ordre des règles est **CRUCIAL**. Le pare-feu applique les règles de haut en bas et s'arrête à la première correspondance. Placez :
+1. Les règles de sécurité (anti-spoofing, blocages) en premier
+2. Les règles spécifiques (accès à des machines précises)
+3. Les règles générales (accès larges)
+4. La règle de blocage par défaut en dernier (implicite)
 :::
 
-#### Règle 1 : Anti-spoofing
+**Règles essentielles à créer :**
 
-Protégez contre les attaques de _spoofing_ (usurpation d'adresse IP).
+1. **Anti-spoofing** : Bloquer les paquets venant d'Internet avec des IP sources internes
+2. **Accès public GLPI** : Autoriser HTTPS depuis Internet vers le serveur GLPI
+3. **Administration DMZ** : Autoriser LAN → DMZ pour HTTPS, SSH, MySQL (si besoin)
+4. **Navigation Internet** : Autoriser LAN → Internet pour les services web et mises à jour
+5. **Mises à jour DMZ** : Autoriser DMZ → Internet pour HTTP, HTTPS, DNS, NTP
+6. **Communication inter-serveurs** : (Si architecture modulaire) Autoriser glpi-web01 → glpi-db01 sur MySQL
+7. **BLOCAGE DMZ → LAN** : ⚠️ **CRITIQUE** - Bloquer tout trafic DMZ → LAN avec alarme
+8. **BLOCAGE Internet → LAN** : Bloquer tout trafic Internet → LAN avec alarme
 
-| Paramètre | Valeur |
-|-----------|--------|
-| **Nom** | `Anti-spoof OUT` |
-| **Source** | Interface OUT, Adresse IP : `net_lan` OU `net_dmz` |
-| **Destination** | Any |
-| **Service** | Any |
-| **Action** | **BLOCK** |
-| **Log** | Alarm |
-
-**Justification** : Bloque les paquets venant d'Internet (OUT) mais prétendant provenir du LAN ou de la DMZ.
-
----
-
-#### Règle 2 : Accès public GLPI (Internet → DMZ)
-
-Autorisez l'accès externe au portail GLPI.
-
-| Paramètre | Valeur |
-|-----------|--------|
-| **Nom** | `Internet vers GLPI` |
-| **Source** | Interface OUT, Adresse : Any |
-| **Destination** | `host_glpi_srv01` (10.54.0.10) |
-| **Service** | HTTPS (443) |
-| **Action** | **PASS** |
-| **Log** | Log |
-| **NAT** | Activer (voir Tâche 7) |
-
-**Justification** : Seul service accessible depuis Internet : le portail GLPI en HTTPS.
+Pour chaque règle, documentez :
+- Son nom
+- Source et destination
+- Services autorisés
+- Action (PASS ou BLOCK)
+- Activation des logs
+- Justification métier
 
 ---
 
-#### Règle 3 : Administration depuis le LAN (LAN → DMZ)
+### Tâche 4 ⭐ : Configuration du NAT/PAT
 
-Autorisez les administrateurs à gérer les serveurs DMZ.
+Le NAT (_Network Address Translation_) permet aux machines avec des adresses IP privées d'accéder à Internet via l'adresse publique du pare-feu.
 
-**Règle 3a : Accès HTTPS**
+**Configuration NAT nécessaire :**
 
-| Paramètre | Valeur |
-|-----------|--------|
-| **Nom** | `LAN vers GLPI HTTPS` |
-| **Source** | `net_lan` |
-| **Destination** | `host_glpi_srv01` |
-| **Service** | HTTPS (443) |
-| **Action** | **PASS** |
-| **Log** | Log |
+#### NAT sortant (PAT)
 
-**Règle 3b : Accès SSH**
+Les réseaux **LAN** et **DMZ** doivent pouvoir sortir sur Internet en utilisant l'IP publique du pare-feu (interface OUT).
 
-| Paramètre | Valeur |
-|-----------|--------|
-| **Nom** | `LAN vers GLPI SSH` |
-| **Source** | `net_lan` |
-| **Destination** | `host_glpi_srv01` |
-| **Service** | SSH (22) |
-| **Action** | **PASS** |
-| **Log** | Log |
+**Principe** : Toutes les connexions sortantes depuis 172.17.0.0/16 et 10.54.0.0/24 doivent être traduites vers l'IP publique de l'interface OUT.
 
-**Règle 3c : Accès MySQL (architecture modulaire uniquement)**
+#### NAT entrant (DNAT)
 
-| Paramètre | Valeur |
-|-----------|--------|
-| **Nom** | `LAN vers MySQL` |
-| **Source** | `net_lan` |
-| **Destination** | `host_glpi_db01` |
-| **Service** | MySQL (3306) |
-| **Action** | **PASS** |
-| **Log** | Log |
+Les connexions HTTPS entrantes sur l'IP publique du pare-feu doivent être **redirigées** vers le serveur GLPI en DMZ.
 
-**Justification** : Les administrateurs doivent pouvoir gérer les serveurs (consultation GLPI, SSH pour maintenance, accès BDD pour debug).
+**Principe** : Quand quelqu'un accède à `https://[IP_publique_pare-feu]`, la requête doit arriver sur le serveur GLPI.
+
+:::note[Rappel du cahier des charges]
+- La solution doit être capable d'héberger de nombreux services web sur une même adresse IP publique
+- Seule l'IP publique du pare-feu est exposée sur Internet
+- Les serveurs DMZ utilisent des IP privées (10.54.0.0/24)
+:::
 
 ---
 
-#### Règle 4 : Navigation Internet depuis le LAN (LAN → Internet)
+### Tâche 5 ⭐ : Tests de validation de l'architecture
 
-Autorisez les utilisateurs du LAN à accéder à Internet.
+Testez que votre architecture fonctionne correctement et que la sécurité est assurée.
 
-| Paramètre | Valeur |
-|-----------|--------|
-| **Nom** | `LAN vers Internet` |
-| **Source** | `net_lan` |
-| **Destination** | Interface OUT, Adresse : Any |
-| **Service** | `srv_updates` (HTTP, HTTPS, DNS, NTP) + SSH |
-| **Action** | **PASS** |
-| **Log** | Log (HTTP/HTTPS uniquement) |
-| **NAT** | Activer (voir Tâche 7) |
+#### Tests de connectivité à réaliser
 
-**Justification** : Navigation web, mises à jour, administration distante pour les utilisateurs internes.
+**Test 1 : LAN → Internet**
 
----
+Depuis le poste `admin-poste`, vérifiez que vous pouvez :
+- Résoudre des noms de domaine (DNS)
+- Accéder à des sites web en HTTP et HTTPS
+- Télécharger des fichiers
 
-#### Règle 5 : Mises à jour depuis la DMZ (DMZ → Internet)
+**Test 2 : DMZ → Internet**
 
-Autorisez les serveurs DMZ à se mettre à jour.
+Depuis `glpi-srv01`, vérifiez que vous pouvez :
+- Effectuer des mises à jour système
+- Synchroniser l'heure (_astuce :_ `ntpdate -q pool.ntp.org`)
+- Résoudre des noms de domaine
 
-| Paramètre | Valeur |
-|-----------|--------|
-| **Nom** | `DMZ vers Internet (updates)` |
-| **Source** | `net_dmz` |
-| **Destination** | Interface OUT, Adresse : Any |
-| **Service** | `srv_updates` (HTTP, HTTPS, DNS, NTP) |
-| **Action** | **PASS** |
-| **Log** | Log |
-| **NAT** | Activer (voir Tâche 7) |
+**Test 3 : LAN → DMZ**
 
-**Justification** : Les serveurs doivent pouvoir télécharger les mises à jour de sécurité et synchroniser l'heure.
+Depuis `admin-poste`, vérifiez que vous pouvez :
+- Accéder à l'interface web GLPI (_astuce :_ `curl -k https://[IP_GLPI]`)
+- Vous connecter en SSH sur les serveurs DMZ
 
----
+**Test 4 : Internet → DMZ**
 
-#### Règle 6 : Communication inter-serveurs DMZ (architecture modulaire)
+Depuis votre machine hôte ou un autre poste du labo, vérifiez que vous pouvez :
+- Accéder au portail GLPI via l'IP publique du pare-feu (_astuce :_ `curl -k https://[IP_publique]`)
 
-**Uniquement si vous avez séparé web et base de données (Mission 1 ⭐⭐⭐).**
+**Test 5 : DMZ → LAN (doit ÉCHOUER !)**
 
-| Paramètre | Valeur |
-|-----------|--------|
-| **Nom** | `GLPI Web vers DB` |
-| **Source** | `host_glpi_web01` |
-| **Destination** | `host_glpi_db01` |
-| **Service** | MySQL (3306) |
-| **Action** | **PASS** |
-| **Log** | - (pas de log, trop verbeux) |
+⚠️ **Test de sécurité critique**
 
-**Justification** : Le serveur web doit pouvoir interroger la base de données.
+Depuis `glpi-srv01`, tentez d'accéder au LAN :
+- Essayez de pinguer une machine du LAN
+- Essayez de vous connecter en SSH à `admin-poste`
 
----
+✅ **Résultat attendu** : Toutes les tentatives doivent **échouer** (timeout). Vérifiez dans les logs du pare-feu qu'une **alarme** a été levée.
 
-#### Règle 7 : BLOCAGE DMZ → LAN (**CRITIQUE**)
+**Test 6 : Vérification du NAT**
 
-**LA règle de sécurité la plus importante** : empêcher un serveur compromis d'attaquer le LAN.
+Depuis `glpi-srv01`, vérifiez que votre IP publique est bien celle du pare-feu :
 
-| Paramètre | Valeur |
-|-----------|--------|
-| **Nom** | `DMZ vers LAN INTERDIT` |
-| **Source** | `net_dmz` |
-| **Destination** | `net_lan` |
-| **Service** | Any |
-| **Action** | **BLOCK** |
-| **Log** | **Alarm** (alerte de sécurité) |
+_Astuce :_ `curl https://ifconfig.me`
 
-**Justification** : Isolation totale. Si un serveur DMZ est piraté, il ne doit JAMAIS pouvoir accéder au réseau interne.
+L'IP affichée doit être celle de l'interface OUT du pare-feu, pas l'IP privée de la DMZ.
+
+#### Documentation des tests
+
+Pour chaque test, documentez dans votre portfolio :
+- La commande utilisée
+- Le résultat obtenu
+- Une capture d'écran si pertinent
+- L'analyse du résultat (conforme ou non aux attentes)
 
 ---
 
-#### Règle 8 : BLOCAGE Internet → LAN
+### Tâche 6 ⭐⭐ : Activation de l'IPS (Intrusion Prevention System)
 
-| Paramètre | Valeur |
-|-----------|--------|
-| **Nom** | `Internet vers LAN INTERDIT` |
-| **Source** | Interface OUT |
-| **Destination** | `net_lan` |
-| **Service** | Any |
-| **Action** | **BLOCK** |
-| **Log** | Alarm |
-
-**Justification** : Aucun accès direct depuis Internet vers le réseau interne.
-
----
-
-#### Règle implicite : Deny All
-
-Stormshield possède une règle implicite en fin de politique : **tout ce qui n'est pas explicitement autorisé est bloqué**.
-
-Vérifiez que cette règle est active : **Configuration > Pare-feu > Règles de filtrage > Règle implicite : Block & Log**.
-
----
-
-### Tâche 7 ⭐ : Configuration du NAT/PAT
-
-Configurez la traduction d'adresses pour permettre aux réseaux privés d'accéder à Internet.
-
-#### NAT sortant (PAT - Port Address Translation)
-
-**Configuration > Pare-feu > NAT**
-
-<Steps>
-
-1. Créez une règle de NAT sortant pour le LAN :
-
-   | Paramètre | Valeur |
-   |-----------|--------|
-   | **Nom** | `NAT LAN sortant` |
-   | **Source** | `net_lan` (172.17.0.0/16) |
-   | **Destination** | Any |
-   | **IP traduite** | Adresse de l'interface OUT (172.25.x.y) |
-   | **Type** | Dynamic NAT (PAT) |
-
-2. Créez une règle de NAT sortant pour la DMZ :
-
-   | Paramètre | Valeur |
-   |-----------|--------|
-   | **Nom** | `NAT DMZ sortant` |
-   | **Source** | `net_dmz` (10.54.0.0/24) |
-   | **Destination** | Any |
-   | **IP traduite** | Adresse de l'interface OUT (172.25.x.y) |
-   | **Type** | Dynamic NAT (PAT) |
-
-</Steps>
-
-**Justification** : Permet aux machines avec des IP privées (10.x et 172.17.x) de sortir sur Internet via l'IP publique du pare-feu.
-
----
-
-#### NAT entrant (DNAT - Destination NAT)
-
-Redirigez les connexions HTTPS entrantes vers le serveur GLPI.
-
-<Steps>
-
-3. Créez une règle de NAT entrant (DNAT) :
-
-   | Paramètre | Valeur |
-   |-----------|--------|
-   | **Nom** | `DNAT HTTPS vers GLPI` |
-   | **Interface entrante** | OUT |
-   | **IP destination** | 172.25.x.y (IP publique de l'EVA1) |
-   | **Port destination** | 443 |
-   | **IP traduite** | 10.54.0.10 (`host_glpi_srv01`) |
-   | **Port traduit** | 443 |
-
-4. **Liez cette règle NAT à la règle de filtrage n°2** (`Internet vers GLPI`)
-
-</Steps>
-
-**Justification** : Quand quelqu'un accède à `https://172.25.x.y` depuis Internet, la requête est automatiquement redirigée vers le serveur GLPI en DMZ.
-
----
-
-### Tâche 8 ⭐ : Tests de connectivité et validation
-
-Vérifiez que votre architecture fonctionne correctement.
-
-#### Test 1 : LAN → Internet
-
-Depuis `admin-poste` :
-```bash
-# Test DNS
-nslookup google.com
-
-# Test HTTP
-curl -I http://www.debian.org
-
-# Test HTTPS
-curl -I https://www.debian.org
-```
-
-✅ **Attendu** : Toutes les commandes fonctionnent.
-
----
-
-#### Test 2 : DMZ → Internet
-
-Depuis `glpi-srv01` :
-```bash
-# Test de mise à jour
-sudo apt update
-
-# Test NTP
-ntpdate -q pool.ntp.org
-
-# Test ping (devrait fonctionner si ICMP autorisé)
-ping -c 3 8.8.8.8
-```
-
-✅ **Attendu** : Les mises à jour fonctionnent, NTP répond.
-
----
-
-#### Test 3 : LAN → DMZ (administration)
-
-Depuis `admin-poste` :
-```bash
-# Test HTTPS vers GLPI
-curl -k https://10.54.0.10
-
-# Test SSH
-ssh user@10.54.0.10
-```
-
-✅ **Attendu** : GLPI répond, SSH fonctionne.
-
----
-
-#### Test 4 : Internet → DMZ (accès public)
-
-Depuis votre machine hôte ou un autre poste du labo :
-```bash
-# Accès au portail GLPI
-curl -k https://172.25.x.y
-```
-
-Ou dans un navigateur : `https://172.25.x.y`
-
-✅ **Attendu** : La page d'accueil de GLPI s'affiche.
-
----
-
-#### Test 5 : DMZ → LAN (doit échouer !)
-
-Depuis `glpi-srv01` :
-```bash
-# Tentative de ping vers le LAN
-ping -c 3 172.17.0.100
-
-# Tentative de SSH vers le LAN
-ssh user@172.17.0.100
-```
-
-❌ **Attendu** : **Toutes les tentatives échouent** (timeout). Vérifiez les logs EVA1 : une alarme doit être levée.
-
----
-
-#### Test 6 : Vérification des logs
-
-Dans l'interface web EVA1 : **Monitoring > Logs > Filtrage**
-
-Recherchez les événements récents :
-- ✅ Connexions autorisées (règles PASS) apparaissent en vert
-- ❌ Connexions bloquées (règles BLOCK) apparaissent en rouge avec alarme
-
-**Vérifiez particulièrement** que la tentative DMZ → LAN (Test 5) a bien généré une alarme.
-
----
-
-### Tâche 9 ⭐⭐ : Activation de l'IPS (Intrusion Prevention System)
-
-Activez la détection et le blocage automatique des attaques.
+Activez la détection et le blocage automatique des attaques sur le pare-feu Stormshield.
 
 #### Configuration de l'IPS
 
-**Configuration > Sécurité > IPS**
+L'IPS doit analyser le trafic pour détecter :
+- Les tentatives d'intrusion (scans de ports, scans de vulnérabilités)
+- Les attaques web (injection SQL, XSS, _Path Traversal_)
+- Les comportements anormaux (connexions vers des serveurs de commande et contrôle)
 
-<Steps>
+**Configurez des profils IPS** adaptés à chaque type de flux :
 
-1. **Activez l'IPS** : Cochez « Activer l'IPS »
+| Flux | Profil recommandé | Objectif |
+|------|-------------------|----------|
+| Internet → DMZ | « Serveur Web » | Détecter attaques web |
+| LAN → Internet | « Poste client » | Détecter malware, exfiltration |
 
-2. **Configurez les profils IPS par interface :**
+**Mode IPS** : Choisissez le mode « Prévention » (pas seulement détection) pour bloquer automatiquement les attaques détectées.
 
-   | Interface | Profil IPS | Justification |
-   |-----------|-----------|---------------|
-   | **OUT → DMZ** | « Serveur Web » | Détecte attaques web (SQL injection, XSS, scan de vulnérabilités) |
-   | **LAN → OUT** | « Poste client » | Détecte malware, C&C (_Command & Control_), exfiltration de données |
-   | **LAN → DMZ** | « Poste client » | Détecte attaques internes |
+#### Tests de l'IPS
 
-3. **Mode IPS** : Sélectionnez « Prévention » (pas juste détection)
+Testez que l'IPS fonctionne en simulant des attaques :
 
-4. **Sensibilité** : Moyenne (compromis entre sécurité et faux positifs)
+**Test 1 : Scan de ports**
 
-5. **Appliquez** la configuration
+Depuis une machine externe, lancez un scan de ports sur votre pare-feu :
 
-</Steps>
+_Astuce :_ `nmap -A -T4 [IP_publique]`
 
----
+**Test 2 : Scan de vulnérabilités web**
 
-#### Test de l'IPS
+Depuis une machine externe, scannez le serveur GLPI :
 
-Depuis un poste externe au labo, lancez un scan de vulnérabilités sur votre serveur GLPI :
-```bash
-# Avec Nmap (scan de ports agressif)
-nmap -A -T4 172.25.x.y
+_Astuce :_ `nikto -h https://[IP_publique]`
 
-# Avec Nikto (scan de vulnérabilités web)
-nikto -h https://172.25.x.y
-```
+**Vérifications attendues :**
+- Les scans doivent être détectés dans les logs IPS
+- Des alertes de sécurité doivent être levées
+- Certaines connexions doivent être bloquées automatiquement
 
-**Vérifiez dans les logs EVA1** (**Monitoring > Logs > IPS**) :
-- ✅ Le scan doit être détecté
-- ✅ Des alertes IPS doivent être levées
-- ✅ Certaines connexions doivent être bloquées
-
-**Documentez** les alertes IPS générées et expliquez leur signification.
+Documentez les alertes IPS générées et expliquez leur signification.
 
 ---
 
-### Tâche 10 ⭐⭐ : Centralisation des logs vers Syslog
+### Tâche 7 ⭐⭐ : Centralisation des logs vers Syslog
 
-Envoyez les logs du pare-feu vers le serveur Syslog centralisé (docker_logs de la Mission 1).
+Envoyez les logs du pare-feu vers le serveur Syslog centralisé (déployé en Mission 1 ⭐⭐).
 
-#### Configuration de l'envoi Syslog
+**Configuration à réaliser :**
 
-**Configuration > Notifications > Syslog**
+- Configurez l'EVA1 pour envoyer ses logs vers votre serveur Syslog
+- Sélectionnez les types de logs pertinents :
+  - Logs de filtrage (règles appliquées)
+  - Logs IPS (alertes de sécurité)
+  - Logs système (authentification, modifications de configuration)
 
-<Steps>
+**Exploitation des logs :**
 
-1. **Activez l'envoi Syslog**
-
-2. **Configurez le serveur Syslog distant :**
-
-   | Paramètre | Valeur |
-   |-----------|--------|
-   | **Adresse IP** | IP de votre conteneur Syslog (ex: 172.17.0.20) |
-   | **Port** | 514 |
-   | **Protocole** | UDP |
-   | **Facility** | Local0 |
-   | **Format** | BSD (RFC 3164) ou IETF (RFC 5424) |
-
-3. **Sélectionnez les types de logs à envoyer :**
-   - ✅ Logs de filtrage (règles pare-feu)
-   - ✅ Logs IPS (alertes de sécurité)
-   - ✅ Logs système (authentification, modifications de configuration)
-
-4. **Testez l'envoi** : Générez du trafic (ping, HTTP) et vérifiez que les logs arrivent sur le serveur Syslog
-
-</Steps>
+Créez des requêtes ou des dashboards pour :
+- Visualiser les connexions bloquées par heure
+- Identifier les IP sources les plus bloquées
+- Suivre les alertes IPS des dernières 24h
+- Détecter les tentatives d'accès DMZ → LAN
 
 ---
 
-#### Exploitation des logs centralisés
+### Tâche 8 ⭐⭐ : Affinage des règles de sécurité
 
-Consultez les logs centralisés et créez quelques requêtes utiles :
+Améliorez la précision de vos règles de pare-feu.
 
-**Exemples de requêtes (syntaxe dépend de votre outil Syslog) :**
-```
-# Toutes les connexions bloquées
-action="BLOCK"
+#### Restriction par IP source
 
-# Alertes IPS uniquement
-facility="IPS"
+Au lieu d'autoriser **tout le LAN** à administrer la DMZ, restreignez l'accès au seul poste d'administration.
 
-# Connexions vers la DMZ depuis Internet
-src_zone="OUT" AND dst_zone="DMZ"
+Modifiez vos règles d'administration (SSH, MySQL) pour n'autoriser que `host_admin_poste` comme source.
 
-# Tentatives DMZ → LAN (doit être vide ou très rare)
-src_zone="DMZ" AND dst_zone="IN"
-```
+**Justification** : Principe du moindre privilège - seul le poste admin doit pouvoir gérer les serveurs.
 
-**Créez un dashboard** affichant :
-- Nombre de connexions bloquées par heure
-- Top 5 des IP sources bloquées
-- Alertes IPS des dernières 24h
+#### Gestion du protocole ICMP
+
+Le protocole ICMP (utilisé par `ping`) est utile pour le diagnostic mais peut être exploité pour des reconnaissances réseau.
+
+**Configurez des règles ICMP** qui :
+- Autorisent le ping depuis le LAN vers toutes les destinations (diagnostic interne)
+- Autorisent le ping depuis la DMZ vers Internet (diagnostic réseau)
+- **Bloquent** le ping depuis Internet vers DMZ et LAN (empêcher la reconnaissance)
 
 ---
 
-### Tâche 11 ⭐⭐ : Affinage des règles de pare-feu
-
-Améliorez la sécurité en restreignant davantage les accès.
-
-#### Restriction par IP source (administration)
-
-Modifiez les règles 3a, 3b, 3c pour limiter l'administration à un seul poste :
-
-**Règle 3a modifiée :**
-
-| Paramètre | Avant | Après |
-|-----------|-------|-------|
-| **Source** | `net_lan` | `host_admin_poste` (172.17.0.100) |
-
-**Justification** : Seul le poste d'administration doit pouvoir gérer les serveurs DMZ, pas tous les postes du LAN.
-
-Faites de même pour les règles 3b et 3c.
-
----
-
-#### Ajout de règles ICMP contrôlées
-
-Autorisez le ping de manière sélective pour le diagnostic réseau.
-
-**Nouvelle règle : LAN → Ping ALL**
-
-| Paramètre | Valeur |
-|-----------|--------|
-| **Nom** | `LAN Ping diagnostic` |
-| **Source** | `net_lan` |
-| **Destination** | Any |
-| **Service** | ICMP Echo Request (ping) |
-| **Action** | **PASS** |
-| **Log** | - |
-
-**Nouvelle règle : Blocage ping depuis Internet**
-
-| Paramètre | Valeur |
-|-----------|--------|
-| **Nom** | `Block ping from Internet` |
-| **Source** | Interface OUT |
-| **Destination** | `net_dmz`, `net_lan` |
-| **Service** | ICMP Echo Request |
-| **Action** | **BLOCK** |
-| **Log** | - |
-
-**Justification** : Permet le diagnostic interne mais empêche le _ping scanning_ depuis Internet.
-
----
-
-### Tâche 12 ⭐⭐⭐ : Filtrage applicatif avancé
+### Tâche 9 ⭐⭐⭐ : Fonctionnalités avancées du pare-feu
 
 Activez des fonctionnalités de pare-feu nouvelle génération.
 
-#### Filtrage d'URL (si SNS le supporte)
+#### Filtrage d'URL (si supporté par SNS)
 
-**Configuration > Sécurité > Filtrage web**
+Bloquez l'accès à des catégories de sites dangereux ou non professionnels depuis le LAN :
+- Sites pour adultes
+- Jeux d'argent
+- Sites de malware / phishing
+- Proxies anonymes / VPN
+- Sites de violence / haine
 
-<Steps>
-
-1. **Activez le filtrage d'URL**
-
-2. **Bloquez les catégories dangereuses :**
-   - Adulte / Pornographie
-   - Jeux d'argent
-   - Malware / Phishing
-   - Proxy anonymes / VPN
-   - Violence / Haine
-
-3. **Appliquez le filtrage** aux flux `LAN → OUT`
-
-4. **Testez** : Depuis `admin-poste`, essayez d'accéder à un site bloqué → Doit être refusé avec une page de blocage
-
-</Steps>
-
----
+Testez en tentant d'accéder à un site bloqué depuis `admin-poste`.
 
 #### Limitation de bande passante (QoS)
 
-**Configuration > Réseau > QoS**
+Mettez en place une politique de QoS (_Quality of Service_) :
+- Le LAN doit avoir **80%** de la bande passante disponible (trafic prioritaire)
+- La DMZ ne doit utiliser que **20%** maximum (mises à jour non critiques)
 
-<Steps>
+#### Géo-restriction
 
-1. **Créez une règle QoS pour le LAN :**
-   - Flux : `net_lan` → OUT
-   - Bande passante garantie : 80% du débit total
-   - Bande passante maximale : 100%
+Si le pare-feu le permet, bloquez les connexions depuis certains pays :
+- Autorisez uniquement l'Union Européenne et l'Amérique du Nord
+- Bloquez les autres pays avec génération d'alarmes
 
-2. **Créez une règle QoS pour la DMZ :**
-   - Flux : `net_dmz` → OUT
-   - Bande passante garantie : 10%
-   - Bande passante maximale : 20%
-
-3. **Appliquez** la configuration
-
-</Steps>
-
-**Justification** : Priorité au trafic utilisateur (LAN). La DMZ ne doit utiliser la bande passante que pour les mises à jour (trafic non critique).
+**Justification** : Le CRASH opère en France. Des connexions depuis des pays lointains sont suspectes.
 
 ---
 
-#### Géo-restriction (blocage par pays)
+### Tâche 10 ⭐⭐⭐ : Audit de sécurité complet
 
-**Configuration > Sécurité > Géolocalisation**
+Réalisez une batterie de tests approfondis pour valider la robustesse de votre architecture.
 
-<Steps>
+#### Test 1 : Segmentation réseau (scan réseau)
 
-1. **Activez la géolocalisation**
+Depuis `glpi-srv01`, tentez de découvrir et scanner le réseau LAN :
 
-2. **Créez une règle de blocage géographique :**
-   - Flux : OUT → DMZ (accès public GLPI)
-   - Pays bloqués : Tous **sauf** Union Européenne + Amérique du Nord
-   - Action : BLOCK
-   - Log : Alarm
+_Astuce :_ `nmap -sn 172.17.0.0/16` (scan de découverte réseau)
 
-3. **Appliquez** la configuration
+✅ **Attendu** : Le scan doit échouer ou être bloqué. Une alarme doit être levée.
 
-</Steps>
+#### Test 2 : Résistance aux scans agressifs
 
-**Justification** : Le CRASH opère principalement en France. Les connexions depuis des pays lointains sont suspectes et peuvent être bloquées.
+Depuis une machine externe, lancez des scans agressifs :
 
----
+_Astuces :_
+- `nmap -sS -T5 [IP_publique]` (scan SYN rapide)
+- `nmap -p- [IP_publique]` (scan de tous les ports)
 
-### Tâche 13 ⭐⭐⭐ : Audit de sécurité complet
-
-Réalisez une batterie de tests pour valider la robustesse de votre architecture.
-
-#### Test 1 : Segmentation réseau
-
-**Objectif** : Vérifier que la DMZ ne peut pas accéder au LAN.
-
-<Steps>
-
-1. Depuis `glpi-srv01`, tentez de scanner le réseau LAN :
-   ```bash
-      nmap -sn 172.17.0.0/16
-   ```
-
-2. Tentez d'accéder à un service du LAN :
-   ```bash
-      curl http://172.17.0.100
-      ssh user@172.17.0.100
-   ```
-
-</Steps>
-
-✅ **Attendu** : Tous les tests échouent. Vérifiez les logs EVA1 : des alarmes doivent être levées.
-
----
-
-#### Test 2 : Résistance au scan de ports
-
-**Objectif** : Vérifier que l'IPS détecte et bloque les scans agressifs.
-
-Depuis une machine externe au labo :
-```bash
-# Scan SYN rapide (agressif)
-sudo nmap -sS -T5 172.25.x.y
-
-# Scan de tous les ports
-sudo nmap -p- 172.25.x.y
-```
-
-✅ **Attendu** :
-- Le scan est détecté dans les logs IPS
-- Certaines connexions sont bloquées (rate limiting)
-- Le scanner est potentiellement mis en liste noire temporairement
-
----
+✅ **Attendu** : L'IPS détecte les scans, génère des alertes, bloque certaines connexions.
 
 #### Test 3 : Injection SQL (simulation)
 
-**Objectif** : Vérifier que l'IPS détecte les tentatives d'injection SQL.
+Tentez des injections SQL via l'URL du portail GLPI :
 
-Depuis un navigateur externe, tentez d'accéder à :
-```
-https://172.25.x.y/index.php?id=1' OR '1'='1
-https://172.25.x.y/index.php?id=1; DROP TABLE users--
-```
+_Exemple d'URL :_ `https://[IP_publique]/index.php?id=1' OR '1'='1`
 
-✅ **Attendu** :
-- Les requêtes sont bloquées par l'IPS
-- Une alerte « SQL Injection » apparaît dans les logs IPS
+✅ **Attendu** : L'IPS détecte et bloque les tentatives d'injection SQL.
 
----
+#### Test 4 : Vérification de l'anti-spoofing
 
-#### Test 4 : Vérification du NAT
+Tentez d'envoyer un paquet avec une IP source usurpée :
 
-**Objectif** : Confirmer que les IP privées sont bien masquées.
-
-<Steps>
-
-1. Depuis `glpi-srv01`, accédez à un service qui affiche votre IP publique :
-   ```bash
-      curl https://ifconfig.me
-   ```
-
-2. L'IP affichée doit être **172.25.x.y** (IP publique de l'EVA1), **PAS** 10.54.0.10
-
-</Steps>
-
-✅ **Attendu** : Le NAT fonctionne, l'IP privée est masquée.
-
----
-
-#### Test 5 : Vérification de l'anti-spoofing
-
-**Objectif** : Confirmer que les paquets usurpés sont bloqués.
-
-Ce test nécessite un outil avancé comme `hping3` ou `scapy`. Depuis une machine externe :
+_Astuce avancée :_ `hping3` ou `scapy`
 ```bash
-# Envoi d'un paquet avec IP source usurpée
-sudo hping3 -S -a 172.17.0.100 -p 443 172.25.x.y
+# Exemple avec hping3
+sudo hping3 -S -a 172.17.0.100 -p 443 [IP_publique]
 ```
 
 ✅ **Attendu** : Le paquet est bloqué par la règle d'anti-spoofing, une alarme est levée.
 
----
+#### Test 5 : Test de déni de service (DoS) léger
+
+⚠️ **À faire uniquement en environnement de test contrôlé**
+
+Testez la résistance du pare-feu à une charge élevée :
+
+_Astuce :_ `hping3 -S --flood -p 443 [IP_publique]`
+
+✅ **Attendu** : Le pare-feu détecte l'anomalie, applique du _rate limiting_, génère des alertes.
 
 #### Rapport d'audit
 
-Rédigez un **rapport d'audit de sécurité** incluant :
+Rédigez un **rapport d'audit de sécurité** professionnel incluant :
 
-1. **Résultats des 5 tests** (succès/échec)
-2. **Captures d'écran** des logs IPS et alarmes
-3. **Analyse des vulnérabilités** résiduelles identifiées
-4. **Recommandations** pour améliorer encore la sécurité
-
-Ce rapport sera un élément majeur de votre portfolio.
+1. **Méthodologie** : Tests réalisés et outils utilisés
+2. **Résultats** : Succès/échec de chaque test avec captures d'écran
+3. **Analyse des logs** : Alertes générées, corrélation d'événements
+4. **Vulnérabilités identifiées** : Points faibles résiduels
+5. **Recommandations** : Améliorations possibles
 
 ---
 
@@ -1096,20 +520,20 @@ Ce rapport sera un élément majeur de votre portfolio.
 ### ⭐ Livrables niveau 1 (obligatoires)
 
 <CardGrid>
-  <Card title="Schéma réseau complet" icon="diagram">
-    Topologie avec toutes les VMs, interfaces, IP, zones de sécurité
+  <Card title="Schéma réseau détaillé" icon="diagram">
+    Topologie complète avec zones, VMs, interfaces, flux
   </Card>
-  <Card title="Documentation des règles pare-feu" icon="list-format">
-    Tableau récapitulatif de toutes les règles avec justifications
+  <Card title="Plan d'adressage" icon="table">
+    Tableau complet des IP, masques, passerelles (utilisez le template fourni)
   </Card>
-  <Card title="Plan d'adressage" icon="network">
-    Tableau complet des IP, masques, passerelles
+  <Card title="Matrice de flux implémentée" icon="list-format">
+    Tableau des règles pare-feu créées avec justifications
   </Card>
-  <Card title="Procédure de configuration" icon="open-book">
-    Guide pas à pas pour reproduire l'architecture
+  <Card title="Documentation NAT/PAT" icon="network">
+    Règles NAT configurées et expliquées
   </Card>
   <Card title="Résultats des tests" icon="checkmark">
-    Tests 1 à 6 réalisés et documentés
+    Tests 1 à 6 réalisés et documentés avec résultats
   </Card>
   <Card title="Captures d'écran" icon="image">
     Interface EVA1, règles configurées, logs de blocage DMZ→LAN
@@ -1120,33 +544,33 @@ Ce rapport sera un élément majeur de votre portfolio.
 
 <CardGrid>
   <Card title="Configuration IPS" icon="shield">
-    Profils activés, logs d'alertes générées
+    Profils activés, mode de fonctionnement choisi
+  </Card>
+  <Card title="Logs d'attaques" icon="warning">
+    Résultats des tests de scan avec alertes IPS générées
   </Card>
   <Card title="Logs centralisés" icon="server">
-    Syslog configuré, dashboard créé
+    Configuration Syslog + dashboard ou requêtes créées
   </Card>
   <Card title="Règles affinées" icon="lock">
-    Restrictions par IP source, ICMP contrôlé
-  </Card>
-  <Card title="Tests IPS" icon="scan">
-    Résultats des scans Nmap/Nikto avec alertes
+    Restrictions par IP source, gestion ICMP documentée
   </Card>
 </CardGrid>
 
 ### ⭐⭐⭐ Livrables niveau 3
 
 <CardGrid>
-  <Card title="Filtrage applicatif" icon="filter">
-    URL filtering, QoS, géo-restriction configurés
+  <Card title="Fonctionnalités avancées" icon="rocket">
+    Filtrage URL, QoS, géo-restriction configurés
   </Card>
-  <Card title="Rapport d'audit" icon="document">
-    5 tests de sécurité réalisés et analysés
+  <Card title="Rapport d'audit complet" icon="document">
+    Document professionnel avec méthodologie, résultats, recommandations
   </Card>
-  <Card title="Analyse de vulnérabilités" icon="warning">
-    Failles identifiées + recommandations
+  <Card title="Analyse de sécurité" icon="magnifier">
+    Vulnérabilités identifiées et plan de remédiation
   </Card>
-  <Card title="Matrice de flux détaillée" icon="table">
-    Tous les flux autorisés/bloqués documentés
+  <Card title="Tests avancés documentés" icon="scan">
+    5 tests d'audit réalisés avec outils avancés
   </Card>
 </CardGrid>
 
@@ -1156,24 +580,32 @@ Ce rapport sera un élément majeur de votre portfolio.
 
 | Critère | ⭐ Niveau 1 | ⭐⭐ Niveau 2 | ⭐⭐⭐ Niveau 3 |
 |---------|------------|--------------|---------------|
-| **Architecture réseau** | 3 zones configurées (OUT/DMZ/IN) | Idem + architecture modulaire gérée | Idem + optimisations QoS |
-| **Règles pare-feu** | 8 règles de base fonctionnelles | + Règles affinées par IP | + Filtrage applicatif (URL, géo) |
-| **NAT/PAT** | NAT sortant + DNAT GLPI | Idem + documentation détaillée | Idem + tests de validation |
-| **Sécurité** | Blocage DMZ→LAN opérationnel | + IPS activé et testé | + Audit complet avec rapport |
-| **Logs** | Logs consultés dans EVA1 | + Centralisation Syslog + dashboard | + Corrélation d'événements |
-| **Tests** | 6 tests de base réussis | + Tests IPS documentés | + 5 tests d'audit avancés |
-| **Documentation** | Schéma + procédure | + Justifications techniques | + Rapport d'audit professionnel |
+| **Architecture réseau** | 3 zones fonctionnelles | + Architecture modulaire gérée | + Optimisations (QoS, géo) |
+| **Plan d'adressage** | Cohérent et documenté | + Justifications des choix | + Plan évolutif documenté |
+| **Règles pare-feu** | 8 règles de base conformes à la matrice | + Règles affinées (IP source) | + Règles avancées (ICMP, etc.) |
+| **NAT/PAT** | Fonctionnel et testé | + Documentation technique détaillée | + Tests de validation avancés |
+| **Sécurité** | Blocage DMZ→LAN validé | + IPS activé et testé | + Audit complet avec outils pros |
+| **Tests** | 6 tests de base réussis | + Tests d'attaque documentés | + 5 tests d'audit avancés |
+| **Logs** | Consultés et compris | + Centralisation + exploitation | + Corrélation et dashboards |
+| **Documentation** | Schémas + procédures | + Analyse technique | + Rapport d'audit professionnel |
+
+:::tip[Conseils pour l'évaluation]
+- La **qualité de la documentation** compte autant que la réalisation technique
+- Les **justifications** de vos choix sont essentielles
+- Les **tests de sécurité** doivent être rigoureux et documentés
+- Le **rapport d'audit** (⭐⭐⭐) valorise fortement votre travail
+:::
 
 ---
 
 ## Ressources complémentaires
 
 - [Documentation Stormshield SNS](https://documentation.stormshield.eu/)
-- [Guide de configuration pare-feu](https://www.stormshield.com/fr/ressources/)
-- [Bonnes pratiques DMZ](https://www.sans.org/white-papers/)
-- [Tests de sécurité avec Nmap](https://nmap.org/book/man.html)
-- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
+- [Guide de bonnes pratiques DMZ](https://www.sans.org/white-papers/)
+- [OWASP Top 10](https://owasp.org/www-project-top-ten/) - Vulnérabilités web
+- [Nmap Reference Guide](https://nmap.org/book/man.html)
+- [RFC 4787](https://datatracker.ietf.org/doc/html/rfc4787) - NAT Behavioral Requirements
 
 :::tip[Prochaine étape]
-Une fois cette mission terminée et validée, vous pourrez passer à la [Mission 3 - Sécurisation SSH](/missions/mission-3) où vous mettrez en place un accès d'administration à distance sécurisé.
+Une fois cette mission terminée et validée, vous pourrez passer à la [Mission 3 - Sécurisation SSH](/crashtest/mission03) où vous mettrez en place un accès d'administration à distance sécurisé.
 :::

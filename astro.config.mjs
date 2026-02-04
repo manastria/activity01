@@ -10,8 +10,8 @@ export default defineConfig({
       sidebar: [
         { label: 'Accueil', link: '/' },
         {
-          label: 'Activités',
-          autogenerate: { directory: 'activities', collapsed: false },
+          label: 'CRASH Test',
+          autogenerate: { directory: 'activities/crashtest', collapsed: true },
         },
       ],
       tableOfContents: {

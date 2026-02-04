@@ -69,11 +69,11 @@ Documentation :
 [Service Web]                [Service BDD]
 ├─ Serveur web              ├─ Base de données
 ├─ PHP + extensions         └─ Sauvegarde automatisée
-└─ Application GLPI                    
+└─ Application GLPI
         │
         └──────────────────────┘
            (Communication réseau)
-        
+
 + Déploiement automatisé
 + Sauvegarde externalisée
 ```
@@ -210,7 +210,7 @@ Si votre base de données est sur le même système que le web :
 
 GLPI contient des comptes par défaut publiquement documentés :
 - `glpi/glpi` (super-admin)
-- `tech/tech` (technicien)  
+- `tech/tech` (technicien)
 - `normal/normal` (utilisateur)
 - `post-only/postonly` (post-only)
 
@@ -238,7 +238,7 @@ Pour diagnostiquer des problèmes, vous devez savoir où trouver les logs.
 
 **Identifiez et documentez** :
 - Logs du serveur web
-- Logs de la base de données  
+- Logs de la base de données
 - Logs applicatifs de GLPI
 - Logs système
 
@@ -416,5 +416,5 @@ Planifiez l'exécution quotidienne avec `cron`.
 - [Docker Syslog centralisé](https://github.com/manastria/docker_logs)
 
 :::tip[Prochaine étape]
-Une fois cette mission terminée et validée, vous pourrez passer à la [Mission 2 - Configuration de la DMZ](/missions/mission-2) où vous sécuriserez l'accès réseau à votre infrastructure GLPI.
+Une fois cette mission terminée et validée, vous pourrez passer à la [Mission 2 - Configuration de la DMZ](/crashtest/mission02) où vous sécuriserez l'accès réseau à votre infrastructure GLPI.
 :::
