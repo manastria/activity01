@@ -1,0 +1,141 @@
+---
+title: CRASH Test
+description: Quand un serveur tombe, le service reste debout - Mise en place d'une infrastructure haute disponibilité pour le Centre Régional des Associations Sportives des Hauts-de-France
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Quand un serveur tombe, le service reste debout
+
+:::note[À propos de ce projet]
+Ce projet s'inscrit dans le cadre de la formation BTS SIO option SISR (Solutions d'Infrastructure, Systèmes et Réseaux). Il vise à concevoir, déployer et tester une architecture haute disponibilité pour sécuriser les services critiques d'une infrastructure existante.
+:::
+
+## Contexte
+
+Le Centre Régional des Associations Sportives des Hauts-de-France (CRASH) héberge 24 associations sportives régionales et comités départementaux dans ses locaux répartis sur quatre bâtiments. Avec 80 bureaux occupés, une salle multimédia de 24 postes, 8 salles de réunion, un amphithéâtre et de nombreux espaces partagés, le CRASH propose un ensemble complet de services mutualisés à ses structures hébergées : accès Internet, téléphonie _VoIP_ (_Voice over IP_ - Voix sur IP), impressions professionnelles, serveur documentaire, système de réservation des salles, et bien d'autres prestations.
+
+L'infrastructure informatique du CRASH est conséquente : plus de 200 équipements réseau répartis dans différents _VLAN_ (_Virtual Local Area Network_ - Réseau local virtuel), des serveurs hébergés en _DMZ_ (_Demilitarized Zone_ - Zone démilitarisée), et un parc informatique hétérogène appartenant aux associations elles-mêmes. Cette complexité technique génère quotidiennement des demandes d'assistance : problèmes de connectivité réseau, pannes de téléphonie IP, dysfonctionnements d'imprimantes, difficultés d'accès aux services, demandes d'intégration de nouveaux postes, etc.
+
+## Problématique
+
+Actuellement, la gestion des incidents et demandes de service s'effectue de manière désorganisée : les associations contactent l'administration du CRASH par email, téléphone, ou se déplacent directement aux bureaux. Cette situation pose plusieurs problèmes majeurs :
+
+<CardGrid>
+  <Card title="Absence de traçabilité" icon="warning">
+    Aucun historique centralisé des interventions, difficultés à identifier les problèmes récurrents
+  </Card>
+  <Card title="Priorisation impossible" icon="error">
+    Toutes les demandes sont traitées dans l'ordre d'arrivée, sans distinction entre urgence critique et simple information
+  </Card>
+  <Card title="Disponibilité limitée" icon="information">
+    L'informaticien bénévole et les deux agents techniques du Conseil Régional ne sont joignables qu'en heures ouvrées
+  </Card>
+  <Card title="Insatisfaction croissante" icon="comment">
+    Les associations ne peuvent pas suivre l'avancement de leurs demandes et ont l'impression que leurs problèmes ne sont pas pris en compte
+  </Card>
+</CardGrid>
+
+Face à cette situation, le directeur du CRASH, M. Lucien Sapin, a décidé de professionnaliser la gestion des services informatiques en s'inspirant des bonnes pratiques _ITIL_ (_Information Technology Infrastructure Library_ - Bibliothèque pour l'infrastructure des technologies de l'information).
+
+## Solution retenue : déploiement d'un portail GLPI
+
+Après analyse comparative de plusieurs solutions, le CRASH a retenu **GLPI** (_Gestion Libre de Parc Informatique_) comme plateforme de gestion des services IT. Ce choix s'appuie sur plusieurs arguments :
+
+**GLPI est un logiciel libre** mature et éprouvé, utilisé par de nombreuses collectivités territoriales et structures associatives. Il ne génère aucun coût de licence et bénéficie d'une communauté active. Sa conception française garantit une interface entièrement traduite et une philosophie d'usage adaptée aux organisations publiques et parapubliques.
+
+### Fonctionnalités proposées
+
+**L'outil propose des fonctionnalités complètes** parfaitement adaptées aux besoins du CRASH :
+
+- **Gestion des incidents** : les associations pourront déclarer leurs problèmes via un portail web accessible 24/7, depuis leurs bureaux ou depuis l'extérieur. Chaque incident sera qualifié, priorisé et attribué automatiquement selon des règles métier.
+
+- **Suivi des demandes de service** : intégration d'un nouveau poste informatique, configuration d'une imprimante réseau, modification d'un compte de messagerie, demande de formation... toutes ces demandes suivront un _workflow_ (flux de travail) formalisé avec validation et traçabilité.
+
+- **Base de connaissances** : les procédures courantes (paramétrage du client de messagerie, connexion au WiFi visiteurs, réservation d'une salle, utilisation de la machine à affranchir...) seront documentées et accessibles en _self-service_ (libre-service), réduisant ainsi le nombre de sollicitations.
+
+- **Gestion de parc** : GLPI permettra de centraliser l'inventaire complet des équipements informatiques des 80 bureaux, avec leurs caractéristiques techniques, dates d'acquisition, garanties et historique des interventions. Cette cartographie sera précieuse pour anticiper les renouvellements et optimiser les configurations.
+
+- **Portail utilisateur intuitif** : chaque association disposera d'un accès personnalisé où elle pourra consulter ses tickets en cours, leur statut d'avancement, les réponses apportées et la base documentaire.
+
+Le système sera accessible depuis l'Internet pour permettre aux responsables associatifs de déclarer des incidents ou consulter la documentation même en dehors des locaux du CRASH. Cette accessibilité externe est indispensable puisque de nombreux bénévoles travaillent depuis leur domicile, notamment pour la préparation des assemblées générales, la gestion administrative de leurs licenciés ou l'organisation de compétitions.
+
+## Enjeux de disponibilité et continuité de service
+
+Le déploiement de GLPI va transformer ce portail en **service critique** pour le fonctionnement quotidien du CRASH. Une fois les associations habituées à l'utiliser, toute indisponibilité du service aura des conséquences importantes :
+
+:::caution[Impacts d'une indisponibilité]
+- Impossibilité de déclarer des incidents urgents (panne réseau bloquant une association avant une réunion importante, dysfonctionnement téléphonique...)
+- Perte d'accès à la base de connaissances, obligeant à solliciter directement l'équipe technique
+- Interruption des _workflows_ de validation en cours (demandes d'intégration de postes, réservations...)
+- Dégradation de l'image du CRASH auprès des structures hébergées
+:::
+
+Par ailleurs, les administrateurs du CRASH devront pouvoir accéder au système **en toute circonstance** pour gérer les incidents, y compris en soirée lors des nombreuses réunions qui se tiennent dans les salles du rez-de-chaussée, ou en week-end pendant les assemblées générales des associations.
+
+N'ayant pas les moyens d'employer un administrateur système dédié disponible en permanence, et compte tenu de la criticité croissante de ce service, **le CRASH souhaite mettre en place une architecture hautement disponible** garantissant la continuité de service même en cas de défaillance matérielle ou logicielle d'un serveur.
+
+## Votre mission
+
+Dans le cadre de cet appel d'offres, vous êtes missionné pour **étudier, concevoir, déployer et valider une solution de haute disponibilité** pour le service GLPI du CRASH.
+
+Le prestataire retenu devra concevoir une architecture redondante permettant de garantir la continuité de service en toutes circonstances, tout en respectant les contraintes budgétaires et techniques du CRASH.
+
+### Objectifs du projet
+
+<CardGrid>
+  <Card title="Haute disponibilité" icon="rocket">
+    Minimiser les interruptions de service et garantir un accès permanent au portail GLPI
+  </Card>
+  <Card title="Sécurisation" icon="shield">
+    Protéger l'infrastructure contre les menaces internes et externes
+  </Card>
+  <Card title="Performance" icon="forward-slash">
+    Assurer des temps de réponse rapides même en cas de charge importante
+  </Card>
+  <Card title="Résilience" icon="refresh">
+    Permettre la reprise automatique du service en cas de panne d'un composant
+  </Card>
+</CardGrid>
+
+### Principes directeurs
+
+Voici les principes retenus pour l'étude et la réalisation :
+
+- La durée de l'interruption de service doit être minimale
+- La perte d'information doit être la plus faible possible (idéalement aucune perte)
+- Il est important qu'il n'y ait aucune corruption ou altération des données lors d'une panne
+- La solution retenue doit être capable d'héberger de nombreux services web sur une même adresse IP publique
+- La solution doit être entièrement automatisée (aucune intervention humaine ne doit être nécessaire)
+- Les systèmes de disques doivent être facilement extensibles et doivent être capables de supporter la défaillance d'un disque
+- La maquette devra être testée sur VirtualBox afin que les administrateurs du CRASH puissent la reproduire facilement et la tester sans avoir besoin d'acheter du matériel supplémentaire
+- La solution retenue devra être administrable à distance via un accès sécurisé par _SSH_ (_Secure Shell_ - Shell sécurisé)
+- Une formation devra être envisagée pour l'administrateur du CRASH aux principes et à la technicité de la mise en place de la solution
+- La solution technique retenue devra respecter une enveloppe matériel/logiciels maximale de 10 000 euros
+- Le projet devra durer au maximum 30 jours
+
+:::tip[Système de progression par niveaux]
+Ce projet propose **trois niveaux de difficulté** pour s'adapter aux compétences et ambitions de chaque étudiant :
+
+- ⭐ **Niveau 1 - Fondamentaux** : Architecture simple et fonctionnelle, validante pour le diplôme
+- ⭐⭐ **Niveau 2 - Approfondissement** : Ajout de redondance et sécurité renforcée
+- ⭐⭐⭐ **Niveau 3 - Excellence** : Architecture complète avec bonnes pratiques professionnelles
+
+Vous devez réaliser au minimum toutes les tâches de niveau ⭐. Les niveaux supérieurs sont cumulatifs et seront valorisés dans votre évaluation.
+:::
+
+## Restitution et validation
+
+Lors de la réception de la solution proposée, vous devrez démontrer l'efficience de la solution lors d'une séance de recette devant le directeur du CRASH, l'administrateur Systèmes et Réseaux et le président du CROSH (Comité Régional Olympique et Sportif des Hauts-de-France). Cette présentation se fera à l'oral, aidée d'un support visuel.
+
+L'attribution du marché se fera sur l'offre économiquement la plus avantageuse appréciée en fonction des critères énoncés ci-dessous par ordre d'examen :
+
+1. Adéquation aux besoins exprimés par le cahier des charges
+2. Qualité du service
+3. Prix
+
+---
+
+:::note[Ressources complémentaires]
+Pour mieux comprendre le contexte du CRASH, consultez le [document de présentation de l'organisation](/crash-organisation) qui détaille l'infrastructure existante, les services proposés et l'interview du directeur M. Lucien Sapin.
+:::

@@ -24,7 +24,7 @@ export default defineConfig({
   // Le bloc vite doit être ICI, après la fermeture du tableau integrations
   vite: {
     server: {
-      allowedHosts: ['n110-prof.local']
+      allowedHosts: ['n110-prof.local'],
     }
   },
 });

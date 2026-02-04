@@ -1,0 +1,420 @@
+---
+title: Mission 1 - Déploiement initial de GLPI
+description: Installation et sécurisation de base de GLPI en anticipant les besoins de haute disponibilité
+---
+
+import { Steps, Card, CardGrid } from '@astrojs/starlight/components';
+
+## Objectif
+
+Installer GLPI dans un environnement de test fonctionnel avec une sécurité de base.
+
+<CardGrid>
+  <Card title="Difficulté" icon="star">
+    Facile 🤔👨‍💻
+  </Card>
+  <Card title="Temps estimé" icon="clock">
+    3 heures
+  </Card>
+</CardGrid>
+
+## Prérequis
+
+- Disposer d'un hyperviseur VirtualBox sur hôte XUbuntu
+- Accès aux VMs de base (Debian 12, XUbuntu, Windows Server 2016)
+- Maîtriser les bases de l'administration Linux
+
+## Contexte
+
+Cette première mission pose les fondations du projet. L'infrastructure que vous allez mettre en place sera dupliquée lors des missions suivantes pour créer un cluster haute disponibilité. Vos choix initiaux auront donc un impact direct sur la complexité des étapes ultérieures.
+
+:::tip[Approche pédagogique]
+Cette mission propose trois niveaux de réalisation :
+- ⭐ GLPI fonctionnel avec sécurité de base
+- ⭐⭐ Optimisation et centralisation des logs
+- ⭐⭐⭐ Architecture modulaire et automatisation
+
+Chaque niveau inclut le précédent. Visez au minimum le niveau ⭐ pour valider la mission.
+:::
+
+## Architecture cible par niveau
+
+### ⭐ Niveau 1 : Installation fonctionnelle
+```
+[Système GLPI]
+├─ Serveur web (Apache/Nginx)
+├─ PHP + extensions
+├─ Base de données (MySQL/MariaDB)
+└─ Application GLPI
+
+Documentation :
+├─ Schéma d'architecture
+├─ Procédure d'installation
+└─ Localisation des logs
+```
+
+### ⭐⭐ Niveau 2 : Optimisation et logs centralisés
+```
+[Système GLPI optimisé]
+├─ Serveur web (optimisé + HTTPS préparé)
+├─ PHP (cache activé)
+├─ Base de données (durcie)
+└─ Application GLPI (sécurisée)
+        │
+        └─→ [Serveur Syslog centralisé]
+```
+
+### ⭐⭐⭐ Niveau 3 : Architecture modulaire
+```
+[Service Web]                [Service BDD]
+├─ Serveur web              ├─ Base de données
+├─ PHP + extensions         └─ Sauvegarde automatisée
+└─ Application GLPI                    
+        │
+        └──────────────────────┘
+           (Communication réseau)
+        
++ Déploiement automatisé
++ Sauvegarde externalisée
+```
+
+## Tâches à réaliser
+
+### Tâche 1 ⭐ : Analyse et choix architectural
+
+Consultez la [documentation officielle de GLPI](https://glpi-project.org/) pour identifier :
+
+<Steps>
+
+1. Les versions minimales requises (PHP, serveur web, base de données)
+
+2. Les extensions PHP nécessaires
+
+3. Les recommandations matérielles (CPU, RAM, stockage)
+
+</Steps>
+
+**Choisissez votre approche de déploiement :** VM traditionnelle ou conteneurisation (_Docker_).
+
+:::tip[Si vous choisissez Docker]
+Vous utiliserez _Docker Compose_ pour orchestrer les conteneurs. Créez votre fichier `docker-compose.yml` avec :
+- Un service pour le serveur web + PHP
+- Un service pour la base de données
+- Des volumes nommés pour la persistance des données
+- Un réseau dédié
+:::
+
+**Documentez votre choix** : Pourquoi VM ou Docker ? Quels avantages pour ce projet ?
+
+:::note[Questions pour guider votre réflexion]
+- Comment allez-vous dupliquer cette installation pour créer un second nœud en mission 5 ?
+- En quoi votre choix facilite-t-il la haute disponibilité ?
+:::
+
+#### Tâche 1.1 ⭐⭐⭐ : Architecture modulaire
+
+**Séparez les services web et base de données** dès maintenant :
+- Deux VMs distinctes (ou deux groupes de conteneurs)
+- Communication réseau entre les deux
+- Schématisez cette architecture
+
+Cette séparation facilitera grandement la mise en place du cluster.
+
+---
+
+### Tâche 2 ⭐ : Conception et documentation de base
+
+**Schématisez votre architecture actuelle** incluant :
+- Les composants installés
+- L'organisation (monolithique ou séparé)
+- La configuration réseau (adresse IP, interface)
+- L'emplacement des données persistantes
+
+**Établissez une convention de nommage** pour :
+- Les machines virtuelles ou conteneurs (`glpi-web01`, `glpi-db01`)
+- Les volumes de données
+- Les réseaux virtuels
+
+:::caution[Point d'attention]
+Si vous optez pour une installation monolithique maintenant, documentez comment vous séparerez web et base de données en mission 5.
+:::
+
+---
+
+### Tâche 3 ⭐ : Déploiement de l'infrastructure
+
+Installez la stack complète :
+
+<Steps>
+
+1. **Serveur web** (Apache ou Nginx - justifiez votre choix dans votre documentation)
+
+2. **Base de données** (MySQL ou MariaDB)
+
+3. **PHP** avec les extensions requises par GLPI
+
+4. **GLPI** via l'assistant web
+
+</Steps>
+
+**Testez** que GLPI est accessible et fonctionnel en créant quelques objets de test (utilisateur, ticket, équipement).
+
+#### Tâche 3.1 ⭐⭐ : Optimisation de la configuration
+
+Optimisez votre installation :
+- Ajustez les limites PHP (taille d'upload, mémoire)
+- Activez le cache PHP (_OPcache_)
+- Activez la compression HTTP
+- Documentez chaque modification
+
+#### Tâche 3.2 ⭐⭐⭐ : Déploiement automatisé
+
+Créez un script d'installation automatisé (Bash ou Ansible) permettant de recréer l'infrastructure complète en une commande.
+
+Le script doit :
+- Installer toutes les dépendances
+- Configurer les services
+- Initialiser GLPI
+- Être idempotent (rejouable sans problème)
+
+---
+
+### Tâche 4 ⭐ : Sécurisation de la base de données
+
+Par défaut, MySQL/MariaDB présente des faiblesses :
+- Compte root sans mot de passe ou faible
+- Comptes anonymes
+- Bases de test
+- Accès distant root autorisé
+
+**Votre mission :**
+- Durcissez la sécurité MySQL/MariaDB
+- Créez un utilisateur dédié pour GLPI avec les droits minimum nécessaires
+- Documentez les identifiants de manière sécurisée (gestionnaire de mots de passe)
+
+:::note[Questions]
+- Quels privilèges MySQL sont vraiment nécessaires pour GLPI ?
+- Comment restreindre l'accès à la base GLPI uniquement ?
+:::
+
+#### Tâche 4.1 ⭐⭐ : Désactivation de l'accès réseau MySQL
+
+Si votre base de données est sur le même système que le web :
+- Configurez MySQL pour n'écouter que sur `localhost`
+- Testez que les connexions externes sont refusées
+- Documentez cette sécurisation
+
+---
+
+### Tâche 5 ⭐ : Durcissement de GLPI
+
+GLPI contient des comptes par défaut publiquement documentés :
+- `glpi/glpi` (super-admin)
+- `tech/tech` (technicien)  
+- `normal/normal` (utilisateur)
+- `post-only/postonly` (post-only)
+
+**Votre mission :**
+- Sécurisez ces comptes (suppression, désactivation ou renommage)
+- Créez un compte administrateur personnel avec mot de passe robuste
+- Documentez votre stratégie
+
+:::caution[Réflexion]
+Analyser les risques : que se passe-t-il si vous supprimez un compte ? Si vous le désactivez ? Si vous le renommez ? Justifiez votre choix.
+:::
+
+#### Tâche 5.1 ⭐⭐ : Politique de mots de passe
+
+Configurez une politique de mots de passe dans GLPI :
+- Longueur minimale (12 caractères)
+- Complexité requise
+- Testez en créant un utilisateur
+
+---
+
+### Tâche 6 ⭐ : Identification des logs
+
+Pour diagnostiquer des problèmes, vous devez savoir où trouver les logs.
+
+**Identifiez et documentez** :
+- Logs du serveur web
+- Logs de la base de données  
+- Logs applicatifs de GLPI
+- Logs système
+
+**Testez** : Provoquez une erreur (mauvais mot de passe) et retrouvez la trace dans les logs.
+
+Créez un document « Où trouver quoi dans les logs ».
+
+#### Tâche 6.1 ⭐⭐ : Centralisation des logs
+
+Déployez un serveur Syslog centralisé en utilisant [docker_logs](https://github.com/manastria/docker_logs).
+
+**Configuration :**
+- Déployez le conteneur Syslog
+- Configurez vos services pour envoyer leurs logs vers ce serveur
+- Testez que les logs arrivent bien centralisés
+- Documentez comment consulter les logs centralisés
+
+Cette infrastructure sera réutilisée pour superviser le cluster en mission 5.
+
+#### Tâche 6.2 ⭐⭐⭐ : Rotation et archivage
+
+Configurez la rotation automatique des logs avec `logrotate` :
+- Conservation 30 jours
+- Compression des logs de plus de 7 jours
+- Archivage dans un répertoire dédié
+
+---
+
+### Tâche 7 ⭐⭐ : Préparation au HTTPS
+
+Familiarisez-vous avec les certificats SSL/TLS :
+
+<Steps>
+
+1. Générez un certificat auto-signé pour votre serveur
+
+2. Configurez votre serveur web pour accepter HTTPS (en parallèle de HTTP)
+
+3. Testez l'accès HTTPS et observez l'avertissement du navigateur
+
+</Steps>
+
+**Documentez** : Pourquoi cet avertissement ? Quelle différence avec un certificat signé par une CA reconnue ?
+
+:::note
+Vous n'êtes pas obligé d'activer HTTPS comme protocole unique maintenant. La configuration complète HTTPS sera faite dans le projet HAProxy.
+:::
+
+#### Tâche 7.1 ⭐⭐⭐ : HTTPS activé avec redirection
+
+- Activez HTTPS comme protocole par défaut
+- Redirigez automatiquement HTTP vers HTTPS
+- Testez que tout fonctionne correctement
+- Documentez la configuration
+
+---
+
+### Tâche 8 ⭐ : Sauvegarde de base
+
+Créez une sauvegarde exploitable de votre installation :
+
+**Si VM :**
+- Snapshot VirtualBox daté
+- OU export OVA/OVF
+
+**Si Docker :**
+- Sauvegarde du `docker-compose.yml`
+- Export des volumes de données
+
+**Testez** : Restaurez votre installation à partir de la sauvegarde.
+
+#### Tâche 8.1 ⭐⭐ : Script de sauvegarde automatisé
+
+Créez un script qui effectue :
+- Export de la base de données
+- Archivage des fichiers GLPI
+- Horodatage des archives
+- Purge des sauvegardes de plus de 7 jours
+
+Planifiez l'exécution quotidienne avec `cron`.
+
+#### Tâche 8.2 ⭐⭐⭐ : Sauvegarde externalisée
+
+- Créez un serveur de sauvegarde dédié (VM distincte)
+- Automatisez le transfert sécurisé des sauvegardes (_rsync_ sur SSH)
+- Testez la restauration depuis la sauvegarde externalisée
+
+---
+
+## Livrables attendus
+
+### ⭐ Livrables niveau 1 (obligatoires)
+
+<CardGrid>
+  <Card title="Schéma d'architecture" icon="document">
+    Composants, flux, adressage IP
+  </Card>
+  <Card title="Procédure d'installation" icon="list-format">
+    Guide pas à pas reproductible
+  </Card>
+  <Card title="Documentation sécurité" icon="shield">
+    Mesures appliquées sur MySQL et GLPI
+  </Card>
+  <Card title="Guide des logs" icon="open-book">
+    Où trouver chaque type de log
+  </Card>
+  <Card title="Sauvegarde testée" icon="backup">
+    Export fonctionnel de l'installation
+  </Card>
+  <Card title="Justifications" icon="pencil">
+    Choix VM/Docker, serveur web, etc.
+  </Card>
+</CardGrid>
+
+### ⭐⭐ Livrables niveau 2
+
+<CardGrid>
+  <Card title="Configuration optimisée" icon="rocket">
+    Paramètres modifiés et justifications
+  </Card>
+  <Card title="Logs centralisés" icon="server">
+    Syslog déployé et configuré
+  </Card>
+  <Card title="Certificat SSL" icon="lock">
+    Certificat généré et testé
+  </Card>
+  <Card title="Scripts de sauvegarde" icon="clockwise">
+    Automatisation planifiée
+  </Card>
+</CardGrid>
+
+### ⭐⭐⭐ Livrables niveau 3
+
+<CardGrid>
+  <Card title="Architecture modulaire" icon="template">
+    Services web et BDD séparés
+  </Card>
+  <Card title="Déploiement automatisé" icon="workflow">
+    Script Bash ou Playbook Ansible
+  </Card>
+  <Card title="HTTPS actif" icon="shield-check">
+    Redirection HTTP→HTTPS fonctionnelle
+  </Card>
+  <Card title="Sauvegarde externalisée" icon="backup">
+    Transfert automatique testé
+  </Card>
+</CardGrid>
+
+## Critères d'évaluation
+
+| Critère | ⭐ Niveau 1 | ⭐⭐ Niveau 2 | ⭐⭐⭐ Niveau 3 |
+|---------|------------|--------------|---------------|
+| **Installation** | GLPI fonctionnel | Configuration optimisée | Architecture modulaire |
+| **Sécurité BDD** | Utilisateur dédié créé | Accès réseau désactivé | Chiffrement connexions |
+| **Sécurité GLPI** | Comptes par défaut traités | Politique mots de passe | Tests de sécurité |
+| **Logs** | Emplacements documentés | Centralisation opérationnelle | Rotation configurée |
+| **HTTPS** | - | Certificat généré et testé | HTTPS actif avec redirection |
+| **Sauvegarde** | Backup manuel testé | Script automatisé | Externalisation fonctionnelle |
+| **Automatisation** | - | - | Déploiement scriptés |
+| **Documentation** | Schémas + procédures | Justifications détaillées | Documentation complète |
+
+:::tip[Conseils]
+- Le niveau ⭐ doit être **entièrement réalisé** pour valider la mission
+- La **qualité de la documentation** est aussi importante que la technique
+- Les **justifications** de vos choix valorisent votre travail
+:::
+
+## Ressources complémentaires
+
+- [Documentation officielle GLPI](https://glpi-install.readthedocs.io/)
+- [Guide de sécurisation MySQL](https://dev.mysql.com/doc/refman/8.0/en/security-guidelines.html)
+- [Documentation Apache](https://httpd.apache.org/docs/2.4/)
+- [Documentation Nginx](https://nginx.org/en/docs/)
+- [Docker Compose reference](https://docs.docker.com/compose/)
+- [Docker Syslog centralisé](https://github.com/manastria/docker_logs)
+
+:::tip[Prochaine étape]
+Une fois cette mission terminée et validée, vous pourrez passer à la [Mission 2 - Configuration de la DMZ](/missions/mission-2) où vous sécuriserez l'accès réseau à votre infrastructure GLPI.
+:::
