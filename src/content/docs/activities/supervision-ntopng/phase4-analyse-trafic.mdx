@@ -1,0 +1,174 @@
+---
+title: Phase 4 - Génération de trafic et analyse
+description: Simulation de différents types de trafic réseau et analyse des flux dans l'interface ntopng
+sidebar:
+  order: 5
+---
+
+Cette phase consiste à générer différents types de trafic réseau depuis les machines clientes pour alimenter ntopng en données, puis à analyser ces flux pour comprendre l'utilisation de la bande passante.
+
+**Durée estimée :** 2h
+
+**Prérequis :** Les [Phase 1](/supervision-ntopng/phase1-config-sns/), [Phase 2](/supervision-ntopng/phase2-installation-ntopng/) et [Phase 3](/supervision-ntopng/phase3-config-ipfix/) doivent être terminées.
+
+---
+
+## PHASE 4 : Génération de trafic et analyse
+
+### Étape 4.1 : Génération de trafic varié
+
+**Objectif :** Simuler différents types d'utilisation réseau pour que ntopng ait des données à analyser, en utilisant les ressources disponibles sur le réseau du laboratoire.
+
+:::caution[Attention à la bande passante]
+Le réseau du laboratoire est partagé par tous les étudiants. Évitez les téléchargements massifs simultanés qui satureraient la connexion Internet. Privilégiez les ressources locales (serveur du labo, torrents locaux).
+:::
+
+**Répartition des tâches sur les 2 VMs Xubuntu :**
+
+#### Sur VM Xubuntu Client 1 (192.168.X.10)
+
+**Navigation web légère (10 minutes) :**
+- Visitez plusieurs sites : Wikipedia, sites d'actualités
+- Ouvrez 5-6 onglets simultanément
+- Consultez votre messagerie web (Gmail, Outlook.com)
+- **Évitez** les téléchargements volumineux depuis Internet
+
+**Services locaux du laboratoire :**
+- Si un serveur FTP/HTTP est disponible sur le réseau du labo (`172.25.X.X`), téléchargez quelques fichiers de test (50-100 Mo)
+- Utilisez les services réseau mis à disposition par l'enseignant
+
+**Streaming vidéo modéré :**
+- Regardez **une seule** vidéo YouTube de 2-3 minutes
+
+#### Sur VM Xubuntu Client 2 (192.168.X.11)
+
+**Téléchargement BitTorrent (local) :**
+- Connectez-vous au tracker BitTorrent du laboratoire (si disponible)
+- Téléchargez une distribution Linux hébergée localement (Ubuntu/Debian ISO)
+
+**Trafic DNS intensif :**
+- Naviguez sur de nombreux sites différents (Wikipedia, sites universitaires)
+- Utilisez `nslookup` pour faire des requêtes DNS variées :
+```bash
+for domain in wikipedia.org github.com stackoverflow.com gnu.org debian.org ubuntu.com; do
+  nslookup $domain
+  sleep 1
+done
+```
+
+**Accès aux serveurs du labo :**
+- Si un serveur web est disponible sur `172.25.X.X`, effectuez plusieurs requêtes HTTP
+- Testez les différents services réseau mis à disposition
+
+#### Utilisation des ressources communes
+
+**Serveur de simulation du laboratoire** (si configuré par l'enseignant) :
+
+Si un serveur Docker/VM est disponible sur le réseau du labo (`172.25.X.Y`), utilisez-le pour :
+- Télécharger des fichiers de test de tailles variées (1 Mo, 10 Mo, 50 Mo)
+- Tester différents protocoles (HTTP, FTP, SSH)
+- Générer du trafic contrôlé sans saturer la connexion Internet
+
+**Commandes de test depuis les VMs clientes :**
+```bash
+# Test HTTP vers serveur du labo (adapter l'IP)
+for i in {1..20}; do
+  curl -o /dev/null http://172.25.X.Y/testfile_10M.bin
+done
+
+# Test FTP vers serveur du labo
+wget ftp://172.25.X.Y/fichier_test.iso
+
+# Génération de trafic DNS
+for i in {1..50}; do
+  dig @172.25.254.15 site$i.example.com
+done
+```
+
+:::tip[Checkpoint 7]
+Laissez tourner ce trafic pendant **15-20 minutes** pour accumuler suffisamment de données.
+
+**Bonnes pratiques :**
+- Évitez les téléchargements simultanés de tous les étudiants
+- Si le réseau devient lent, réduisez votre trafic
+- Privilégiez les ressources locales du laboratoire
+- Alternez les activités entre les binômes
+:::
+
+### Étape 4.2 : Analyse dans ntopng
+
+Connectez-vous à l'interface ntopng depuis une VM cliente pour analyser les résultats.
+
+#### Vue d'ensemble du trafic
+
+1. Accédez à **Dashboard**
+2. Observez le graphique de bande passante en temps réel
+3. Notez les débits maximum observés
+
+**Questions de réflexion :**
+
+- À quel moment le trafic a-t-il été le plus élevé ?
+- Quelle VM a généré le plus de trafic ?
+
+#### Analyse des hôtes
+
+1. Cliquez sur **Hosts → Hosts**
+2. Identifiez les deux VMs clientes (`192.168.X.10` et `192.168.X.11`)
+3. Cliquez sur chaque hôte pour voir le détail :
+   - Volume de données envoyées/reçues
+   - Nombre de flux
+   - Ports utilisés
+
+**Tableau à compléter dans votre rapport :**
+
+| Hôte         | Volume envoyé | Volume reçu | Top 3 des ports utilisés | Observation |
+| ------------ | ------------- | ----------- | ------------------------ | ----------- |
+| 192.168.X.10 |               |             |                          |             |
+| 192.168.X.11 |               |             |                          |             |
+
+#### Analyse des flux
+
+1. Cliquez sur **Flows → Flows**
+2. Triez par "Bytes" pour voir les flux les plus volumineux
+3. Identifiez :
+   - Les connexions vers des sites de streaming (port 443, gros volume)
+   - Les téléchargements (connexions longues avec transfert important)
+   - La navigation web classique (nombreuses petites connexions)
+
+:::tip[Checkpoint 8]
+Prenez 5-6 captures d'écran montrant :
+- Le dashboard global
+- Le détail des deux hôtes
+- La liste des flux triés par volume
+- La répartition des protocoles (HTTP/HTTPS/DNS/etc.)
+:::
+
+### Étape 4.3 : Analyse des applications
+
+1. Allez dans **Applications**
+2. ntopng catégorise automatiquement le trafic par type d'application
+
+**Questions d'analyse :**
+
+- Quelle application a consommé le plus de bande passante ?
+- Quelle proportion représente le streaming vidéo par rapport au total ?
+- Y a-t-il des applications inattendues ou suspectes ?
+
+:::tip[Checkpoint 9]
+Complétez un tableau récapitulatif :
+
+| Catégorie d'application | Pourcentage du trafic | Volume de données | Commentaire |
+| ----------------------- | --------------------- | ----------------- | ----------- |
+| Streaming vidéo         |                       |                   |             |
+| Navigation web          |                       |                   |             |
+| Téléchargements         |                       |                   |             |
+| DNS                     |                       |                   |             |
+| Autres                  |                       |                   |             |
+:::
+
+
+---
+
+:::tip[Prochaine étape]
+Maintenant que vous avez analysé du trafic normal, apprenez à détecter des comportements anormaux dans la [Phase 5](/supervision-ntopng/phase5-detection-anomalies/).
+:::

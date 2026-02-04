@@ -1,0 +1,689 @@
+---
+title: "Phase 4 - Règles de filtrage pour le VPN"
+description: "Configuration des règles de filtrage sur le Stormshield pour autoriser et sécuriser les connexions VPN SSL"
+draft: true
+---
+
+# Phase 4 : Règles de filtrage pour le VPN SSL
+
+## Informations
+
+- **Durée estimée** : 1h30
+- **Prérequis** : Phases 1, 2 et 3 terminées et validées
+- **Rôle principal** : Étudiant Y (Serveur VPN)
+
+---
+
+## Objectifs de cette phase
+
+- ✅ Comprendre les flux réseau nécessaires au VPN
+- ✅ Créer les règles de filtrage pour autoriser les connexions VPN entrantes
+- ✅ Autoriser le trafic des clients VPN vers le réseau interne
+- ✅ Configurer le NAT si nécessaire
+- ✅ Optimiser l'ordre des règles
+- ✅ Tester et valider les règles créées
+
+---
+
+## Contexte : Comprendre les flux réseau du VPN
+
+### Les 3 flux essentiels à autoriser
+
+Pour que le VPN fonctionne, il faut autoriser **3 types de flux** différents :
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  FLUX 1 : Établissement de la connexion VPN                 │
+│  ────────────────────────────────────────────────           │
+│                                                             │
+│  Client VPN (172.25.X.10) ──────────────────────────▶       │
+│                              TCP/443                        │
+│                       SNS OUT (172.25.Y.254)                │
+│                                                             │
+│  BUT : Permettre au client de se connecter au serveur VPN   │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  FLUX 2 : Clients VPN vers réseau interne                   │
+│  ─────────────────────────────────────────                  │
+│                                                             │
+│  Client VPN (10.Y.100.5) ────────────────────────▶          │
+│                                                             │
+│                   Réseau interne (10.Y.1.0/24)              │
+│                         ↓                                   │
+│                   Serveur Debian (10.Y.1.20)                │
+│                                                             │
+│  BUT : Permettre l'accès aux ressources internes            │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  FLUX 3 : Réseau interne vers clients VPN (réponses)        │
+│  ────────────────────────────────────────────────────       │
+│                                                             │
+│  Serveur Debian (10.Y.1.20) ────────────────────────▶       │
+│                                                             │
+│                   Client VPN (10.Y.100.5)                   │
+│                                                             │
+│  BUT : Permettre les réponses aux requêtes                  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Zones de sécurité impliquées
+
+Le Stormshield utilise des **zones de sécurité** :
+- 🔴 **out** (Internet/rouge) : Zone non fiable
+- 🟢 **in** (Interne/vert) : Zone de confiance
+- 🔵 **vpn_ssl** (VPN) : Zone intermédiaire créée automatiquement
+
+:::tip[Zone VPN SSL]
+Quand vous activez le VPN SSL, le Stormshield crée automatiquement une zone virtuelle `vpn_ssl`.
+Les clients VPN connectés sont considérés comme faisant partie de cette zone.
+:::
+
+---
+
+## Étape 4.1 : Vérification de la zone VPN SSL
+
+:::caution[Rôle spécifique]
+**Cette phase est réalisée par l'Étudiant Y** (Serveur VPN).
+L'Étudiant X observe et comprend les principes.
+:::
+
+### 🔧 Tâche : Vérifier la création de la zone VPN
+
+**1. Se connecter à l'interface web du SNS**
+
+```
+URL : https://172.25.Y.254/admin
+Login : admin
+Mot de passe : admin
+```
+
+**2. Accéder à la gestion des interfaces**
+
+```
+Configuration → Réseau → Interfaces
+```
+
+**3. Vérifier la présence de l'interface VPN SSL**
+
+Dans la liste des interfaces, vous devriez voir :
+
+| Interface   | Type          | État   | Zone                  |
+| ----------- | ------------- | ------ | --------------------- |
+| out         | Physique      | UP     | Internet (rouge)      |
+| in          | Physique      | UP     | Réseau interne (vert) |
+| **vpn_ssl** | **Virtuelle** | **UP** | **VPN SSL (bleu)**    |
+
+:::tip[Interface virtuelle]
+L'interface `vpn_ssl` est créée automatiquement lors de l'activation du service VPN SSL.
+Elle représente tous les clients VPN connectés.
+:::
+
+**4. Vérifier les propriétés de la zone VPN**
+
+Cliquer sur l'interface `vpn_ssl` :
+- **Type de zone** : VPN SSL
+- **Niveau de sécurité** : Intermédiaire (entre Internet et Interne)
+- **Réseau associé** : Pool VPN (10.Y.100.0/26)
+
+:::tip[Validation Étape 4.1]
+✅ L'interface `vpn_ssl` est présente et active (UP)
+✅ La zone VPN SSL est de type "VPN SSL"
+✅ Capture d'écran : Liste des interfaces avec vpn_ssl visible
+:::
+
+---
+
+## Étape 4.2 : Création de la règle 1 - Autoriser les connexions VPN entrantes
+
+### 🎯 Objectif
+Autoriser les clients distants à se connecter au serveur VPN sur le port 443.
+
+### 🔧 Tâche : Créer la règle de connexion VPN
+
+**1. Accéder aux règles de filtrage**
+
+```
+Configuration → Politique de sécurité → Filtrage et NAT → Règles de filtrage
+```
+
+**2. Créer une nouvelle règle**
+
+Cliquer sur `Ajouter` (en haut de la liste) :
+
+**Informations générales :**
+- **Nom de la règle** : `Autoriser connexions VPN SSL entrantes`
+- **État** : ✅ Activé
+- **Action** : `Accepter` (PASS - couleur verte)
+- **Position** : Placer en haut de la liste (avant les autres règles)
+
+**Onglet Origine :**
+- **Source** : `any` (ou `Internet` si l'objet existe)
+  - Explication : N'importe quel client sur Internet peut tenter de se connecter
+  - L'authentification LDAP filtrera les utilisateurs autorisés
+
+**Onglet Destination :**
+- **Destination** : Cliquer sur `+`
+  - Type : `Objet de type Firewall`
+  - Sélectionner : `Firewall_out` (l'interface OUT du SNS - 172.25.Y.254)
+  - Valider
+
+**Onglet Service :**
+- **Service** : Cliquer sur `+`
+  - Type : `Service prédéfini` ou `Service personnalisé`
+  - Service : `https` (TCP/443)
+  - Valider
+
+:::tip[Port 443]
+On autorise le port 443 (HTTPS) car c'est le port configuré pour le VPN SSL en Phase 3.
+Si vous aviez choisi le port 1194, il faudrait autoriser `openvpn` (UDP/1194).
+:::
+
+**Onglet Inspection :**
+- **Inspection SSL** : `Désactivée` (pas d'inspection du tunnel VPN)
+- **IPS** : `Désactivée` (pour ne pas interférer avec le VPN)
+
+**Onglet Logs :**
+- **Logs** : ✅ `Activer les logs`
+  - Important pour déboguer les connexions VPN
+
+**3. Créer la règle**
+
+Cliquer sur `Créer`.
+
+:::tip[Explication]
+Cette règle dit :
+"Autoriser n'importe qui (any) à se connecter à l'interface OUT du firewall (172.25.Y.254) sur le port 443 (https)."
+
+Le serveur VPN écoute sur ce port et gérera l'authentification des utilisateurs.
+:::
+
+:::tip[Validation Étape 4.2]
+- ✅ La règle apparaît en première position (ou dans le top 3)
+- ✅ Action : ACCEPT (vert)
+- ✅ Source : any → Destination : Firewall_out → Service : https
+- ✅ Capture d'écran : Règle de connexion VPN créée
+:::
+
+---
+
+## Étape 4.3 : Création de la règle 2 - Clients VPN vers réseau interne
+
+### 🎯 Objectif
+Autoriser les clients VPN connectés (zone vpn_ssl) à accéder au réseau interne (zone in).
+
+### 🔧 Tâche : Créer la règle d'accès au réseau interne
+
+**1. Créer une nouvelle règle**
+
+Cliquer sur `Ajouter` :
+
+**Informations générales :**
+- **Nom** : `VPN clients vers réseau interne`
+- **État** : ✅ Activé
+- **Action** : `Accepter` (PASS - vert)
+
+**Onglet Origine :**
+- **Source** : Cliquer sur `+`
+  - Type : `Interface` ou `Réseau`
+  - Option 1 : Sélectionner l'interface `vpn_ssl`
+  - Option 2 : Créer un objet réseau `10.Y.100.0/26` (le pool VPN)
+  - Valider
+
+:::tip[Quelle option choisir ?]
+Les deux fonctionnent :
+- **Interface vpn_ssl** : Plus simple, couvre automatiquement tous les clients VPN
+- **Réseau 10.Y.100.0/26** : Plus précis, permet un contrôle granulaire
+
+Pour cette activité, utilisez **l'interface vpn_ssl**.
+:::
+
+**Onglet Destination :**
+- **Destination** : Cliquer sur `+`
+  - Type : `Réseau`
+  - Si l'objet existe : Sélectionner `Reseau_Interne_Y` (10.Y.1.0/24)
+  - Sinon, créer l'objet :
+    - Nom : `Reseau_Interne_Y`
+    - Adresse : `10.Y.1.0/24`
+  - Valider
+
+**Onglet Service :**
+- **Service** : `any` (tous les services)
+  - Explication : On autorise les clients VPN à accéder à tous les services internes
+  - En production, on limiterait (ex: HTTP, SSH, SMB seulement)
+
+**Onglet Inspection :**
+- **Inspection** : `Activée` (optionnel mais recommandé)
+- **IPS** : `Activée` (protection)
+
+**Onglet Logs :**
+- **Logs** : ✅ Activés
+
+**2. Créer la règle**
+
+:::tip[Explication]
+Cette règle dit :
+"Autoriser les clients VPN (zone vpn_ssl) à accéder au réseau interne (10.Y.1.0/24) sur tous les ports."
+
+Cela permet aux clients VPN d'accéder au serveur Debian (10.Y.1.20) et à toutes les ressources internes.
+:::
+
+:::tip[Validation Étape 4.3]
+- ✅ La règle est créée
+- ✅ Source : vpn_ssl → Destination : 10.Y.1.0/24 → Service : any
+- ✅ Action : ACCEPT
+- ✅ Capture d'écran : Règle clients VPN vers interne
+:::
+
+---
+
+## Étape 4.4 : Création de la règle 3 - Réseau interne vers clients VPN (réponses)
+
+### 🎯 Objectif
+Autoriser les serveurs internes à répondre aux clients VPN.
+
+### 🔧 Tâche : Créer la règle de retour
+
+**1. Créer une nouvelle règle**
+
+Cliquer sur `Ajouter` :
+
+**Informations générales :**
+- **Nom** : `Réseau interne vers clients VPN (réponses)`
+- **État** : ✅ Activé
+- **Action** : `Accepter` (PASS - vert)
+
+**Onglet Origine :**
+- **Source** : `Reseau_Interne_Y` (10.Y.1.0/24)
+
+**Onglet Destination :**
+- **Destination** : Interface `vpn_ssl` ou réseau `10.Y.100.0/26`
+
+**Onglet Service :**
+- **Service** : `any`
+
+**Onglet Options avancées :**
+- **État de connexion** : `Établie` (established)
+  - Cette option limite la règle aux réponses de connexions déjà initiées
+  - Sécurité : empêche les serveurs internes d'initier des connexions vers les VPN
+
+:::tip[État "Établie"]
+En sélectionnant "Établie", on dit :
+"Autoriser uniquement les paquets de réponse à des connexions déjà ouvertes par les clients VPN."
+
+Cela empêche un serveur compromis d'initier des connexions sortantes vers les clients VPN.
+:::
+
+**Onglet Logs :**
+- **Logs** : ✅ Activés
+
+**2. Créer la règle**
+
+:::note[Cette règle est-elle vraiment nécessaire ?]
+Sur certains firewalls modernes avec **connexion tracking** (suivi de connexion), cette règle peut être optionnelle car les réponses sont automatiquement autorisées.
+
+**Stormshield** fait du connexion tracking, donc techniquement cette règle n'est pas obligatoire.
+
+**Cependant**, pour la pédagogie et la clarté :
+- ✅ On la crée quand même pour comprendre le flux complet
+- ✅ Cela rend la politique de filtrage plus explicite
+- ✅ Compatible avec tous les types de firewalls
+:::
+
+:::tip[Validation Étape 4.4]
+- ✅ La règle est créée
+- ✅ Source : 10.Y.1.0/24 → Destination : vpn_ssl → Service : any
+- ✅ État : Établie (established)
+- ✅ Capture d'écran : Règle réseau interne vers VPN
+:::
+
+---
+
+## Étape 4.5 : Vérification et optimisation de l'ordre des règles
+
+### 🎯 Objectif
+S'assurer que les règles sont dans le bon ordre pour un fonctionnement optimal et sécurisé.
+
+### 🔧 Tâche : Organiser les règles de filtrage
+
+**1. Accéder à la vue d'ensemble des règles**
+
+```
+Configuration → Politique de sécurité → Filtrage et NAT → Règles de filtrage
+```
+
+**2. Ordre recommandé des règles**
+
+Les règles doivent être organisées par ordre de spécificité (du plus spécifique au plus général) :
+
+```
+Position │ Nom de la règle                               │ Action
+─────────┼───────────────────────────────────────────────┼────────
+    1    │ Autoriser connexions VPN SSL entrantes        │ ACCEPT
+    2    │ VPN clients vers réseau interne               │ ACCEPT
+    3    │ Réseau interne vers clients VPN (réponses)    │ ACCEPT
+    4    │ Firewall vers Internet (Phase 1)              │ ACCEPT
+    5    │ Réseau interne vers Internet (Phase 1)        │ ACCEPT
+ ─────── │ ───────────────────────────────────────────── │ ──────
+ Implicite│ Deny All (tout bloquer par défaut)           │ BLOCK
+```
+
+**3. Réorganiser si nécessaire**
+
+Si vos règles ne sont pas dans cet ordre :
+- Sélectionner une règle
+- Utiliser les flèches ⬆️ ⬇️ pour la déplacer
+- Placer les règles VPN en tête (positions 1-3)
+
+:::tip[Pourquoi cet ordre ?]
+**Principe de sécurité** : Les règles les plus spécifiques en premier.
+
+1. **Règles VPN** (très spécifiques : port 443, zones vpn_ssl) → En premier
+2. **Règles générales** (firewall vers Internet, réseau interne) → Ensuite
+3. **Deny All implicite** → Fin (automatique)
+
+Si on inversait, les règles VPN ne seraient jamais évaluées !
+:::
+
+**4. Appliquer les modifications**
+
+Cliquer sur `Appliquer` pour activer le nouvel ordre.
+
+:::tip[Validation Étape 4.5]
+- ✅ Les 3 règles VPN sont en positions 1-3
+- ✅ Les règles de la Phase 1 sont après
+- ✅ Aucune erreur de configuration
+- ✅ Capture d'écran : Liste complète des règles dans le bon ordre
+:::
+
+---
+
+## Étape 4.6 : Configuration NAT pour les clients VPN (si nécessaire)
+
+### 🎯 Objectif
+Vérifier si un NAT est nécessaire pour les clients VPN.
+
+### Contexte : NAT pour les clients VPN ?
+
+**Question** : Les clients VPN (10.Y.100.0/26) ont-ils besoin d'un NAT pour accéder au réseau interne (10.Y.1.0/24) ?
+
+**Réponse** : **NON**, car :
+- Les deux réseaux sont privés (10.x.x.x)
+- Le SNS route directement entre vpn_ssl et in
+- Pas besoin de traduction d'adresse
+
+**MAIS** : Si les clients VPN veulent accéder à **Internet** (pas juste au réseau interne), alors oui, il faut un NAT.
+
+### 🔧 Tâche : Créer une règle NAT pour VPN vers Internet (optionnel)
+
+:::note[Cette étape est optionnelle]
+Dans notre activité, le **split tunneling** est activé. Cela signifie que :
+- Trafic vers 10.Y.1.0/24 → passe par le VPN
+- Trafic vers Internet → passe directement par la connexion locale du client
+
+**Si vous aviez activé le Full Tunnel**, cette règle NAT serait nécessaire.
+:::
+
+**Pour créer la règle NAT (si besoin) :**
+
+1. Accéder au NAT :
+```
+Configuration → Politique de sécurité → Filtrage et NAT → NAT
+```
+
+2. Créer une règle :
+- **Nom** : `NAT VPN clients vers Internet`
+- **État** : ✅ Activé
+
+**Onglet Original :**
+- **Source** : Interface `vpn_ssl` ou réseau `10.Y.100.0/26`
+- **Destination** : `Internet`
+- **Service** : `any`
+
+**Onglet Translaté :**
+- **Source** : `Firewall_out` (172.25.Y.254)
+- **Destination** : Original
+- **Service** : Original
+
+3. Créer
+
+:::tip[Pour cette activité]
+**Vous pouvez sauter cette étape** si vous avez configuré le split tunneling (Phase 3).
+Le NAT de la Phase 1 (réseau interne vers Internet) suffit.
+:::
+
+:::tip[Validation Étape 4.6]
+- ✅ Pas de NAT nécessaire pour VPN → réseau interne (routage direct)
+- ✅ (Optionnel) NAT créé si Full Tunnel activé
+:::
+
+---
+
+## Étape 4.7 : Test préliminaire des règles
+
+### 🎯 Objectif
+Vérifier que les règles créées sont bien prises en compte par le firewall.
+
+### 🔧 Tâche : Tester l'accessibilité du serveur VPN
+
+**1. Depuis la VM Client VPN (Étudiant X)**
+
+Tester la connectivité vers le serveur VPN :
+
+```bash
+# Test 1 : Ping vers le serveur VPN
+ping -c 4 172.25.Y.254
+
+# Test 2 : Test du port 443 (VPN SSL)
+nc -zv 172.25.Y.254 443
+
+# Ou avec telnet :
+telnet 172.25.Y.254 443
+
+# Ou avec curl :
+curl -k https://172.25.Y.254/
+```
+
+**Résultats attendus :**
+- ✅ Ping : Réponses OK
+- ✅ Port 443 : Ouvert (Connected / Connection succeeded)
+- ✅ Curl : Page HTML du portail VPN
+
+:::caution[Si le port 443 est fermé]
+Vérifiez que :
+- La règle "Autoriser connexions VPN SSL entrantes" est bien créée
+- La règle est en position haute (avant les deny)
+- La règle est activée (✅)
+- Le service VPN SSL est démarré (Phase 3)
+:::
+
+**2. Consulter les logs de connexion**
+
+```
+Monitoring → Logs → Filtrage et NAT → Connexions
+```
+
+Filtrer par :
+- **Destination** : 172.25.Y.254
+- **Service** : https (443)
+
+Vous devriez voir :
+- 🟢 Lignes vertes (PASS) pour les tentatives de connexion au port 443
+- **Règle appliquée** : "Autoriser connexions VPN SSL entrantes"
+
+:::tip[Validation Étape 4.7]
+- ✅ Le port 443 est accessible depuis le Client VPN
+- ✅ Les logs montrent les connexions autorisées (PASS)
+- ✅ La bonne règle est appliquée dans les logs
+- ✅ Capture d'écran : Logs de connexion montrant l'accès au port 443
+:::
+
+---
+
+## Étape 4.8 : Analyse de sécurité des règles
+
+### 🔧 Tâche : Vérifier que les règles respectent les bonnes pratiques
+
+**1. Checklist de sécurité**
+
+Vérifiez que vos règles respectent les principes suivants :
+
+| Principe                               | Vérification                                           | ✅/❌ |
+| -------------------------------------- | ------------------------------------------------------ | ----- |
+| **Principe du moindre privilège**      | Les règles autorisent uniquement le nécessaire         |       |
+| **Règles spécifiques avant générales** | Ordre : VPN → Firewall → Réseau interne                |       |
+| **Logs activés**                       | Toutes les règles VPN ont les logs activés             |       |
+| **État de connexion**                  | Règle "réseau interne vers VPN" limitée à "Établie"    |       |
+| **Services limités**                   | VPN entrante limitée au port 443 uniquement            |       |
+| **Source contrôlée**                   | VPN clients vers interne : source = vpn_ssl uniquement |       |
+| **Deny All implicite**                 | Tout ce qui n'est pas autorisé est bloqué              |       |
+
+**2. Test négatif (important)**
+
+Vérifier que ce qui **ne doit pas** être autorisé est bien bloqué :
+
+Depuis la VM Client VPN (avant connexion VPN) :
+```bash
+# Tentative d'accès direct au serveur Debian (doit échouer)
+ping 10.Y.1.20
+# Attendu : Aucune réponse ou "Destination Host Unreachable"
+
+# Tentative de connexion SSH directe (doit échouer)
+ssh techservices@10.Y.1.20
+# Attendu : Timeout ou "No route to host"
+```
+
+**Résultat attendu :** ❌ Échec (c'est ce qu'on veut !)
+
+Pourquoi ? Car le client VPN n'est **pas encore connecté au VPN**.
+Il est sur le réseau 172.25.X.0/16 (Internet), pas sur le réseau 10.Y.100.0/26 (VPN).
+
+:::tip[C'est normal que ça ne marche pas !]
+Si vous pouviez accéder au serveur Debian (10.Y.1.20) **sans** être connecté au VPN, cela signifierait :
+- ❌ Soit une erreur de configuration réseau
+- ❌ Soit une faille de sécurité majeure
+
+Le but du VPN est justement de **restreindre l'accès** aux ressources internes.
+:::
+
+:::tip[Validation Étape 4.8]
+- ✅ Tous les critères de la checklist sont respectés
+- ✅ Les tests négatifs échouent (preuve que la sécurité fonctionne)
+- ✅ Capture d'écran : Tentative échouée de ping vers 10.Y.1.20 (avant VPN)
+:::
+
+---
+
+## ✅ Tableau de validation de la Phase 4
+
+Complétez ce tableau dans votre compte-rendu :
+
+| Élément               | Description                             | Valeur/État      | ✅/❌ |
+| --------------------- | --------------------------------------- | ---------------- | ----- |
+| **Zone VPN SSL**      | Interface virtuelle créée               | Présente et UP   |       |
+| **Règle 1**           | Autoriser connexions VPN entrantes      | Créée et activée |       |
+| Règle 1 - Source      | any (Internet)                          | Configuré        |       |
+| Règle 1 - Destination | Firewall_out                            | Configuré        |       |
+| Règle 1 - Service     | https (443)                             | Configuré        |       |
+| **Règle 2**           | VPN clients vers réseau interne         | Créée et activée |       |
+| Règle 2 - Source      | vpn_ssl                                 | Configuré        |       |
+| Règle 2 - Destination | 10.Y.1.0/24                             | Configuré        |       |
+| Règle 2 - Service     | any                                     | Configuré        |       |
+| **Règle 3**           | Réseau interne vers VPN (réponses)      | Créée et activée |       |
+| Règle 3 - Source      | 10.Y.1.0/24                             | Configuré        |       |
+| Règle 3 - Destination | vpn_ssl                                 | Configuré        |       |
+| Règle 3 - État        | Établie                                 | Configuré        |       |
+| **Ordre des règles**  | VPN en positions 1-3                    | Correct          |       |
+| **Logs**              | Activés sur toutes les règles VPN       | Activés          |       |
+| **Test port 443**     | Accessible depuis Client VPN            | Accessible       |       |
+| **Test négatif**      | Serveur interne non accessible sans VPN | Bloqué (normal)  |       |
+
+---
+
+## ✅ Critères de validation de la Phase 4
+
+Avant de passer à la Phase 5, assurez-vous que :
+
+- [ ] L'interface virtuelle `vpn_ssl` est créée et active
+- [ ] La règle 1 autorise les connexions VPN entrantes (any → Firewall_out:443)
+- [ ] La règle 2 autorise les clients VPN vers le réseau interne (vpn_ssl → 10.Y.1.0/24)
+- [ ] La règle 3 autorise les réponses (10.Y.1.0/24 → vpn_ssl, état "Établie")
+- [ ] Les 3 règles VPN sont en positions 1-3 (avant les autres)
+- [ ] Tous les logs sont activés sur les règles VPN
+- [ ] Le port 443 est accessible depuis le Client VPN (test nc/telnet/curl)
+- [ ] Les logs montrent les connexions autorisées vers le port 443
+- [ ] Le serveur Debian (10.Y.1.20) est **inaccessible** depuis le Client VPN (avant connexion VPN)
+
+:::tip[Checkpoint enseignant]
+👨‍🏫 Avant de continuer, faites valider votre configuration par l'enseignant.
+Montrez-lui :
+1. La liste des règles de filtrage dans le bon ordre
+2. Les détails des 3 règles VPN créées
+3. Les logs montrant l'accès au port 443 autorisé
+4. Un test négatif (ping vers 10.Y.1.20 qui échoue)
+:::
+
+---
+
+## 🎯 Résumé de la Phase 4
+
+Vous avez maintenant :
+
+- ✅ Compris les 3 flux réseau nécessaires au VPN
+- ✅ Créé la zone de sécurité VPN SSL (vpn_ssl)
+- ✅ Créé les 3 règles de filtrage essentielles :
+  1. Autoriser connexions VPN entrantes (Internet → SNS:443)
+  2. Autoriser clients VPN vers réseau interne (vpn_ssl → 10.Y.1.0/24)
+  3. Autoriser réponses (10.Y.1.0/24 → vpn_ssl)
+- ✅ Organisé les règles dans le bon ordre
+- ✅ Activé les logs pour le suivi
+- ✅ Vérifié que le port 443 est accessible
+- ✅ Confirmé que la sécurité fonctionne (ressources internes bloquées sans VPN)
+
+**🎉 Le serveur VPN est maintenant prêt à accepter des connexions !**
+
+**Prochaine étape** : Phase 5 - Installation et configuration du client VPN, puis connexion et tests
+
+---
+
+## 📚 Pour aller plus loin (bonus)
+
+### Bonus 1 : Créer des règles plus granulaires
+
+Au lieu d'autoriser "any" pour les clients VPN vers l'interne, limitez aux services strictement nécessaires :
+
+Modifiez la règle 2 :
+- **Services autorisés** : Créer un groupe de services
+  - HTTP (80)
+  - HTTPS (443)
+  - SSH (22)
+  - SMB (445) - pour le partage de fichiers
+
+Cela applique le **principe du moindre privilège**.
+
+### Bonus 2 : Créer une règle de blocage explicite
+
+Ajouter une règle juste après les règles VPN :
+- **Nom** : `Bloquer tout autre accès depuis VPN`
+- **Source** : vpn_ssl
+- **Destination** : any
+- **Action** : `Bloquer` (DENY)
+- **Logs** : ✅ Activés
+
+Cela permet de logger toutes les tentatives d'accès non autorisées depuis le VPN.
+
+### Bonus 3 : Activer l'IPS sur le tunnel VPN
+
+```
+Configuration → Politique de sécurité → Prévention d'intrusion (IPS)
+```
+
+Créer un profil IPS spécifique pour la zone vpn_ssl :
+- Activer les signatures d'attaques réseau
+- Activer les signatures d'exploits applicatifs
+- Mode : Prévention (bloquer les attaques détectées)
+
+Associer ce profil à la règle 2 (VPN clients vers réseau interne).

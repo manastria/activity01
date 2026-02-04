@@ -4,21 +4,18 @@ description: "Activités pédagogiques — BTS SIO SISR"
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
+import { LinkButton } from '@astrojs/starlight/components';
 
 # BTS SIO — Activités SISR
 
 Ce site regroupe les activités prêtes à l’emploi. Utilisez la barre latérale pour parcourir par thèmes.
 
 <CardGrid>
-  <Card title="Toutes les activités" href="/activities/" />
-  <Card title="Commencer ici (méthode)" href="/methodologie/" />
-  <Card title="Critères d’évaluation" href="/evaluation/" />
+  <Card title="CRASH Test" >
+    <p>Projet d'après le contexte CRASH</p>
+    <LinkButton href="/activities/crashtest/">Voir l’activité</LinkButton>
+  </Card>
+
 </CardGrid>
 
-## Mode d’emploi
-- Chaque activité a un code (`A01`, `A02`, …), une **durée**, un **niveau** et des **tags**.
-- Le bouton **Rechercher** (loupe) permet de filtrer rapidement par mot-clé.
-- Les consignes et livrables sont dans la page de l’activité.
 
-## Dernières infos
-- Pensez à vérifier la durée et les prérequis avant une séance.

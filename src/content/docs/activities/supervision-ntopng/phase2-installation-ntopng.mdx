@@ -1,0 +1,237 @@
+---
+title: Phase 2 - Installation et configuration de ntopng
+description: Déploiement de la VM Debian et installation de ntopng et nProbe pour la collecte des flux réseau
+sidebar:
+  order: 3
+---
+
+Cette phase consiste à déployer une machine virtuelle Debian qui hébergera ntopng (interface d'analyse) et nProbe (collecteur de flux IPFIX). Ces deux composants travaillent ensemble pour recevoir, traiter et visualiser les flux réseau envoyés par le firewall SNS.
+
+**Durée estimée :** 1h30
+
+**Prérequis :** La [Phase 1](/supervision-ntopng/phase1-config-sns/) doit être terminée.
+
+---
+
+## PHASE 2 : Installation et configuration de ntopng
+
+### Étape 2.1 : Déploiement de la VM ntopng
+
+1. Récupérez l'OVA Debian 12 et importez-la dans VirtualBox
+2. Configurez la VM avec les paramètres suivants :
+   - **Nom** : `ntopng_superviseur`
+   - **Réseau** : **Adapter 1** en "Internal Network" (nom : `LAN_IN_X` où X = votre numéro d'étudiant)
+3. Démarrez la VM et connectez-vous (identifiants fournis par l'enseignant)
+4. Configurez l'adresse IP de la VM : `192.168.X.50/24` avec comme passerelle et DNS `192.168.X.254`
+
+:::tip[Checkpoint 1]
+- La VM ntopng doit pouvoir joindre la passerelle SNS (192.168.X.254). Testez avec `ping`.
+- La VM ntopng doit pouvoir joindre une machine sur internet (`ping`) et résoudre un nom de domaine publique (`dig`).
+:::
+
+### Étape 2.2 : Installation de ntopng et nProbe
+
+:::note[Pourquoi ntopng ?]
+ntopng est un outil open-source de monitoring réseau qui permet d'analyser en temps réel le trafic réseau. Contrairement à la simple consultation des logs du firewall, ntopng offre une vue graphique, des statistiques détaillées et une analyse comportementale du réseau.
+:::
+
+#### Préparation du système
+
+1. Mettez à jour le système et installez les dépendances :
+   ```bash
+   sudo apt update && sudo apt upgrade -y
+   ```
+
+2. Installer les dépendances :
+
+   ```bash
+   sudo apt install wget gnupg software-properties-common -y
+   ```
+
+#### Ajout du dépôt officiel ntop
+
+3. Téléchargez le paquet de configuration du dépôt ntop :
+   ```bash
+   wget https://packages.ntop.org/apt/bookworm/all/apt-ntop.deb
+   ```
+
+4. Installez le paquet téléchargé :
+   ```bash
+   sudo dpkg -i apt-ntop.deb
+   ```
+
+5. Mettez à jour la liste des paquets :
+   ```bash
+   sudo apt update
+   ```
+
+#### Installation de ntopng et nprobe
+
+6. Installez ntopng, nProbe et leurs dépendances (Redis sera installé automatiquement) :
+   ```bash
+   sudo apt install ntopng ntopng-data nprobe -y
+   ```
+
+   :::note[Rôle de nProbe]
+   Dans la version Community, ntopng ne collecte pas directement les flux NetFlow/IPFIX reçus en UDP.
+   nProbe joue le rôle de **collecteur de flux** (UDP 4739 par exemple) et les expose ensuite à ntopng via ZMQ.
+   :::
+
+   :::note[nProbe Community vs Professional]
+   **nProbe Community** (gratuit) est suffisant pour ce TP. Il permet de :
+   - Collecter des flux IPFIX/NetFlow
+   - Les transmettre à ntopng via ZMQ
+   - Gérer les templates IPFIX basiques
+
+   **nProbe Professional** (payant) offre des fonctionnalités avancées :
+   - Export des flux vers plusieurs collecteurs
+   - DPI (Deep Packet Inspection) pour identifier les applications chiffrées
+   - Agrégation de flux multiples
+   - Support de protocoles propriétaires
+
+   Pour un usage en production, évaluez vos besoins avant de choisir la version.
+   :::
+
+#### Sauvegarde des fichiers de configuration
+
+7. Avant toute modification, sauvegardez les fichiers de configuration :
+   ```bash
+   sudo cp -a /etc/ntopng/ntopng.conf /etc/ntopng/ntopng.conf.bak.$(date +%F)
+   sudo cp -a /etc/nprobe/nprobe.conf /etc/nprobe/nprobe.conf.bak.$(date +%F)
+   ```
+
+### Étape 2.3 : Configuration de nProbe (collecte IPFIX/NetFlow)
+
+1. Éditez le fichier de configuration de nProbe :
+   ```bash
+   sudo nano /etc/nprobe/nprobe.conf
+   ```
+
+   Remplacez le contenu par une configuration minimale :
+   ```text
+   # Collecte des flux reçus du firewall (IPFIX/NetFlow) sur UDP/4739
+   --collector-port=4739
+
+   # Exposition des flux vers ntopng via ZMQ (ntopng se connecte sur ce port)
+   --zmq=tcp://*:5556
+
+   # Template recommandé pour une bonne compatibilité avec ntopng
+   -T=@NTOPNG@
+   ```
+
+   :::note[Port de collecte IPFIX]
+   Dans ce TP, le firewall SNS exporte les flux en IPFIX vers le port UDP **4739**.
+   Si vous utilisez un autre port (ex. 2055), adaptez `--collector-port` et la règle de filtrage côté SNS.
+   :::
+
+### Étape 2.4 : Configuration de ntopng
+
+1. Éditez le fichier de configuration :
+```bash
+sudo nano /etc/ntopng/ntopng.conf
+```
+
+Ajoutez/modifiez les lignes suivantes :
+```text
+-G=/var/run/ntopng.pid
+--http-port=3000
+--community
+--disable-login=1
+# Interface de flux fournie par nProbe (ZMQ)
+-i=tcp://127.0.0.1:5556
+```
+
+**Explications :**
+
+- `--collector-port=4739` (nProbe) : nProbe écoute les flux IPFIX/NetFlow envoyés par le firewall sur le port UDP 4739.
+- `--zmq=tcp://*:5556` (nProbe) : nProbe met à disposition une interface ZMQ.
+- `-i=tcp://127.0.0.1:5556` (ntopng) : ntopng se connecte à nProbe pour afficher les flux.
+
+:::caution[Sécurité en production]
+Dans un environnement de production, il ne faut **jamais** désactiver l'authentification. Cette option n'est utilisée ici que dans un cadre pédagogique sur un réseau isolé.
+:::
+
+### Étape 2.5 : Démarrage des services
+
+1. Activez et démarrez les services Redis, nProbe et ntopng :
+```bash
+sudo systemctl enable redis-server
+sudo systemctl start redis-server
+
+sudo systemctl enable nprobe
+sudo systemctl start nprobe
+
+sudo systemctl enable ntopng
+sudo systemctl start ntopng
+```
+
+2. Vérifiez le statut des services :
+```bash
+sudo systemctl status redis-server --no-pager
+sudo systemctl status nprobe --no-pager
+sudo systemctl status ntopng --no-pager
+```
+
+:::tip[Checkpoint 2]
+Les trois services doivent être actifs (running). Prenez une capture d'écran du résultat de `systemctl status ntopng`.
+:::
+
+### Étape 2.6 : Vérification de l'installation
+
+1. Vérifiez que nProbe et ntopng sont bien installés et écoutent sur les bons ports :
+```bash
+# Vérifier les versions installées
+nprobe --version
+ntopng --version
+
+# Vérifier que nProbe écoute sur le port 4739 (après démarrage)
+sudo ss -ulnp | grep 4739
+
+# Vérifier que nProbe expose ZMQ sur le port 5556
+sudo ss -ltnp | grep 5556
+
+# Vérifier que ntopng écoute sur le port 3000
+sudo ss -ltnp | grep 3000
+```
+
+:::note[Comportement de ZMQ et sockets UDP]
+Il est possible que la commande `ss` ne montre pas les ports 5556 (ZMQ) et 4739 (UDP IPFIX) selon la façon dont nProbe configure ses sockets. Ce comportement est normal. Si les services sont **actifs** (`systemctl status`) et que l'interface web ntopng affiche une interface ZMQ, tout fonctionne correctement.
+
+Pour vérifier manuellement la réception de flux IPFIX, utilisez :
+```bash
+sudo tcpdump -ni any udp port 4739 -c 5
+```
+:::
+
+**Résultats attendus :**
+```text
+# nProbe écoute UDP 4739 pour collecter IPFIX
+UNCONN 0 0 0.0.0.0:4739 0.0.0.0:* users:(("nprobe",pid=XXXX,fd=X))
+
+# nProbe expose ZMQ sur TCP 5556
+LISTEN 0 128 0.0.0.0:5556 0.0.0.0:* users:(("nprobe",pid=XXXX,fd=X))
+
+# ntopng interface web sur TCP 3000
+LISTEN 0 128 0.0.0.0:3000 0.0.0.0:* users:(("ntopng",pid=XXXX,fd=X))
+```
+
+:::tip[Checkpoint 3]
+Si les trois ports sont bien en écoute, l'installation est correcte. Prenez une capture d'écran des résultats.
+:::
+
+### Étape 2.7 : Accès à l'interface web
+
+1. Depuis une VM Xubuntu cliente, ouvrez un navigateur
+2. Accédez à : `http://192.168.X.50:3000`
+3. L'interface ntopng doit s'afficher
+
+:::tip[Checkpoint 4]
+Prenez une capture d'écran de la page d'accueil de ntopng (qui sera encore vide pour l'instant).
+:::
+
+
+---
+
+:::tip[Prochaine étape]
+Maintenant que ntopng est installé et opérationnel, configurez l'export IPFIX sur le firewall dans la [Phase 3](/supervision-ntopng/phase3-config-ipfix/).
+:::

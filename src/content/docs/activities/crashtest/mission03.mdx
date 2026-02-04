@@ -1,0 +1,645 @@
+---
+title: Mission 3 - Sécurisation de l'accès SSH
+description: Configuration d'un accès d'administration à distance sécurisé par SSH avec analyse des risques
+---
+
+import { Steps, Card, CardGrid, Aside } from '@astrojs/starlight/components';
+
+# Mission 3 : Sécurisation de l'accès SSH
+
+## Objectif
+
+Mettre en place une solution permettant l'administration à distance sécurisée des serveurs GLPI via SSH depuis Internet.
+
+<CardGrid>
+  <Card title="Difficulté" icon="star">
+    Moyen 🤔
+  </Card>
+  <Card title="Temps estimé" icon="clock">
+    3 heures
+  </Card>
+</CardGrid>
+
+## Prérequis
+
+- Avoir terminé la Mission 2 (DMZ configurée et fonctionnelle)
+- Serveurs GLPI accessibles en SSH depuis le LAN
+- Maîtriser les bases de SSH et de l'authentification Linux
+- Comprendre les principes de cryptographie asymétrique
+
+## Contexte
+
+L'administrateur du CRASH doit pouvoir intervenir sur les serveurs GLPI **en toute circonstance**, y compris :
+- En soirée lors des réunions des associations (après 18h)
+- Le week-end pendant les assemblées générales
+- Depuis son domicile en cas d'incident urgent
+- En déplacement via une connexion mobile
+
+Actuellement, l'accès SSH n'est possible que depuis le réseau interne (LAN). Pour permettre l'administration à distance depuis Internet, vous devez mettre en place une solution qui soit à la fois **pratique** et **sécurisée**.
+
+:::caution[Risques liés à l'exposition SSH]
+Exposer un service SSH sur Internet présente des risques majeurs :
+- Attaques par force brute sur les mots de passe
+- Exploitation de vulnérabilités SSH non patchées
+- Compromission des serveurs en cas de mot de passe faible
+- Escalade de privilèges après intrusion
+
+Votre mission est de **minimiser ces risques** tout en permettant l'accès légitime.
+:::
+
+:::tip[Approche pédagogique]
+Cette mission propose trois niveaux de réalisation :
+- ⭐ Solution de base avec authentification par clés et règles pare-feu
+- ⭐⭐ Durcissement SSH avancé et protection contre les attaques
+- ⭐⭐⭐ Architecture professionnelle avec bastion et surveillance
+
+Chaque niveau inclut le précédent. Visez au minimum le niveau ⭐ pour valider la mission.
+:::
+
+---
+
+## Solutions possibles
+
+Plusieurs architectures permettent de résoudre ce problème. Analysez-les avant de choisir.
+
+### Solution A : Accès SSH direct depuis Internet
+```
+Internet
+    |
+    | SSH (port 22 ou custom)
+    |
+[fw-crash] → DNAT → [glpi-srv01]
+```
+
+**Avantages :**
+- Simple à mettre en place
+- Pas de machine supplémentaire
+
+**Inconvénients :**
+- ❌ Serveur de production directement exposé sur Internet
+- ❌ Si compromis, accès direct aux données GLPI
+- ❌ Difficile de surveiller et contrôler les accès
+
+---
+
+### Solution B : Bastion SSH (Jump Host)
+```
+Internet
+    |
+    | SSH vers bastion
+    |
+[fw-crash] → DNAT → [bastion-ssh]
+                         |
+                         | SSH interne
+                         |
+                    [glpi-srv01]
+```
+
+**Avantages :**
+- ✅ Serveurs de production non exposés directement
+- ✅ Point d'entrée unique à surveiller et durcir
+- ✅ Logs centralisés des connexions
+- ✅ Possibilité d'ajouter de l'authentification forte
+
+**Inconvénients :**
+- Machine supplémentaire à maintenir
+- Connexion en deux étapes
+
+---
+
+### Solution C : VPN puis SSH
+```
+Internet
+    |
+    | VPN (OpenVPN, WireGuard...)
+    |
+[fw-crash] → Tunnel VPN
+                |
+                | Accès au LAN comme si on était sur place
+                |
+            [glpi-srv01]
+```
+
+**Avantages :**
+- ✅ Sécurité maximale (tunnel chiffré)
+- ✅ Accès à tous les services internes, pas seulement SSH
+- ✅ Traçabilité complète
+
+**Inconvénients :**
+- Plus complexe à mettre en place
+- Nécessite un client VPN sur la machine de l'admin
+- Gestion des certificats VPN
+
+---
+
+## Tâches à réaliser
+
+### Tâche 1 ⭐ : Analyse de risques et choix de solution
+
+Avant toute mise en œuvre technique, vous devez analyser les risques et choisir une solution adaptée.
+
+#### Étape 1.1 : Identification des menaces
+
+Identifiez les menaces pesant sur un accès SSH exposé sur Internet.
+
+**Rédigez un document** listant :
+- Les **menaces** possibles (qui pourrait attaquer ? comment ?)
+- Les **vulnérabilités** exploitables (faiblesses techniques)
+- L'**impact** en cas de compromission (que pourrait faire un attaquant ?)
+- La **probabilité** d'occurrence (risque élevé, moyen, faible ?)
+
+:::tip[Méthodologie d'analyse de risques]
+Pour chaque risque identifié, évaluez :
+- **Gravité** : Impact si le risque se réalise (1 à 5)
+- **Probabilité** : Chances que cela arrive (1 à 5)
+- **Niveau de risque** : Gravité × Probabilité
+- **Mesures de mitigation** : Comment réduire ce risque ?
+
+Concentrez vos efforts sur les risques avec le niveau le plus élevé.
+:::
+
+#### Étape 1.2 : Comparaison des solutions
+
+Comparez les trois solutions proposées (A, B, C) selon les critères suivants :
+
+| Critère | Solution A | Solution B | Solution C |
+|---------|-----------|-----------|-----------|
+| **Sécurité** | | | |
+| **Simplicité** | | | |
+| **Coût** (ressources) | | | |
+| **Maintenabilité** | | | |
+| **Extensibilité** | | | |
+
+**Justifiez votre choix** de solution en fonction du contexte du CRASH et de votre analyse de risques.
+
+:::note[Pour votre portfolio]
+Cette analyse de risques et ce comparatif sont des éléments essentiels qui démontrent votre capacité à prendre des décisions techniques argumentées.
+:::
+
+---
+
+### Tâche 2 ⭐ : Mise en place de l'authentification par clés SSH
+
+Quelle que soit la solution choisie, l'authentification par clés SSH est **obligatoire**. Les mots de passe doivent être désactivés.
+
+#### Principe de l'authentification par clés
+
+L'authentification par clés repose sur la cryptographie asymétrique :
+- Vous générez une **paire de clés** : privée (secrète) + publique
+- La clé publique est installée sur le serveur
+- La clé privée reste sur votre machine (protégée par passphrase)
+- Lors de la connexion, le serveur vérifie que vous possédez la clé privée correspondante
+
+**Avantages sur le mot de passe :**
+- ✅ Impossible à deviner par force brute
+- ✅ Peut être révoquée facilement
+- ✅ Peut être protégée par passphrase (double protection)
+
+#### Mise en œuvre
+
+**Sur votre machine d'administration** (admin-poste ou votre hôte), générez une paire de clés SSH :
+
+:::tip[Choix de l'algorithme]
+Plusieurs algorithmes sont disponibles :
+- **RSA** : Classique, bien supporté (minimum 4096 bits)
+- **Ed25519** : Plus moderne, plus court, plus rapide (recommandé)
+- **ECDSA** : Alternatif mais moins populaire
+
+Pour ce projet, privilégiez **Ed25519** ou **RSA 4096 bits**.
+:::
+
+**Installez la clé publique** sur les serveurs à administrer (glpi-srv01 ou glpi-web01/glpi-db01).
+
+**Testez** la connexion SSH avec authentification par clés depuis le LAN.
+
+**Désactivez** l'authentification par mot de passe sur les serveurs SSH.
+
+:::caution[Ne vous enfermez pas dehors !]
+Avant de désactiver l'authentification par mot de passe, assurez-vous que :
+1. L'authentification par clés fonctionne
+2. Vous avez testé depuis plusieurs machines si nécessaire
+3. Vous avez un accès de secours (console VirtualBox) en cas de problème
+:::
+
+---
+
+### Tâche 3 ⭐ : Configuration du pare-feu pour l'accès SSH externe
+
+Configurez le pare-feu `fw-crash` pour autoriser les connexions SSH depuis Internet.
+
+#### Configuration à réaliser
+
+**Selon la solution choisie :**
+
+**Solution A (accès direct) :**
+- Créez une règle de filtrage : Internet → DMZ sur le port SSH
+- Configurez un NAT entrant (DNAT) : IP publique:22 → glpi-srv01:22
+- ⚠️ **Recommandation** : Utilisez un port non standard (ex: 2222) plutôt que le port 22
+
+**Solution B (bastion) :**
+- Créez une VM `bastion-ssh` dans la DMZ
+- Créez une règle de filtrage : Internet → bastion-ssh sur le port SSH
+- Configurez un DNAT : IP publique:22 → bastion-ssh:22
+- Configurez le routage/proxy SSH depuis le bastion vers les serveurs GLPI
+
+**Solution C (VPN) :**
+- Installez et configurez un serveur VPN sur `fw-crash` ou une VM dédiée
+- Créez une règle de filtrage pour le port VPN
+- Configurez l'authentification VPN (certificats)
+
+:::tip[Changement de port SSH]
+Changer le port SSH par défaut (22) vers un port non standard (ex: 2222, 22022) réduit drastiquement les scans automatisés. Ce n'est pas une sécurité en soi (« security through obscurity »), mais cela réduit le bruit dans les logs.
+
+Attention : Si vous changez le port, pensez à :
+- Modifier la configuration SSH du serveur (`/etc/ssh/sshd_config` : `Port 2222`)
+- Adapter les règles de pare-feu
+- Documenter ce changement pour les futurs administrateurs
+:::
+
+#### Tests de connexion
+
+**Depuis une machine externe au labo** (votre domicile, un smartphone en 4G, etc.), testez la connexion SSH :
+```bash
+# Si port standard (22)
+ssh user@172.25.x.y
+
+# Si port custom (ex: 2222)
+ssh -p 2222 user@172.25.x.y
+
+# Si bastion (solution B)
+ssh -J user@bastion user@glpi-srv01
+```
+
+✅ **Attendu** : La connexion fonctionne avec authentification par clés.
+
+---
+
+### Tâche 4 ⭐⭐ : Durcissement de la configuration SSH
+
+Renforcez la sécurité de votre serveur SSH en appliquant les bonnes pratiques.
+
+#### Configuration du serveur SSH
+
+Le fichier de configuration SSH (`/etc/ssh/sshd_config`) contient de nombreux paramètres de sécurité.
+
+**Paramètres de sécurité recommandés à configurer :**
+
+| Paramètre | Valeur recommandée | Justification |
+|-----------|-------------------|---------------|
+| `PermitRootLogin` | `no` | Empêche la connexion directe en root |
+| `PasswordAuthentication` | `no` | Force l'authentification par clés |
+| `PubkeyAuthentication` | `yes` | Active l'authentification par clés |
+| `PermitEmptyPasswords` | `no` | Interdit les mots de passe vides |
+| `X11Forwarding` | `no` | Désactive le forwarding X11 (rarement utile) |
+| `MaxAuthTries` | `3` | Limite les tentatives d'authentification |
+| `MaxSessions` | `2` | Limite le nombre de sessions simultanées |
+| `LoginGraceTime` | `30` | Temps maximum pour s'authentifier |
+| `ClientAliveInterval` | `300` | Détecte les connexions mortes |
+| `ClientAliveCountMax` | `2` | Ferme les connexions inactives |
+
+**Restriction des utilisateurs autorisés :**
+
+Plutôt que d'autoriser tous les utilisateurs du système, restreignez SSH à un groupe spécifique :
+```
+AllowGroups ssh-users
+```
+
+Créez ce groupe et ajoutez-y uniquement les utilisateurs légitimes.
+
+**Restriction des algorithmes cryptographiques :**
+
+Désactivez les algorithmes faibles ou obsolètes, ne gardez que les algorithmes robustes.
+
+:::note[Consultation des bonnes pratiques]
+Consultez les recommandations de l'ANSSI ou de Mozilla pour connaître les algorithmes cryptographiques recommandés pour SSH.
+:::
+
+Après chaque modification, **redémarrez le service SSH** et **testez** que vous pouvez toujours vous connecter.
+
+---
+
+### Tâche 5 ⭐⭐ : Protection contre les attaques par force brute
+
+Mettez en place des mécanismes de détection et de blocage des tentatives d'intrusion.
+
+#### Solution 1 : Fail2ban
+
+**Fail2ban** est un outil qui analyse les logs et bannit automatiquement les IP malveillantes.
+
+**Principe :**
+- Fail2ban surveille les logs SSH (généralement `/var/log/auth.log`)
+- Détecte les échecs d'authentification répétés
+- Après N échecs en X minutes, bannit l'IP source via iptables/nftables
+- Le ban peut être temporaire (ex: 1h) ou permanent
+
+**Configuration à réaliser :**
+- Installez fail2ban sur vos serveurs SSH
+- Configurez une « jail » SSH avec des paramètres adaptés
+- Testez en provoquant des échecs d'authentification volontaires
+
+:::tip[Paramètres fail2ban recommandés]
+- `maxretry` : 3-5 tentatives
+- `findtime` : 600 secondes (10 minutes)
+- `bantime` : 3600 secondes (1h) pour les récidivistes, -1 (permanent) pour les attaques graves
+
+Adaptez selon votre tolérance au risque.
+:::
+
+#### Solution 2 : Port knocking
+
+Le **port knocking** cache le port SSH jusqu'à ce qu'une séquence de ports soit « frappée ».
+
+**Principe :**
+- Le port SSH est fermé par défaut
+- L'administrateur « frappe » une séquence secrète de ports (ex: 7000, 8000, 9000)
+- Le pare-feu détecte cette séquence et ouvre temporairement le port SSH pour cette IP
+- Après connexion ou timeout, le port se referme
+
+**Avantages :** Rend le service SSH invisible pour les scanners.
+**Inconvénients :** Plus complexe, peut poser problème derrière certains NAT.
+
+Documentez la solution choisie et testez son efficacité.
+
+---
+
+### Tâche 6 ⭐⭐ : Surveillance et audit des connexions SSH
+
+Mettez en place une surveillance des accès SSH pour détecter les comportements anormaux.
+
+#### Centralisation des logs SSH
+
+Les logs SSH (connexions réussies, échecs, commandes exécutées) doivent être envoyés au serveur Syslog centralisé configuré en Mission 1 et 2.
+
+**Vérifiez** que les événements suivants sont bien loggés et centralisés :
+- Connexions réussies (qui, quand, depuis où)
+- Tentatives échouées
+- Déconnexions
+- Changements de configuration SSH
+
+#### Création d'alertes
+
+Créez des **alertes automatiques** pour les événements suspects :
+
+**Exemples d'événements à surveiller :**
+- Plus de 5 échecs d'authentification depuis une même IP en 10 minutes
+- Connexion SSH depuis un pays inhabituel (si géolocalisation disponible)
+- Connexion en dehors des heures ouvrables (si politique stricte)
+- Tentative de connexion root (doit être impossible mais à surveiller)
+
+:::tip[Outils de surveillance]
+Selon votre stack de logs :
+- **Fail2ban** : Peut envoyer des emails d'alerte
+- **ELK/Loki** : Créer des alertes avec Elastalert ou Grafana
+- **SIEM** : Si disponible dans votre infrastructure
+:::
+
+#### Audit périodique
+
+Créez un **script ou dashboard** affichant :
+- Liste des connexions SSH des 7 derniers jours
+- Top 10 des IP sources
+- Nombre de tentatives échouées par IP
+- Horaires des connexions (identifier les patterns anormaux)
+
+---
+
+### Tâche 7 ⭐⭐⭐ : Architecture bastion SSH professionnelle
+
+Si vous avez choisi la Solution B, ou si vous souhaitez améliorer votre architecture, déployez un bastion SSH professionnel.
+
+#### Création du bastion
+
+Créez une VM dédiée `bastion-ssh` dans la DMZ avec une configuration minimaliste :
+
+**Caractéristiques du bastion :**
+- Système d'exploitation minimal (Debian minimal, Alpine Linux...)
+- **Aucun service autre que SSH**
+- Pas de données sensibles stockées
+- Durcissement maximal (voir Tâche 4)
+- Logs exhaustifs de toutes les connexions
+
+#### Configuration du SSH Jump Host
+
+Le bastion doit permettre de « rebondir » vers les serveurs internes via SSH.
+
+**Deux méthodes possibles :**
+
+**Méthode 1 : SSH ProxyJump (moderne, recommandée)**
+
+Configuration côté client (dans `~/.ssh/config`) :
+```
+Host bastion
+    HostName 172.25.x.y
+    User admin
+    Port 22
+
+Host glpi-srv01
+    HostName 10.54.0.10
+    User admin
+    ProxyJump bastion
+```
+
+Connexion en une commande : `ssh glpi-srv01`
+
+**Méthode 2 : SSH ProxyCommand (compatible anciennes versions)**
+```
+Host glpi-srv01
+    HostName 10.54.0.10
+    User admin
+    ProxyCommand ssh -W %h:%p bastion
+```
+
+#### Logs et audit renforcés
+
+Sur le bastion, activez le **logging exhaustif** :
+
+**Enregistrement des sessions :**
+- Installez et configurez un outil d'enregistrement de sessions (ex: `ttyrec`, `script`, ou solutions pro comme Teleport)
+- Toutes les commandes tapées via le bastion doivent être loggées
+- Les logs doivent être immutables et centralisés
+
+**Surveillance en temps réel :**
+- Alertes sur toute connexion au bastion
+- Notification des administrateurs en cas de commande suspecte
+
+---
+
+### Tâche 8 ⭐⭐⭐ : Authentification multi-facteurs (2FA)
+
+Ajoutez une couche de sécurité supplémentaire avec l'authentification à deux facteurs.
+
+#### Principe du 2FA pour SSH
+
+Même si un attaquant vole votre clé privée SSH, il ne pourra pas se connecter sans le second facteur :
+- **Clé SSH** (ce que vous avez) + **Code OTP** (ce que vous connaissez/possédez)
+
+#### Mise en œuvre avec Google Authenticator
+
+**Google Authenticator PAM** permet d'ajouter un code TOTP (_Time-based One-Time Password_) à SSH.
+
+**Installation et configuration :**
+- Installez le module PAM Google Authenticator sur les serveurs
+- Configurez SSH pour utiliser PAM avec « keyboard-interactive »
+- Générez les secrets TOTP pour chaque utilisateur
+- Testez la connexion avec clé SSH + code à 6 chiffres
+
+:::caution[Attention au verrouillage]
+Avant d'activer le 2FA, assurez-vous de :
+- Avoir plusieurs méthodes de secours (codes de backup)
+- Tester sur une connexion non-critique d'abord
+- Conserver un accès de secours (console)
+:::
+
+#### Alternative : Clés FIDO2/U2F
+
+Pour les environnements hautement sécurisés, les clés matérielles (YubiKey, etc.) offrent le meilleur niveau de sécurité.
+
+Documentez la solution 2FA choisie et le processus d'authentification complet.
+
+---
+
+### Tâche 9 ⭐⭐⭐ : Tests d'intrusion SSH
+
+Réalisez des tests pour valider la robustesse de votre configuration.
+
+#### Test 1 : Attaque par force brute
+
+Depuis une machine externe, tentez une attaque par force brute sur SSH :
+
+_Outils disponibles :_ `hydra`, `medusa`, `ncrack`
+```bash
+# Exemple avec hydra (ne PAS faire sur des systèmes réels sans autorisation)
+hydra -l admin -P /usr/share/wordlists/rockyou.txt ssh://172.25.x.y
+```
+
+✅ **Attendu** :
+- L'attaque échoue (authentification par clés active)
+- L'IP attaquante est bannie par Fail2ban
+- Des alertes sont générées
+
+#### Test 2 : Scan de vulnérabilités SSH
+
+Analysez votre configuration SSH pour détecter des faiblesses :
+
+_Outils disponibles :_ `ssh-audit`, `nmap --script ssh*`
+```bash
+# Exemple avec ssh-audit
+python ssh-audit.py 172.25.x.y
+
+# Ou avec nmap
+nmap --script ssh2-enum-algos,ssh-hostkey 172.25.x.y
+```
+
+✅ **Attendu** : Aucun algorithme faible détecté, configuration robuste.
+
+#### Test 3 : Vérification des logs
+
+Après avoir effectué plusieurs connexions (réussies et échouées), vérifiez :
+- Que tous les événements sont loggés
+- Que les logs sont centralisés sur le serveur Syslog
+- Que les alertes configurées se déclenchent correctement
+
+#### Rapport de tests
+
+Documentez vos tests d'intrusion avec :
+- Commandes utilisées
+- Résultats obtenus
+- Captures d'écran
+- Analyse de la sécurité de votre configuration
+
+---
+
+## Livrables attendus
+
+### ⭐ Livrables niveau 1 (obligatoires)
+
+<CardGrid>
+  <Card title="Analyse de risques" icon="warning">
+    Document d'analyse des menaces, vulnérabilités et impacts
+  </Card>
+  <Card title="Comparatif de solutions" icon="table">
+    Tableau comparatif des 3 solutions avec justification du choix
+  </Card>
+  <Card title="Configuration SSH" icon="document">
+    Authentification par clés configurée et testée
+  </Card>
+  <Card title="Règles pare-feu" icon="shield">
+    Accès SSH depuis Internet fonctionnel et sécurisé
+  </Card>
+  <Card title="Documentation d'accès" icon="open-book">
+    Procédure de connexion SSH depuis l'extérieur
+  </Card>
+  <Card title="Tests de connexion" icon="checkmark">
+    Connexion réussie depuis Internet documentée
+  </Card>
+</CardGrid>
+
+### ⭐⭐ Livrables niveau 2
+
+<CardGrid>
+  <Card title="Configuration durcie" icon="lock">
+    Fichier sshd_config optimisé et commenté
+  </Card>
+  <Card title="Protection anti-bruteforce" icon="shield-check">
+    Fail2ban ou équivalent configuré et testé
+  </Card>
+  <Card title="Logs centralisés" icon="server">
+    Logs SSH envoyés au Syslog + alertes configurées
+  </Card>
+  <Card title="Dashboard de surveillance" icon="chart">
+    Visualisation des connexions et tentatives d'intrusion
+  </Card>
+</CardGrid>
+
+### ⭐⭐⭐ Livrables niveau 3
+
+<CardGrid>
+  <Card title="Architecture bastion" icon="template">
+    Bastion SSH opérationnel avec logs exhaustifs
+  </Card>
+  <Card title="Authentification 2FA" icon="key">
+    Second facteur configuré et testé
+  </Card>
+  <Card title="Rapport de tests d'intrusion" icon="scan">
+    Tests de force brute, scan de vulnérabilités documentés
+  </Card>
+  <Card title="Procédures d'urgence" icon="emergency">
+    Documentation de récupération en cas de verrouillage
+  </Card>
+</CardGrid>
+
+---
+
+## Critères d'évaluation
+
+| Critère | ⭐ Niveau 1 | ⭐⭐ Niveau 2 | ⭐⭐⭐ Niveau 3 |
+|---------|------------|--------------|---------------|
+| **Analyse de risques** | Menaces identifiées | + Évaluation quantitative | + Plan de mitigation complet |
+| **Authentification** | Clés SSH configurées | + Passphrase obligatoire | + 2FA opérationnel |
+| **Configuration SSH** | Mots de passe désactivés | + Durcissement complet | + Algorithmes optimaux uniquement |
+| **Protection** | Règles pare-feu adaptées | + Fail2ban ou équivalent | + Tests d'intrusion réussis |
+| **Surveillance** | Logs consultables | + Centralisation + alertes | + Bastion avec enregistrement sessions |
+| **Tests** | Connexion externe validée | + Tentative brute-force bloquée | + Audit complet avec outils pros |
+| **Documentation** | Procédure d'accès | + Analyse technique détaillée | + Runbook complet (normal + urgence) |
+
+:::tip[Conseils pour l'évaluation]
+- L'**analyse de risques** initiale est cruciale et valorisée
+- La **justification** de votre choix de solution compte autant que la réalisation
+- Les **tests de sécurité** doivent être rigoureux et reproductibles
+- La **documentation** doit permettre à un autre admin de reprendre votre travail
+:::
+
+---
+
+## Ressources complémentaires
+
+- [Guide de durcissement SSH - ANSSI](https://www.ssi.gouv.fr/)
+- [OpenSSH Best Practices](https://www.ssh.com/academy/ssh/best-practices)
+- [SSH Audit Tool](https://github.com/jtesta/ssh-audit)
+- [Fail2ban Documentation](https://www.fail2ban.org/)
+- [Google Authenticator PAM](https://github.com/google/google-authenticator-libpam)
+- [SSH Jump Host Tutorial](https://en.wikibooks.org/wiki/OpenSSH/Cookbook/Proxies_and_Jump_Hosts)
+
+:::tip[Prochaine étape]
+Une fois cette mission terminée et validée, vous pourrez passer aux missions suivantes où vous mettrez en place la haute disponibilité de votre infrastructure GLPI.
+:::

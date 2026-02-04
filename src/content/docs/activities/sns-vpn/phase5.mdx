@@ -1,0 +1,1013 @@
+---
+title: "Phase 5 - Installation du client VPN et connexion"
+description: "Installation et configuration du client OpenVPN Connect, connexion au VPN SSL et validation du fonctionnement"
+draft: true
+---
+
+# Phase 5 : Installation du client VPN et connexion
+
+## Informations
+
+- **Durée estimée** : 1h30
+- **Prérequis** : Phases 1, 2, 3 et 4 terminées et validées
+- **Rôle principal** : Étudiant X (Client VPN)
+- **Participation** : Étudiant Y (support)
+
+---
+
+## Objectifs de cette phase
+
+- ✅ Comprendre le rôle du client VPN
+- ✅ Télécharger et installer OpenVPN Connect
+- ✅ Récupérer le profil de connexion depuis le portail
+- ✅ Configurer le client VPN avec le profil
+- ✅ Se connecter au VPN SSL
+- ✅ Vérifier l'attribution d'une IP virtuelle
+- ✅ Tester l'accès aux ressources internes via le VPN
+- ✅ Analyser les logs de connexion VPN
+
+---
+
+## Contexte : Le client VPN
+
+### Qu'est-ce qu'un client VPN ?
+
+Un **client VPN** est un logiciel installé sur l'ordinateur de l'utilisateur qui permet de :
+- 🔐 Établir un tunnel sécurisé (chiffré) vers le serveur VPN
+- 🌐 Obtenir une adresse IP virtuelle sur le réseau distant
+- 📡 Router le trafic à travers le tunnel VPN
+- 🔑 S'authentifier auprès du serveur VPN
+
+### Pourquoi OpenVPN Connect ?
+
+**OpenVPN** est le protocole VPN open-source le plus utilisé :
+- ✅ Compatible avec Stormshield (le SNS utilise OpenVPN pour le VPN SSL)
+- ✅ Multi-plateforme (Windows, Linux, macOS, Android, iOS)
+- ✅ Open-source et audité
+- ✅ Très sécurisé (chiffrement AES-256)
+
+**OpenVPN Connect** est le client officiel développé par OpenVPN Inc.
+
+### Architecture de connexion
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                     AVANT LA CONNEXION VPN                   │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Client VPN (172.25.X.10)                                    │
+│       │                                                      │
+│       │ Accès uniquement au réseau LABO                      │
+│       ▼                                                      │
+│  Internet (LABO 172.25.0.0/16)                               │
+│       │                                                      │
+│       ✗ Pas d'accès au réseau interne (10.Y.1.0/24)          │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                     APRÈS LA CONNEXION VPN                   │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Client VPN                                                  │
+│  ├─ IP physique : 172.25.X.10 (reste inchangée)              │
+│  └─ IP virtuelle VPN : 10.Y.100.5 (nouvelle !)               │
+│       │                                                      │
+│       │ Tunnel SSL/TLS chiffré                               │
+│       ▼                                                      │
+│  Serveur VPN (172.25.Y.254)                                  │
+│       │                                                      │
+│       │ Le serveur route vers le réseau interne              │
+│       ▼                                                      │
+│  Réseau interne (10.Y.1.0/24)                                │
+│       └─ Serveur Debian : 10.Y.1.20 ✅ Accessible !          │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Étape 5.1 : Installation d'OpenVPN Connect
+
+:::caution[Rôle principal]
+**Cette phase est réalisée par l'Étudiant X** (Client VPN).
+L'Étudiant Y peut observer ou aider en cas de problème.
+:::
+
+### 🔧 Tâche : Installer OpenVPN Connect sur la VM Client
+
+**1. Se connecter à la VM Client VPN (XUbuntu)**
+
+- Login : `sysadmin`
+- Mot de passe : `netlab123`
+
+**2. Ouvrir un terminal**
+
+**3. Télécharger et installer OpenVPN Connect**
+
+Pour Linux (XUbuntu), plusieurs options :
+
+**Option A : Installation via le dépôt OpenVPN (recommandé)**
+
+```bash
+# Télécharger la clé GPG du dépôt OpenVPN
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://swupdate.openvpn.net/repos/openvpn-repo-pkg-key.pub | sudo gpg --dearmor -o /etc/apt/keyrings/openvpn-repo.gpg
+
+# Ajouter le dépôt OpenVPN
+echo "deb [signed-by=/etc/apt/keyrings/openvpn-repo.gpg] https://swupdate.openvpn.net/community/openvpn3/repos/ubuntu jammy main" | sudo tee /etc/apt/sources.list.d/openvpn3.list
+
+# Mettre à jour et installer
+sudo apt update
+sudo apt install -y openvpn3
+```
+
+**Option B : Installation du client classique (alternative)**
+
+```bash
+# Plus simple mais interface en ligne de commande uniquement
+sudo apt update
+sudo apt install -y openvpn network-manager-openvpn network-manager-openvpn-gnome
+```
+
+**4. Vérifier l'installation**
+
+```bash
+# Pour OpenVPN3
+openvpn3 version
+
+# Pour OpenVPN classique
+openvpn --version
+```
+
+**Résultat attendu :**
+```
+OpenVPN 3 Linux ...
+```
+ou
+```
+OpenVPN 2.x.x ...
+```
+
+:::tip[OpenVPN3 vs OpenVPN classique]
+- **OpenVPN3** : Version moderne, meilleure intégration système, interface graphique
+- **OpenVPN classique** : Version historique, plus simple, ligne de commande
+
+Les deux fonctionnent avec Stormshield. Pour cette activité, **OpenVPN3** est recommandé.
+:::
+
+:::tip[Validation Étape 5.1]
+- ✅ OpenVPN est installé
+- ✅ La commande `openvpn3 version` ou `openvpn --version` fonctionne
+- ✅ Capture d'écran : Résultat de la commande version
+:::
+
+---
+
+## Étape 5.2 : Téléchargement du profil de connexion VPN
+
+### 🎯 Objectif
+Récupérer le fichier de configuration `.ovpn` depuis le portail web du SNS.
+
+### 🔧 Tâche : Accéder au portail web et télécharger le profil
+
+**1. Ouvrir un navigateur web sur la VM Client**
+
+**2. Accéder au portail VPN**
+
+```
+URL : https://172.25.Y.254/
+```
+(Remplacer Y par le numéro de l'Étudiant Serveur)
+
+**3. Accepter le certificat auto-signé**
+
+- Cliquer sur `Avancé` ou `Paramètres avancés`
+- `Accepter le risque et continuer`
+
+**4. Page d'accueil du portail**
+
+Vous devriez voir :
+- 🔐 Formulaire de connexion
+- 📥 Lien : **"Télécharger le profil de connexion"** ou **"Download VPN Profile"**
+
+**5. Télécharger le profil de connexion**
+
+:::note[Deux méthodes possibles]
+Selon la configuration du SNS, vous pouvez télécharger le profil :
+
+**Méthode 1 : Sans authentification (accès public au profil)**
+- Cliquer directement sur "Télécharger le profil"
+- Le fichier `vpn-techservices.ovpn` se télécharge
+
+**Méthode 2 : Avec authentification (plus sécurisé)**
+- Cliquer sur "Télécharger le profil"
+- Page de login apparaît
+- Se connecter avec `jdupont` / `Vpn2025!`
+- Le profil se télécharge après authentification
+:::
+
+**6. Sauvegarder le fichier**
+
+Le fichier téléchargé s'appelle généralement :
+- `client.ovpn`
+- `vpn-ssl.ovpn`
+- `vpn-techservices.ovpn`
+
+Sauvegarder dans : `/home/client/Téléchargements/`
+
+:::tip[Qu'est-ce qu'un fichier .ovpn ?]
+Un fichier `.ovpn` (OpenVPN) contient toute la configuration nécessaire pour se connecter au VPN :
+- Adresse du serveur VPN (172.25.Y.254)
+- Port (443)
+- Protocole (TCP ou UDP)
+- Certificats (CA, client)
+- Options de chiffrement (AES-256, SHA256)
+- Routes à ajouter (10.Y.1.0/24)
+
+C'est comme un "paquet tout-en-un" pour la connexion VPN.
+:::
+
+:::tip[Validation Étape 5.2]
+- ✅ Le portail web est accessible
+- ✅ Le fichier `.ovpn` est téléchargé
+- ✅ Le fichier est dans `/home/client/Téléchargements/`
+- ✅ Capture d'écran : Portail web avec lien de téléchargement visible
+:::
+
+---
+
+## Étape 5.3 : Analyse du profil de connexion (optionnel mais pédagogique)
+
+### 🔧 Tâche : Examiner le contenu du fichier .ovpn
+
+**1. Ouvrir le fichier avec un éditeur de texte**
+
+```bash
+cd ~/Téléchargements
+cat *.ovpn | less
+# ou
+nano *.ovpn
+```
+
+**2. Observer les directives importantes**
+
+Vous devriez voir quelque chose comme :
+
+```
+# Configuration client OpenVPN pour TechServices VPN
+client
+dev tun
+proto tcp
+remote 172.25.Y.254 443
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+
+# Sécurité
+remote-cert-tls server
+cipher AES-256-GCM
+auth SHA256
+key-direction 1
+
+# Certificat de l'autorité de certification (CA)
+<ca>
+-----BEGIN CERTIFICATE-----
+MIIDXzCCAkegAwIBAgIJAK... (contenu du certificat)
+-----END CERTIFICATE-----
+</ca>
+
+# Certificat client (si authentification par certificat)
+<cert>
+-----BEGIN CERTIFICATE-----
+MIIDXzCCAkegAwIBAgIJAK...
+-----END CERTIFICATE-----
+</cert>
+
+# Clé privée client (si authentification par certificat)
+<key>
+-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w...
+-----END PRIVATE KEY-----
+</key>
+
+# Routes à ajouter après connexion
+route 10.Y.1.0 255.255.255.0
+```
+
+**3. Comprendre les directives clés**
+
+| Directive | Signification |
+|-----------|---------------|
+| `client` | Ce fichier configure un client (pas un serveur) |
+| `dev tun` | Utiliser une interface TUN (tunnel réseau de niveau 3) |
+| `proto tcp` | Utiliser TCP (ou UDP selon config) |
+| `remote 172.25.Y.254 443` | Adresse et port du serveur VPN |
+| `cipher AES-256-GCM` | Algorithme de chiffrement (très sécurisé) |
+| `auth SHA256` | Algorithme d'authentification des paquets |
+| `route 10.Y.1.0 ...` | Route vers le réseau interne (split tunnel) |
+
+:::tip[Ne pas modifier le fichier]
+Ce fichier a été généré automatiquement par le SNS avec les bons paramètres.
+**Ne le modifiez pas** sauf si vous savez exactement ce que vous faites.
+:::
+
+:::tip[Validation Étape 5.3]
+- ✅ Le fichier `.ovpn` contient les paramètres de connexion
+- ✅ L'adresse du serveur (172.25.Y.254:443) est correcte
+- ✅ Les certificats sont inclus dans le fichier
+- ✅ Capture d'écran : Extrait du fichier .ovpn montrant les paramètres principaux
+:::
+
+---
+
+## Étape 5.4 : Connexion au VPN avec OpenVPN3
+
+### 🎯 Objectif
+Établir la connexion VPN et obtenir une IP virtuelle.
+
+### 🔧 Tâche : Se connecter au VPN
+
+**1. Importer le profil dans OpenVPN3**
+
+```bash
+cd ~/Téléchargements
+
+# Importer le profil (remplacer le nom du fichier si nécessaire)
+openvpn3 config-import --config client.ovpn --name VPN-TechServices --persistent
+```
+
+**Résultat attendu :**
+```
+Configuration imported.  Configuration path: /net/openvpn/v3/configuration/xxxxx
+```
+
+**2. Lister les profils importés**
+
+```bash
+openvpn3 configs-list
+```
+
+**Résultat attendu :**
+```
+Configuration path: /net/openvpn/v3/configuration/xxxxx
+    Name: VPN-TechServices
+    Read only: False
+```
+
+**3. Se connecter au VPN**
+
+```bash
+openvpn3 session-start --config VPN-TechServices
+```
+
+**Une invite de connexion apparaît :**
+
+```
+Enter Authentication Username: jdupont
+Enter Authentication Password:
+```
+
+**Entrer les identifiants :**
+- **Username** : `jdupont`
+- **Password** : `Vpn2025!`
+
+**4. Observer la connexion en cours**
+
+Vous devriez voir des messages de log :
+
+```
+Connecting to [172.25.Y.254]:443 (tcp) via out
+WAIT: Connecting
+Tunnel device 'tun0' opened
+CONNECTED
+```
+
+:::caution[Si l'authentification échoue]
+Vérifiez que :
+- Le login/mot de passe sont corrects (jdupont / Vpn2025!)
+- L'utilisateur existe bien dans l'annuaire LDAP (Phase 2)
+- L'utilisateur fait partie du groupe `Utilisateurs_VPN` (Phase 2)
+- La politique d'accès VPN autorise ce groupe (Phase 3)
+
+Consultez les logs sur le SNS :
+```
+Monitoring → Logs → VPN → VPN SSL
+```
+:::
+
+**5. Vérifier l'état de la connexion**
+
+```bash
+openvpn3 sessions-list
+```
+
+**Résultat attendu :**
+```
+Session path: /net/openvpn/v3/sessions/xxxxx
+    Status: Connection, Client connected
+    Config name: VPN-TechServices
+    Device: tun0
+    Client address: 10.Y.100.5  ← IP virtuelle attribuée !
+    VPN remote: 172.25.Y.254:443
+```
+
+:::tip[🎉 Connexion réussie !]
+Si vous voyez **"Client connected"** et une **IP virtuelle (10.Y.100.x)**, félicitations !
+Le tunnel VPN est établi. 🔐
+:::
+
+:::tip[Validation Étape 5.4]
+- ✅ Le profil est importé dans OpenVPN3
+- ✅ La connexion VPN est établie (status: "Connected")
+- ✅ Une IP virtuelle est attribuée (10.Y.100.x)
+- ✅ L'interface `tun0` est créée
+- ✅ Capture d'écran : Résultat de `openvpn3 sessions-list` montrant la connexion active
+:::
+
+---
+
+## Étape 5.5 : Vérification de la configuration réseau avec le VPN
+
+### 🔧 Tâche : Analyser les changements réseau
+
+**1. Vérifier les interfaces réseau**
+
+```bash
+ip a
+```
+
+**Observer les interfaces :**
+
+```
+1: lo: <LOOPBACK,UP,LOWER_UP> ...
+    inet 127.0.0.1/8 ...
+
+2: enp0s3: <BROADCAST,MULTICAST,UP,LOWER_UP> ...
+    inet 172.25.X.10/16 ...          ← IP physique (inchangée)
+
+3: tun0: <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> ...
+    inet 10.Y.100.5/32 ...            ← IP virtuelle VPN (nouvelle !)
+```
+
+**2. Vérifier la table de routage**
+
+```bash
+ip route
+```
+
+**Observer les routes :**
+
+```
+default via 172.25.254.254 dev enp0s3           ← Route par défaut (Internet)
+10.Y.1.0/24 via 10.Y.100.1 dev tun0             ← Route vers réseau interne via VPN !
+10.Y.100.1 dev tun0 proto kernel scope link     ← Route locale VPN
+172.25.0.0/16 dev enp0s3 proto kernel scope link ← Réseau LABO
+```
+
+**Analyse :**
+- ✅ Route par défaut : reste sur `enp0s3` (Internet direct) → **Split tunneling**
+- ✅ Route vers `10.Y.1.0/24` : passe par `tun0` (VPN) → **Trafic interne via VPN**
+- ✅ Route locale VPN : `10.Y.100.1` (passerelle VPN)
+
+:::tip[Split Tunneling en action]
+Grâce au split tunneling (configuré en Phase 3) :
+- Trafic vers `10.Y.1.0/24` → 🔐 Passe par le VPN
+- Trafic vers Internet → 🌐 Passe directement (plus rapide)
+
+C'est visible dans la table de routage !
+:::
+
+**3. Tester la connectivité VPN**
+
+```bash
+# Test vers la passerelle VPN
+ping -c 4 10.Y.100.1
+
+# Test vers l'interface IN du SNS
+ping -c 4 10.Y.1.254
+
+# Test vers le serveur Debian (ressource interne)
+ping -c 4 10.Y.1.20
+```
+
+**Résultats attendus :**
+- ✅ Ping vers 10.Y.100.1 : OK (passerelle VPN)
+- ✅ Ping vers 10.Y.1.254 : OK (SNS interface IN)
+- ✅ Ping vers 10.Y.1.20 : OK (serveur Debian) → **🎉 C'EST LE BUT DU VPN !**
+
+:::caution[Si les pings échouent]
+Vérifiez que :
+- La connexion VPN est bien active (`openvpn3 sessions-list`)
+- Les routes sont correctes (`ip route`)
+- Les règles de filtrage (Phase 4) sont bien configurées
+- Le serveur Debian a bien 10.Y.1.254 comme gateway
+
+Consultez les logs du SNS :
+```
+Monitoring → Logs → Filtrage et NAT → Connexions
+Filtrer par : Source = 10.Y.100.x
+```
+:::
+
+:::tip[Validation Étape 5.5]
+- ✅ L'interface `tun0` est créée avec IP 10.Y.100.x
+- ✅ Les routes vers 10.Y.1.0/24 passent par le VPN
+- ✅ Ping vers 10.Y.100.1 (gateway VPN) : OK
+- ✅ Ping vers 10.Y.1.254 (SNS IN) : OK
+- ✅ Ping vers 10.Y.1.20 (serveur Debian) : OK ← **Objectif atteint !**
+- ✅ Capture d'écran : Résultats des pings réussis
+- ✅ Capture d'écran : Table de routage montrant les routes VPN
+:::
+
+---
+
+## Étape 5.6 : Tests d'accès aux ressources internes
+
+### 🎯 Objectif
+Vérifier l'accès aux services du réseau interne via le VPN.
+
+### 🔧 Tâche : Tester différents services
+
+**1. Test HTTP vers le serveur web Debian**
+
+```bash
+# Test avec curl
+curl http://10.Y.1.20
+
+# Ou ouvrir dans un navigateur
+firefox http://10.Y.1.20 &
+```
+
+**Résultat attendu :**
+```html
+<h1>Serveur TechServices - Ressource interne</h1>
+<p>Si vous voyez cette page, le VPN fonctionne !</p>
+```
+
+**Dans le navigateur :** La page web du serveur Debian doit s'afficher.
+
+**2. Test SSH vers le serveur Debian**
+
+```bash
+ssh techservices@10.Y.1.20
+# Mot de passe : Sio2025!
+```
+
+**Résultat attendu :** Connexion SSH réussie !
+
+```
+Welcome to Debian GNU/Linux 12 (bookworm)
+techservices@serveur-debian-Y:~$
+```
+
+**3. Test de transfert de fichier (SCP)**
+
+```bash
+# Créer un fichier de test
+echo "Test VPN - Fichier envoyé via le tunnel sécurisé" > test-vpn.txt
+
+# Envoyer le fichier via SCP
+scp test-vpn.txt techservices@10.Y.1.20:/tmp/
+
+# Vérifier la réception
+ssh techservices@10.Y.1.20 "cat /tmp/test-vpn.txt"
+```
+
+**Résultat attendu :**
+```
+Test VPN - Fichier envoyé via le tunnel sécurisé
+```
+
+**4. Test de résolution DNS (si configuré)**
+
+```bash
+# Si vous avez configuré un DNS interne
+nslookup serveur-debian-Y.techservices.local
+```
+
+:::tip[🎉 Succès complet !]
+Si tous ces tests fonctionnent, le VPN est **pleinement opérationnel** !
+
+Vous avez réussi à :
+- ✅ Établir un tunnel VPN SSL chiffré
+- ✅ Obtenir une IP virtuelle sur le réseau distant
+- ✅ Accéder aux ressources internes (web, SSH, fichiers)
+- ✅ Le tout de manière **sécurisée** (chiffrement AES-256)
+
+**Félicitations ! 🎊**
+:::
+
+:::tip[Validation Étape 5.6]
+- ✅ Page web du serveur Debian accessible via le navigateur
+- ✅ Connexion SSH vers 10.Y.1.20 réussie
+- ✅ Transfert de fichier SCP fonctionne
+- ✅ Capture d'écran : Page web du serveur Debian dans le navigateur
+- ✅ Capture d'écran : Session SSH active sur le serveur Debian
+:::
+
+---
+
+## Étape 5.7 : Analyse des logs VPN côté serveur (Étudiant Y)
+
+### 🎯 Objectif
+Observer les événements de connexion VPN du côté serveur.
+
+### 🔧 Tâche : Consulter les logs VPN sur le SNS (Étudiant Y)
+
+**1. Se connecter à l'interface web du SNS**
+
+```
+URL : https://172.25.Y.254/admin
+Login : admin
+```
+
+**2. Accéder aux logs VPN SSL**
+
+```
+Monitoring → Logs → VPN → VPN SSL
+```
+
+**3. Observer les événements**
+
+Vous devriez voir des lignes montrant :
+
+**Événement 1 : Connexion initiale**
+```
+[INFO] User 'jdupont' connected from 172.25.X.10:xxxxx
+[INFO] Assigned IP: 10.Y.100.5
+[INFO] Routes pushed: 10.Y.1.0/24
+```
+
+**Événement 2 : Authentification**
+```
+[INFO] LDAP authentication successful for user 'jdupont'
+[INFO] User 'jdupont' member of group 'Utilisateurs_VPN'
+[INFO] Policy 'Acces-VPN-Groupe-Utilisateurs' applied
+```
+
+**Événement 3 : Établissement du tunnel**
+```
+[INFO] TLS handshake completed
+[INFO] Cipher: AES-256-GCM
+[INFO] Tunnel established
+[INFO] Session started for user 'jdupont'
+```
+
+**4. Accéder aux logs de filtrage pour voir le trafic VPN**
+
+```
+Monitoring → Logs → Filtrage et NAT → Connexions
+```
+
+**Filtrer par :**
+- **Source** : `10.Y.100.5` (ou votre IP VPN)
+- **Action** : `PASS`
+
+**Vous devriez voir les connexions :**
+```
+Source: 10.Y.100.5  →  Dest: 10.Y.1.20  Service: HTTP   Action: PASS  Rule: VPN clients vers réseau interne
+Source: 10.Y.100.5  →  Dest: 10.Y.1.20  Service: SSH    Action: PASS  Rule: VPN clients vers réseau interne
+Source: 10.Y.1.20   →  Dest: 10.Y.100.5 Service: HTTP   Action: PASS  Rule: Réseau interne vers clients VPN
+```
+
+:::tip[Traçabilité]
+Les logs montrent :
+- **Qui** : jdupont
+- **Quand** : Date et heure de connexion
+- **D'où** : 172.25.X.10 (IP origine)
+- **IP attribuée** : 10.Y.100.5
+- **Accès** : Quelles ressources (10.Y.1.20) et quels services (HTTP, SSH)
+
+C'est essentiel pour :
+- La sécurité (détecter des accès anormaux)
+- L'audit (traçabilité des actions)
+- Le dépannage (identifier les problèmes)
+:::
+
+:::tip[Validation Étape 5.7]
+- ✅ Les logs VPN montrent la connexion de jdupont
+- ✅ L'IP attribuée (10.Y.100.5) est visible
+- ✅ L'authentification LDAP est réussie
+- ✅ Les logs de filtrage montrent le trafic VPN autorisé
+- ✅ Capture d'écran : Logs VPN SSL montrant la connexion de jdupont
+- ✅ Capture d'écran : Logs de filtrage montrant les connexions depuis 10.Y.100.5
+:::
+
+---
+
+## Étape 5.8 : Test avec d'autres utilisateurs
+
+### 🎯 Objectif
+Vérifier que tous les utilisateurs créés en Phase 2 peuvent se connecter.
+
+### 🔧 Tâche : Se connecter avec mmartin et pdurand
+
+**1. Se déconnecter du VPN (connexion actuelle)**
+
+```bash
+# Lister les sessions actives
+openvpn3 sessions-list
+
+# Se déconnecter
+openvpn3 session-manage --disconnect --config VPN-TechServices
+```
+
+**2. Se reconnecter avec mmartin**
+
+```bash
+openvpn3 session-start --config VPN-TechServices
+```
+
+**Identifiants :**
+- **Username** : `mmartin`
+- **Password** : `Vpn2025!`
+
+**Vérifier :**
+```bash
+openvpn3 sessions-list
+# Observer l'IP attribuée (ex: 10.Y.100.6)
+
+ping -c 4 10.Y.1.20
+# Doit fonctionner
+```
+
+**3. Se déconnecter et reconnecter avec pdurand**
+
+```bash
+openvpn3 session-manage --disconnect --config VPN-TechServices
+openvpn3 session-start --config VPN-TechServices
+```
+
+**Identifiants :**
+- **Username** : `pdurand`
+- **Password** : `Vpn2025!`
+
+**Vérifier :**
+```bash
+openvpn3 sessions-list
+ping -c 4 10.Y.1.20
+```
+
+**4. Observer les logs côté serveur (Étudiant Y)**
+
+Sur le SNS, observer que :
+- 3 utilisateurs différents se sont connectés
+- Chacun a reçu une IP différente du pool (10.Y.100.5, 10.Y.100.6, 10.Y.100.7)
+- L'authentification LDAP a réussi pour chacun
+
+:::tip[Gestion du pool d'adresses]
+Le SNS attribue dynamiquement les IP du pool :
+- Première connexion → 10.Y.100.1 (ou .5)
+- Deuxième connexion → 10.Y.100.2 (ou .6)
+- Etc.
+
+Le pool peut gérer jusqu'à 62 clients simultanés (configuration Phase 3).
+:::
+
+:::tip[Validation Étape 5.8]
+- ✅ mmartin peut se connecter au VPN
+- ✅ pdurand peut se connecter au VPN
+- ✅ Chaque utilisateur reçoit une IP unique
+- ✅ Tous peuvent accéder au serveur Debian (10.Y.1.20)
+- ✅ Les logs montrent les 3 connexions distinctes
+- ✅ Capture d'écran : Logs VPN montrant les connexions de mmartin et pdurand
+:::
+
+---
+
+## Étape 5.9 : Test de sécurité - Utilisateur non autorisé
+
+### 🎯 Objectif
+Vérifier que le système de sécurité fonctionne en tentant une connexion avec un compte non autorisé.
+
+### 🔧 Tâche : Tenter de se connecter avec un utilisateur inexistant
+
+**1. Se déconnecter du VPN**
+
+```bash
+openvpn3 session-manage --disconnect --config VPN-TechServices
+```
+
+**2. Tenter une connexion avec de faux identifiants**
+
+```bash
+openvpn3 session-start --config VPN-TechServices
+```
+
+**Identifiants invalides :**
+- **Username** : `hacker`
+- **Password** : `password123`
+
+**Résultat attendu :**
+```
+AUTH_FAILED: Authentication failed
+Connection failed
+```
+
+**3. Observer les logs côté serveur**
+
+Sur le SNS :
+```
+Monitoring → Logs → Utilisateurs → Authentifications
+```
+
+Vous devriez voir :
+```
+❌ [ERROR] Authentication failed for user 'hacker'
+   Reason: User not found in LDAP directory
+```
+
+Et dans les logs VPN :
+```
+❌ [WARNING] Connection attempt from 172.25.X.10 failed
+   User: hacker (authentication failed)
+```
+
+:::tip[🛡️ Sécurité confirmée !]
+Si la connexion échoue avec un compte invalide, cela prouve que :
+- ✅ L'authentification LDAP fonctionne
+- ✅ Seuls les utilisateurs autorisés peuvent se connecter
+- ✅ Les tentatives d'intrusion sont détectées et loguées
+- ✅ Le système de sécurité est opérationnel
+:::
+
+:::tip[Validation Étape 5.9]
+- ✅ La connexion avec "hacker" échoue (comme prévu)
+- ✅ Message d'erreur : "Authentication failed"
+- ✅ Les logs montrent l'échec d'authentification
+- ✅ Capture d'écran : Message d'erreur de connexion
+- ✅ Capture d'écran : Log d'échec d'authentification sur le SNS
+:::
+
+---
+
+## Étape 5.10 : Déconnexion propre et nettoyage
+
+### 🔧 Tâche : Se déconnecter du VPN
+
+**1. Arrêter la session VPN**
+
+```bash
+openvpn3 session-manage --disconnect --config VPN-TechServices
+```
+
+**2. Vérifier que l'interface tun0 a disparu**
+
+```bash
+ip a
+# L'interface tun0 ne doit plus apparaître
+```
+
+**3. Vérifier que les routes VPN ont été supprimées**
+
+```bash
+ip route
+# La route vers 10.Y.1.0/24 ne doit plus apparaître
+```
+
+**4. Tenter d'accéder au serveur Debian (doit échouer)**
+
+```bash
+ping -c 4 10.Y.1.20
+# Résultat attendu : Échec (pas de route)
+```
+
+:::tip[Retour à la normale]
+Après déconnexion :
+- ❌ Plus d'accès au réseau interne (10.Y.1.0/24)
+- ❌ Plus d'interface tun0
+- ✅ Accès Internet normal (172.25.0.0/16)
+
+Le comportement est revenu à l'état initial (avant Phase 5).
+:::
+
+---
+
+## ✅ Tableau de validation de la Phase 5
+
+Complétez ce tableau dans votre compte-rendu :
+
+| Test | Description | Résultat attendu | ✅/❌ |
+|------|-------------|------------------|------|
+| **Installation** | OpenVPN installé | Version affichée | |
+| **Profil téléchargé** | Fichier .ovpn récupéré | Fichier présent | |
+| **Import profil** | Profil importé dans OpenVPN3 | Configuration visible | |
+| **Connexion jdupont** | Connexion VPN réussie | Status: Connected | |
+| **IP virtuelle** | IP attribuée (10.Y.100.x) | IP visible | |
+| **Interface tun0** | Interface VPN créée | Interface présente | |
+| **Routes VPN** | Routes vers 10.Y.1.0/24 via tun0 | Routes correctes | |
+| **Ping gateway VPN** | ping 10.Y.100.1 | OK | |
+| **Ping SNS IN** | ping 10.Y.1.254 | OK | |
+| **Ping serveur Debian** | ping 10.Y.1.20 | OK | |
+| **Accès web** | http://10.Y.1.20 | Page affichée | |
+| **Accès SSH** | ssh vers 10.Y.1.20 | Connexion OK | |
+| **Transfert fichier** | SCP vers 10.Y.1.20 | Fichier transféré | |
+| **Logs VPN** | Connexion visible dans logs | Événements loggés | |
+| **Connexion mmartin** | Deuxième utilisateur | Connexion OK | |
+| **Connexion pdurand** | Troisième utilisateur | Connexion OK | |
+| **Sécurité** | Utilisateur invalide bloqué | Connexion refusée | |
+| **Déconnexion** | VPN déconnecté proprement | Plus d'accès interne | |
+
+---
+
+## ✅ Critères de validation de la Phase 5
+
+Avant de terminer l'activité, assurez-vous que :
+
+- [ ] OpenVPN Connect est installé sur la VM Client
+- [ ] Le profil .ovpn a été téléchargé depuis le portail
+- [ ] Le profil est importé dans OpenVPN3
+- [ ] La connexion VPN avec jdupont réussit
+- [ ] Une IP virtuelle (10.Y.100.x) est attribuée
+- [ ] L'interface tun0 est créée
+- [ ] Les routes vers 10.Y.1.0/24 passent par le VPN
+- [ ] Le ping vers 10.Y.1.20 (serveur Debian) fonctionne
+- [ ] La page web du serveur Debian est accessible via le navigateur
+- [ ] La connexion SSH au serveur Debian fonctionne
+- [ ] Les logs VPN côté serveur montrent la connexion
+- [ ] Les 3 utilisateurs (jdupont, mmartin, pdurand) peuvent se connecter
+- [ ] Un utilisateur invalide ne peut pas se connecter
+- [ ] Après déconnexion, l'accès au réseau interne n'est plus possible
+
+:::tip[Checkpoint final enseignant]
+👨‍🏫 Faites valider l'ensemble de l'activité par l'enseignant.
+Montrez-lui :
+1. La connexion VPN active (openvpn3 sessions-list)
+2. L'accès au serveur web Debian via le navigateur
+3. Une session SSH active sur le serveur Debian
+4. Les logs VPN montrant plusieurs connexions
+5. Le test de sécurité (utilisateur invalide bloqué)
+:::
+
+---
+
+## 🎯 Résumé de la Phase 5
+
+Vous avez maintenant :
+
+- ✅ Installé et configuré OpenVPN Connect
+- ✅ Récupéré et analysé le profil de connexion
+- ✅ Établi un tunnel VPN SSL chiffré
+- ✅ Obtenu une IP virtuelle sur le réseau distant
+- ✅ Accédé aux ressources internes (web, SSH, fichiers)
+- ✅ Vérifié le fonctionnement pour tous les utilisateurs
+- ✅ Confirmé que la sécurité fonctionne (utilisateurs non autorisés bloqués)
+- ✅ Analysé les logs côté serveur
+
+**🎊 L'activité VPN SSL est terminée avec succès ! 🎊**
+
+Vous avez mis en place une infrastructure VPN SSL complète et fonctionnelle, permettant l'accès distant sécurisé aux ressources d'entreprise.
+
+**Prochaine étape** : Rédaction du compte-rendu final
+
+---
+
+## 📚 Pour aller plus loin (bonus)
+
+### Bonus 1 : Connexions simultanées
+
+Testez avec 2 machines clientes différentes (binôme) :
+- Étudiant X : jdupont
+- Étudiant Y : mmartin
+
+Les deux peuvent-ils accéder simultanément au serveur Debian ?
+Observer les IPs attribuées et les logs.
+
+### Bonus 2 : Test de performance
+
+Mesurez la bande passante via le VPN :
+```bash
+# Sur le serveur Debian
+sudo apt install iperf3
+iperf3 -s
+
+# Sur le client VPN
+iperf3 -c 10.Y.1.20 -t 10
+```
+
+Comparez avec la bande passante sans VPN.
+
+### Bonus 3 : Activer la double authentification
+
+Sur le SNS :
+```
+Configuration → VPN → VPN SSL → Authentification
+```
+
+Activer :
+- ✅ Certificat client + mot de passe
+
+Générer des certificats clients individuels et tester la connexion.
+
+### Bonus 4 : Interface graphique OpenVPN
+
+Installer une interface graphique pour gérer le VPN plus facilement :
+```bash
+sudo apt install network-manager-openvpn-gnome
+```
+
+Importer le profil via l'interface graphique XFCE.

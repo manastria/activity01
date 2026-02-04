@@ -1,0 +1,725 @@
+---
+title: "Phase 3 - Configuration du serveur VPN SSL"
+description: "Configuration complète du serveur VPN SSL sur le Stormshield EVA1 pour permettre l'accès distant sécurisé"
+draft: true
+---
+
+# Phase 3 : Configuration du serveur VPN SSL
+
+## Informations
+
+- **Durée estimée** : 2h00
+- **Prérequis** : Phases 1 et 2 terminées et validées
+- **Rôle principal** : Étudiant Y (Serveur VPN)
+
+---
+
+## Objectifs de cette phase
+
+- ✅ Comprendre le fonctionnement d'un VPN SSL
+- ✅ Activer le service VPN SSL sur le Stormshield
+- ✅ Configurer les certificats pour le VPN
+- ✅ Définir les réseaux accessibles via le VPN
+- ✅ Configurer le pool d'adresses IP pour les clients VPN
+- ✅ Associer les utilisateurs/groupes autorisés
+- ✅ Tester la configuration avant déploiement
+
+---
+
+## Contexte : Comprendre le VPN SSL
+
+### Qu'est-ce qu'un VPN SSL ?
+
+Un **VPN SSL** (Virtual Private Network - Secure Sockets Layer) est une technologie qui permet :
+
+- 🔐 **Chiffrement** : Toutes les données transitent dans un tunnel sécurisé
+- 🌐 **Accès distant** : Se connecter au réseau d'entreprise depuis n'importe où
+- 🔑 **Authentification** : Vérifier l'identité de l'utilisateur avant l'accès
+- 🛡️ **Sécurité** : Protéger les communications sur Internet
+
+### Différence VPN SSL vs VPN IPsec
+
+| Critère              | VPN SSL                            | VPN IPsec                       |
+| -------------------- | ---------------------------------- | ------------------------------- |
+| **Usage**            | Accès utilisateur distant (nomade) | Interconnexion de sites         |
+| **Client**           | Léger (navigateur ou petit client) | Client lourd souvent requis     |
+| **Port**             | 443 (HTTPS) - passe les firewalls  | 500/4500 (souvent bloqué)       |
+| **Authentification** | Login/mot de passe + certificat    | Clés pré-partagées, certificats |
+| **Granularité**      | Par utilisateur                    | Par site/réseau                 |
+
+Pour notre cas (télétravail, agence distante), le **VPN SSL est le plus adapté**.
+
+### Architecture du VPN SSL
+
+```
+┌────────────────────────────────────────────────────────┐
+│                    INTERNET (LABO)                     │
+│                                                        │
+│  ┌──────────────┐                    ┌──────────────┐  │
+│  │ Client VPN   │                    │   SNS Y      │  │
+│  │ 172.25.X.10  │───── Tunnel ──────▶│ 172.25.Y.254 │  │
+│  │              │      SSL/TLS       │ (port 443)   │  │
+│  └──────────────┘                    └──────┬───────┘  │
+│                                              │         │
+│                                              │         │
+│                    ┌─────────────────────────┘         │
+│                    │ Tunnel VPN établi                 │
+│                    ▼                                   │
+│            ┌───────────────┐                           │
+│            │  Pool VPN     │                           │
+│            │  10.Y.100.0/26│                           │
+│            │  Client → IP  │                           │
+│            │  10.Y.100.5   │                           │
+│            └───────┬───────┘                           │
+│                    │                                   │
+│                    │ Accès au réseau interne           │
+│                    ▼                                   │
+│            ┌───────────────┐                           │
+│            │ Réseau interne│                           │
+│            │ 10.Y.1.0/24   │                           │
+│            │               │                           │
+│            │ Serveur Debian│                           │
+│            │ 10.Y.1.20     │                           │
+│            └───────────────┘                           │
+└────────────────────────────────────────────────────────┘
+```
+
+**Fonctionnement :**
+1. Le client se connecte au serveur VPN (172.25.Y.254:443)
+2. Authentification avec login/mot de passe (LDAP)
+3. Tunnel SSL/TLS chiffré établi
+4. Le client obtient une IP virtuelle (10.Y.100.5)
+5. Le client peut accéder au réseau interne (10.Y.1.0/24)
+
+---
+
+## Étape 3.1 : Activation du module VPN SSL
+
+:::caution[Rôle spécifique]
+**Cette phase est réalisée par l'Étudiant Y** (Serveur VPN).
+L'Étudiant X observe et prend des notes pour comprendre la configuration.
+:::
+
+### 🔧 Tâche : Activer le service VPN SSL
+
+**1. Se connecter à l'interface web du SNS**
+
+```
+URL : https://172.25.Y.254/admin
+Login : admin
+Mot de passe : admin
+```
+
+**2. Accéder à la configuration VPN**
+
+Menu de gauche :
+```
+Configuration → VPN → VPN SSL
+```
+
+**3. Activer le VPN SSL**
+
+Onglet **Général** :
+
+- **Activer le VPN SSL** : ✅ Cocher
+- **Nom du service** : `VPN-TechServices`
+- **Description** : `VPN SSL pour accès distant sécurisé`
+
+**4. Configuration du serveur**
+
+**Interface d'écoute :**
+- **Interface** : Sélectionner `out` (172.25.Y.254)
+- **Port d'écoute** : `443` (HTTPS standard)
+  - ✅ Avantage : passe par la plupart des firewalls
+  - Alternative possible : `1194` (port OpenVPN standard)
+
+**Protocole :**
+- **Protocole** : `SSL/TLS` (sélectionné par défaut)
+
+**5. Appliquer**
+
+Cliquer sur `Appliquer`.
+
+:::tip[Port 443]
+Le port 443 est le port HTTPS standard. En l'utilisant pour le VPN :
+- ✅ Compatible avec la plupart des réseaux publics (hôtels, cafés)
+- ✅ Rarement bloqué par les firewalls
+- ⚠️ Attention : si vous hébergez aussi un serveur web sur le même port, il faut utiliser le SNI (Server Name Indication)
+:::
+
+:::tip[Validation Étape 3.1]
+- ✅ Message de confirmation : "VPN SSL activé"
+- ✅ État du service : "Démarré" ou "Running"
+- ✅ Capture d'écran : Page de configuration VPN SSL avec service activé
+:::
+
+---
+
+## Étape 3.2 : Configuration des certificats SSL
+
+### 🎯 Objectif
+Configurer les certificats pour sécuriser la connexion VPN.
+
+### Contexte : Pourquoi des certificats ?
+
+Le VPN SSL utilise des **certificats SSL/TLS** pour :
+- Chiffrer les communications
+- Authentifier le serveur (prouver son identité)
+- Éviter les attaques de type "Man-in-the-Middle"
+
+### 🔧 Tâche : Utiliser le certificat auto-signé par défaut
+
+**1. Accéder à la gestion des certificats**
+
+```
+Configuration → Système → Gestion des certificats → Autorité de certification
+```
+
+**2. Vérifier l'autorité de certification (CA) interne**
+
+Le Stormshield crée automatiquement une **CA interne** lors de l'initialisation :
+- **Nom** : `Stormshield CA`
+- **Utilisation** : Signer des certificats pour les services (VPN, web, etc.)
+
+**3. Vérifier le certificat du serveur**
+
+```
+Configuration → Système → Gestion des certificats → Certificats
+```
+
+Vous devriez voir un certificat nommé :
+- **Nom** : `Firewall` ou `SSL-VPN-Server`
+- **Émetteur** : `Stormshield CA`
+- **Utilisation** : `Serveur VPN SSL`
+- **Validité** : Plusieurs années
+
+:::tip[Certificat auto-signé]
+Pour cette activité, nous utilisons le **certificat auto-signé par défaut** du SNS.
+
+**En production**, on utiliserait :
+- Un certificat signé par une autorité reconnue (Let's Encrypt, DigiCert, etc.)
+- Pour éviter les alertes de sécurité dans les navigateurs
+
+**Pour l'activité** :
+- ✅ Le certificat auto-signé suffit
+- ⚠️ Le client devra accepter l'avertissement de sécurité
+:::
+
+**4. Associer le certificat au VPN SSL**
+
+```
+Configuration → VPN → VPN SSL → Onglet "Certificats"
+```
+
+- **Certificat serveur** : Sélectionner le certificat par défaut
+  - Si liste déroulante : choisir `Firewall` ou `SSL-VPN-Server`
+  - Si déjà sélectionné : laisser tel quel
+
+**5. Appliquer**
+
+:::tip[Validation Étape 3.2]
+- ✅ Un certificat est associé au service VPN SSL
+- ✅ Le certificat est valide (date de validité OK)
+- ✅ Capture d'écran : Page des certificats montrant le certificat VPN
+:::
+
+---
+
+## Étape 3.3 : Configuration du pool d'adresses IP
+
+### 🎯 Objectif
+Définir une plage d'adresses IP qui seront attribuées aux clients VPN connectés.
+
+### Contexte : Le pool d'adresses VPN
+
+Quand un client se connecte au VPN :
+1. Il s'authentifie
+2. Le serveur VPN lui attribue une **IP virtuelle** du pool
+3. Cette IP permet au client d'accéder au réseau interne comme s'il était physiquement sur place
+
+**Notre plan d'adressage :**
+- Réseau interne : `10.Y.1.0/24`
+- Pool VPN : `10.Y.100.0/26` (64 adresses possibles)
+
+### 🔧 Tâche : Créer le pool d'adresses
+
+**1. Accéder à la configuration des pools**
+
+```
+Configuration → VPN → VPN SSL → Onglet "Pools d'adresses"
+```
+
+**2. Créer un nouveau pool**
+
+Cliquer sur `Ajouter` :
+
+**Paramètres du pool :**
+- **Nom** : `Pool-VPN-Clients`
+- **Description** : `Adresses IP pour les clients VPN SSL`
+- **Type** : `Plage d'adresses` (range)
+
+**Plage d'adresses :**
+- **Première adresse** : `10.Y.100.1` (remplacer Y par votre numéro)
+- **Dernière adresse** : `10.Y.100.62`
+- **Masque réseau** : `255.255.255.192` (soit /26)
+
+:::tip[Calcul du /26]
+Un réseau en /26 contient 64 adresses :
+- Adresse réseau : 10.Y.100.0 (non utilisable)
+- Première adresse hôte : 10.Y.100.1
+- Dernière adresse hôte : 10.Y.100.62
+- Adresse broadcast : 10.Y.100.63 (non utilisable)
+- Total utilisable : 62 adresses pour les clients VPN
+:::
+
+**Configuration avancée du pool :**
+- **Passerelle** : `10.Y.1.254` (l'interface IN du SNS)
+- **Serveurs DNS** :
+  - DNS primaire : `172.25.254.15` (DNS du LABO)
+  - DNS secondaire : `8.8.8.8` (optionnel)
+
+**3. Créer le pool**
+
+Cliquer sur `Créer`.
+
+:::tip[Validation Étape 3.3]
+- ✅ Le pool `Pool-VPN-Clients` apparaît dans la liste
+- ✅ Plage : 10.Y.100.1 à 10.Y.100.62 (62 adresses)
+- ✅ Capture d'écran : Configuration du pool d'adresses
+:::
+
+---
+
+## Étape 3.4 : Configuration des réseaux accessibles
+
+### 🎯 Objectif
+Définir quels réseaux les clients VPN pourront atteindre une fois connectés.
+
+### 🔧 Tâche : Créer une politique d'accès réseau
+
+**1. Accéder à la configuration des réseaux**
+
+```
+Configuration → VPN → VPN SSL → Onglet "Réseaux distants"
+```
+
+**2. Ajouter un réseau distant**
+
+Cliquer sur `Ajouter` :
+
+**Paramètres :**
+- **Nom** : `Reseau-Interne-Entreprise`
+- **Description** : `Réseau interne accessible via VPN`
+- **Type** : `Réseau IPv4`
+
+**Réseau :**
+- **Adresse réseau** : `10.Y.1.0` (remplacer Y)
+- **Masque** : `255.255.255.0` (soit /24)
+
+**Options :**
+- **Publier ce réseau** : ✅ Cocher
+  - Cela signifie que le client VPN pourra router son trafic vers ce réseau
+- **Split tunneling** : ✅ Activer (recommandé pour l'activité)
+
+:::tip[Split Tunneling]
+**Split tunneling** = tunnel divisé
+
+- ✅ **Activé** : Seul le trafic vers 10.Y.1.0/24 passe par le VPN
+  - Avantage : Le client peut encore accéder à Internet directement (plus rapide)
+  - Usage : Télétravail, accès ponctuel
+
+- ❌ **Désactivé (Full tunnel)** : Tout le trafic passe par le VPN
+  - Avantage : Contrôle total du trafic
+  - Inconvénient : Surcharge du VPN, plus lent
+  - Usage : Sécurité maximale, politique stricte
+
+Pour cette activité, le split tunneling est adapté.
+:::
+
+**3. Créer**
+
+:::tip[Validation Étape 3.4]
+- ✅ Le réseau `Reseau-Interne-Entreprise` (10.Y.1.0/24) apparaît dans la liste
+- ✅ Split tunneling activé
+- ✅ Capture d'écran : Liste des réseaux distants configurés
+:::
+
+---
+
+## Étape 3.5 : Configuration de l'authentification VPN
+
+### 🎯 Objectif
+Définir comment les utilisateurs s'authentifieront pour accéder au VPN.
+
+### 🔧 Tâche : Configurer la méthode d'authentification
+
+**1. Accéder à la configuration d'authentification**
+
+```
+Configuration → VPN → VPN SSL → Onglet "Authentification"
+```
+
+**2. Choisir la méthode d'authentification**
+
+**Méthode principale :**
+- **Type** : `Annuaire LDAP` (déjà configuré en Phase 2)
+- **Annuaire** : Sélectionner `Annuaire interne`
+
+**Paramètres d'authentification :**
+- **Exiger un certificat client** : ❌ Décocher (pour simplifier)
+  - En production, on activerait pour une double authentification
+- **Authentification unique (SSO)** : ❌ Décocher
+- **Durée de session** : `8 heures` (durée avant déconnexion automatique)
+- **Nombre de connexions simultanées par utilisateur** : `2`
+  - Permet à un utilisateur de se connecter depuis 2 appareils maximum
+
+**3. Appliquer**
+
+:::tip[Double authentification (bonus)]
+Pour une sécurité renforcée, on peut combiner :
+- **Quelque chose que vous savez** : mot de passe
+- **Quelque chose que vous avez** : certificat client, token OTP
+
+Pour cette activité, le mot de passe suffit.
+:::
+
+:::tip[Validation Étape 3.5]
+- ✅ Méthode d'authentification : Annuaire LDAP interne
+- ✅ Paramètres de session configurés
+- ✅ Capture d'écran : Page de configuration de l'authentification VPN
+:::
+
+---
+
+## Étape 3.6 : Définition des droits d'accès par utilisateur/groupe
+
+### 🎯 Objectif
+Autoriser les utilisateurs ou groupes LDAP à se connecter au VPN.
+
+### 🔧 Tâche : Créer une politique d'accès VPN
+
+**1. Accéder aux politiques d'accès**
+
+```
+Configuration → VPN → VPN SSL → Onglet "Politiques d'accès"
+```
+
+**2. Créer une nouvelle politique**
+
+Cliquer sur `Ajouter` :
+
+**Informations générales :**
+- **Nom** : `Acces-VPN-Groupe-Utilisateurs`
+- **Description** : `Autoriser le groupe Utilisateurs_VPN à se connecter`
+- **État** : ✅ Activé
+
+**Utilisateurs/Groupes autorisés :**
+- Cliquer sur `Ajouter un groupe`
+- Rechercher et sélectionner : `Utilisateurs_VPN`
+  - Chemin complet : `cn=Utilisateurs_VPN,ou=groupes,dc=techservices,dc=local`
+- Valider
+
+:::tip[Groupe vs Utilisateurs individuels]
+**Pourquoi utiliser un groupe plutôt que des utilisateurs individuels ?**
+- ✅ Gestion simplifiée : ajouter un utilisateur = l'ajouter au groupe LDAP
+- ✅ Scalabilité : fonctionne pour 3 ou 300 utilisateurs
+- ✅ Politique centralisée : un seul endroit à modifier
+:::
+
+**Ressources accessibles :**
+- **Pool d'adresses** : Sélectionner `Pool-VPN-Clients`
+- **Réseaux accessibles** :
+  - ✅ Cocher `Reseau-Interne-Entreprise` (10.Y.1.0/24)
+
+**Options avancées :**
+- **Durée maximale de connexion** : `8 heures`
+- **Déconnexion automatique après inactivité** : `30 minutes`
+- **Bande passante** : Illimitée (laisser par défaut)
+
+**3. Créer la politique**
+
+Cliquer sur `Créer`.
+
+**4. Vérifier l'ordre des politiques**
+
+Les politiques sont évaluées de haut en bas. Si plusieurs politiques existent, la première qui correspond est appliquée.
+
+:::tip[Validation Étape 3.6]
+- ✅ La politique `Acces-VPN-Groupe-Utilisateurs` est créée
+- ✅ Le groupe `Utilisateurs_VPN` est associé
+- ✅ Le pool et le réseau interne sont configurés
+- ✅ Capture d'écran : Fiche de la politique d'accès créée
+:::
+
+---
+
+## Étape 3.7 : Configuration du portail web VPN
+
+### 🎯 Objectif
+Personnaliser la page de connexion VPN accessible via navigateur.
+
+### 🔧 Tâche : Configurer le portail web
+
+**1. Accéder au portail web**
+
+```
+Configuration → VPN → VPN SSL → Onglet "Portail web"
+```
+
+**2. Activer le portail web**
+
+- **Activer le portail web** : ✅ Cocher
+  - Permet de télécharger le client VPN et de se connecter via navigateur
+
+**3. Personnaliser le portail (optionnel)**
+
+**Apparence :**
+- **Titre** : `VPN TechServices SARL`
+- **Message de bienvenue** :
+  ```
+  Bienvenue sur le portail VPN de TechServices.
+  Connectez-vous avec vos identifiants d'entreprise.
+  ```
+- **Logo** : Laisser par défaut ou uploader un logo (optionnel)
+
+**Options :**
+- **Afficher le lien de téléchargement du client** : ✅ Cocher
+  - Les utilisateurs pourront télécharger OpenVPN Connect
+- **Types de clients supportés** :
+  - ✅ Windows
+  - ✅ Linux
+  - ✅ macOS
+  - ✅ Android/iOS
+
+**4. Appliquer**
+
+:::tip[Accès au portail web]
+Une fois configuré, le portail sera accessible à l'adresse :
+```
+https://172.25.Y.254/
+```
+(remplacer Y par votre numéro)
+:::
+
+:::tip[Validation Étape 3.7]
+- ✅ Le portail web est activé
+- ✅ Message de bienvenue configuré
+- ✅ Lien de téléchargement du client activé
+- ✅ Capture d'écran : Configuration du portail web
+:::
+
+---
+
+## Étape 3.8 : Vérification finale de la configuration
+
+### 🔧 Tâche : Passer en revue tous les paramètres
+
+**1. Accéder au tableau de bord VPN**
+
+```
+Monitoring → VPN → VPN SSL → Dashboard
+```
+
+**2. Vérifier l'état du service**
+
+Le tableau de bord doit afficher :
+- **État du service** : 🟢 Démarré (Running)
+- **Interface d'écoute** : `out` (172.25.Y.254)
+- **Port** : `443`
+- **Connexions actives** : `0` (normal, personne n'est encore connecté)
+- **Utilisateurs autorisés** : `3` (jdupont, mmartin, pdurand via le groupe)
+
+**3. Vérifier le récapitulatif de configuration**
+
+```
+Configuration → VPN → VPN SSL → Onglet "Résumé"
+```
+
+Vous devez voir :
+```
+✅ Service VPN SSL : Activé
+✅ Interface : out (172.25.Y.254:443)
+✅ Certificat : Configuré
+✅ Pool d'adresses : Pool-VPN-Clients (10.Y.100.1-62)
+✅ Réseaux accessibles : 10.Y.1.0/24
+✅ Authentification : LDAP interne
+✅ Politiques d'accès : 1 politique active
+✅ Utilisateurs autorisés : Groupe Utilisateurs_VPN (3 membres)
+✅ Portail web : Activé
+```
+
+:::tip[Validation Étape 3.8]
+- ✅ Tous les voyants sont au vert
+- ✅ Le service VPN SSL est démarré
+- ✅ Les paramètres correspondent au plan d'adressage
+- ✅ Capture d'écran : Dashboard VPN montrant l'état du service
+- ✅ Capture d'écran : Page de résumé de la configuration
+:::
+
+---
+
+## Étape 3.9 : Test d'accès au portail web (sans connexion)
+
+### 🔧 Tâche : Vérifier que le portail web est accessible
+
+**1. Depuis la VM Client VPN (Étudiant X)**
+
+Ouvrir un navigateur web :
+```
+URL : https://172.25.Y.254/
+```
+(remplacer Y par le numéro de votre binôme Serveur)
+
+**2. Accepter le certificat auto-signé**
+
+- Le navigateur affiche un avertissement
+- Cliquer sur `Avancé` → `Accepter le risque`
+
+**3. Observer la page d'accueil du portail VPN**
+
+Vous devriez voir :
+- 🔐 Formulaire de connexion
+  - Champ : Nom d'utilisateur
+  - Champ : Mot de passe
+  - Bouton : Se connecter
+- 📥 Lien de téléchargement du client VPN
+- 💬 Message de bienvenue (si personnalisé)
+
+**4. NE PAS SE CONNECTER ENCORE**
+
+:::caution[Important]
+Ne tentez pas de vous connecter pour l'instant.
+Nous allons d'abord créer les règles de filtrage nécessaires en Phase 4.
+:::
+
+:::tip[Validation Étape 3.9]
+- ✅ Le portail web est accessible depuis le Client VPN
+- ✅ La page de login s'affiche correctement
+- ✅ Le lien de téléchargement du client est visible
+- ✅ Capture d'écran : Page d'accueil du portail VPN
+:::
+
+---
+
+## ✅ Tableau de validation de la Phase 3
+
+Complétez ce tableau dans votre compte-rendu :
+
+| Configuration      | Paramètre       | Valeur attendue          | ✅/❌ |
+| ------------------ | --------------- | ------------------------ | ----- |
+| Service VPN SSL    | État            | Activé / Démarré         |       |
+| Interface d'écoute | Interface       | out (172.25.Y.254)       |       |
+| Port d'écoute      | Port            | 443                      |       |
+| Certificat SSL     | État            | Configuré et valide      |       |
+| Pool d'adresses    | Plage           | 10.Y.100.1 à 10.Y.100.62 |       |
+| Pool d'adresses    | Passerelle      | 10.Y.1.254               |       |
+| Réseau accessible  | Réseau          | 10.Y.1.0/24              |       |
+| Split tunneling    | État            | Activé                   |       |
+| Authentification   | Méthode         | Annuaire LDAP interne    |       |
+| Politique d'accès  | Groupe autorisé | Utilisateurs_VPN         |       |
+| Politique d'accès  | Pool associé    | Pool-VPN-Clients         |       |
+| Portail web        | État            | Activé et accessible     |       |
+| Portail web        | URL             | https://172.25.Y.254/    |       |
+
+---
+
+## ✅ Critères de validation de la Phase 3
+
+Avant de passer à la Phase 4, assurez-vous que :
+
+- [ ] Le service VPN SSL est activé et démarré
+- [ ] L'interface OUT (172.25.Y.254) écoute sur le port 443
+- [ ] Un certificat SSL est configuré (auto-signé pour l'activité)
+- [ ] Le pool d'adresses VPN est créé (10.Y.100.1-62)
+- [ ] Le réseau interne (10.Y.1.0/24) est défini comme accessible
+- [ ] Le split tunneling est activé
+- [ ] L'authentification LDAP interne est configurée
+- [ ] La politique d'accès autorise le groupe `Utilisateurs_VPN`
+- [ ] La politique associe le bon pool et le bon réseau
+- [ ] Le portail web est activé et accessible depuis le Client VPN
+- [ ] La page de login du portail s'affiche correctement
+
+:::tip[Checkpoint enseignant]
+👨‍🏫 Avant de continuer, faites valider votre configuration par l'enseignant.
+Montrez-lui :
+1. Le dashboard VPN avec le service démarré
+2. La configuration du pool d'adresses
+3. La politique d'accès avec le groupe autorisé
+4. Le portail web accessible depuis la VM Client
+:::
+
+---
+
+## 🎯 Résumé de la Phase 3
+
+Vous avez maintenant :
+
+- ✅ Un serveur VPN SSL opérationnel
+- ✅ Écoute sur l'interface publique (172.25.Y.254:443)
+- ✅ Certificats SSL configurés
+- ✅ Pool d'adresses IP pour les clients (10.Y.100.0/26)
+- ✅ Réseau interne accessible via VPN (10.Y.1.0/24)
+- ✅ Authentification LDAP fonctionnelle
+- ✅ Politique d'accès pour le groupe Utilisateurs_VPN
+- ✅ Portail web actif et accessible
+
+**⚠️ MAIS : Le VPN ne fonctionne pas encore !**
+
+**Pourquoi ?** Il manque les **règles de filtrage** pour :
+- Autoriser les connexions VPN entrantes sur le port 443
+- Autoriser le trafic des clients VPN vers le réseau interne
+- Autoriser les réponses du réseau interne vers les clients VPN
+
+**Prochaine étape** : Phase 4 - Configuration des règles de filtrage pour le VPN
+
+---
+
+## 📚 Pour aller plus loin (bonus)
+
+Si vous avez terminé en avance :
+
+### Bonus 1 : Comprendre le fichier de configuration OpenVPN
+
+Le Stormshield génère automatiquement un fichier `.ovpn` pour les clients.
+
+Depuis l'interface web, téléchargez le profil de configuration :
+```
+Configuration → VPN → VPN SSL → Onglet "Profils clients" → Télécharger
+```
+
+Ouvrez-le avec un éditeur de texte et observez :
+```
+client
+dev tun
+proto tcp
+remote 172.25.Y.254 443
+cipher AES-256-GCM
+auth SHA256
+...
+```
+
+Analysez chaque directive et comprenez son rôle.
+
+### Bonus 2 : Activer les logs détaillés du VPN
+
+Pour faciliter le dépannage :
+```
+Configuration → VPN → VPN SSL → Onglet "Options avancées"
+```
+
+- **Niveau de logs** : `Détaillé (Debug)`
+- Activer tous les types de logs VPN
+
+Ensuite, consultez :
+```
+Monitoring → Logs → VPN → VPN SSL
+```
+
+### Bonus 3 : Configurer le Full Tunnel au lieu du Split Tunnel
+
+Modifiez la configuration pour que TOUT le trafic passe par le VPN :
+- Désactiver le split tunneling
+- Ajouter une route par défaut (0.0.0.0/0) dans les réseaux accessibles
+
+Observez l'impact sur la configuration client.
+

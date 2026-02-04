@@ -1,0 +1,146 @@
+---
+title: Annexe - Vérifications et dépannage
+description: Guide de dépannage pour l'enseignant avec commandes de diagnostic et solutions aux problèmes courants
+sidebar:
+  order: 9
+  badge:
+    text: Enseignant
+    variant: tip
+---
+
+Cette annexe regroupe les commandes utiles pour diagnostiquer rapidement un problème de collecte de flux. Elle est destinée à l'enseignant pour l'aider à débloquer les étudiants en cas de difficulté technique.
+
+**Public :** Enseignant uniquement
+
+---
+
+## Annexe : Vérifications et dépannage (enseignant)
+
+Cette annexe regroupe les commandes utiles pour diagnostiquer rapidement un problème de collecte de flux.
+
+### 1) Statut des services
+```bash
+sudo systemctl status redis-server --no-pager
+sudo systemctl status nprobe --no-pager
+sudo systemctl status ntopng --no-pager
+```
+
+### 2) Logs (les erreurs de configuration sont souvent explicites)
+```bash
+sudo journalctl -u nprobe -n 200 --no-pager
+sudo journalctl -u ntopng -n 200 --no-pager
+```
+
+### 3) Vérifier les ports (écoute et connexions)
+```bash
+# nProbe doit écouter en UDP sur le port de collecte (ici 4739)
+sudo ss -lunp | grep 4739
+
+# nProbe doit exposer ZMQ (ici 5556) et ntopng doit pouvoir s'y connecter
+sudo ss -ltnp | grep 5556
+```
+
+### 4) Vérifier l'arrivée des flux côté Debian
+```bash
+# Voir si le firewall envoie bien des paquets vers le collecteur
+sudo tcpdump -ni any udp port 4739
+```
+
+### 5) Vérifier la cohérence configuration nProbe/ntopng
+```bash
+sudo grep -E "collector-port|zmq|@NTOPNG@" /etc/nprobe/nprobe.conf
+sudo grep -E "^-i=|--http-port|--community|--disable-login" /etc/ntopng/ntopng.conf
+```
+
+### 6) Symptômes fréquents
+
+- **Paquets visibles avec tcpdump, mais aucun trafic dans ntopng** :
+  - vérifier que nProbe écoute bien sur le bon port UDP (`ss -lunp | grep 4739`)
+  - vérifier que ntopng pointe sur le bon endpoint ZMQ (`-i=tcp://127.0.0.1:5556`)
+  - vérifier les logs nProbe/ntopng (erreur ZMQ, option inconnue, etc.)
+- **Interface ntopng vide (pas d'interface ZMQ)** :
+  - vérifier que nProbe expose bien ZMQ (`ss -ltnp | grep 5556`)
+  - vérifier un éventuel pare-feu local (rare sur VM de TP)
+
+### 7) Scénarios de dépannage courants
+
+#### Scénario A : nProbe ne démarre pas
+
+**Symptôme :** `sudo systemctl status nprobe` montre "failed"
+
+**Diagnostic :**
+```bash
+sudo journalctl -u nprobe -n 50 --no-pager
+```
+
+**Causes fréquentes :**
+- Port 4739 déjà utilisé par un autre processus
+- Erreur de syntaxe dans `/etc/nprobe/nprobe.conf`
+- Problème de permissions
+
+**Solution :**
+```bash
+# Vérifier si le port est occupé
+sudo ss -ulnp | grep 4739
+
+# Tester la configuration manuellement
+sudo nprobe --collector-port=4739 --zmq=tcp://*:5556 -T=@NTOPNG@
+# Si erreur → corriger la config
+```
+
+#### Scénario B : ntopng ne voit aucune interface ZMQ
+
+**Symptôme :** Interface ntopng vide, aucun trafic visible
+
+**Diagnostic :**
+```bash
+# Vérifier que nProbe expose bien ZMQ
+sudo ss -ltnp | grep 5556
+
+# Vérifier la config ntopng
+grep "^-i=" /etc/ntopng/ntopng.conf
+```
+
+**Causes fréquentes :**
+- nProbe n'a pas démarré correctement
+- Configuration ZMQ incorrecte dans ntopng.conf
+- Mauvaise syntaxe : `-i=tcp://127.0.0.1:5556` (correct) vs `-i=tcp://localhost:5556` (parfois problématique)
+
+**Solution :**
+```bash
+# Redémarrer dans l'ordre
+sudo systemctl restart nprobe
+sleep 5
+sudo systemctl restart ntopng
+```
+
+#### Scénario C : Flux IPFIX reçus mais pas affichés dans ntopng
+
+**Symptôme :** `tcpdump` montre des paquets UDP 4739, mais ntopng reste vide
+
+**Diagnostic :**
+```bash
+# Vérifier que nProbe reçoit et traite les flux
+sudo journalctl -u nprobe -f
+# On doit voir : "Received X flow packets"
+
+# Vérifier que ntopng se connecte à ZMQ
+sudo journalctl -u ntopng -f
+# On doit voir : "ZMQ interface tcp://127.0.0.1:5556"
+```
+
+**Causes fréquentes :**
+- Template IPFIX non reconnu par nProbe
+- Version incompatible nProbe/ntopng
+- Problème de décodage des flux
+
+**Solution :**
+```bash
+# Vérifier la version de nProbe et ntopng
+nprobe --version
+ntopng --version
+
+# Forcer le template NTOPNG dans nProbe
+sudo nano /etc/nprobe/nprobe.conf
+# S'assurer que -T=@NTOPNG@ est présent
+```

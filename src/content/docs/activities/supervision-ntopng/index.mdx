@@ -1,0 +1,108 @@
+---
+title: Supervision et analyse du trafic réseau avec ntopng
+description: Activité pratique de déploiement et configuration d'une solution de supervision réseau pour analyser le trafic traversant un firewall SNS.
+sidebar:
+  order: 1
+---
+
+## Contexte professionnel
+
+**Entreprise :** DataFlow SARL (société de services informatiques, 45 employés)
+
+**Situation :** Le responsable informatique a constaté des ralentissements réseau récurrents en fin de journée. La direction demande un rapport détaillé sur l'utilisation de la bande passante pour :
+
+- Identifier les applications consommant le plus de ressources
+- Détecter d'éventuels usages non professionnels
+- Dimensionner correctement la bande passante pour l'année prochaine
+- Préparer un audit de sécurité exigé par un nouveau client
+
+**Mission des étudiants :** Déployer une solution de supervision réseau basée sur ntopng pour analyser le trafic traversant le firewall SNS et produire un rapport d'analyse.
+
+## Objectifs pédagogiques
+
+À l'issue de cette activité, les étudiants seront capables de :
+
+- Comprendre l'intérêt d'un outil de supervision réseau dans un contexte professionnel
+- Installer et configurer ntopng sur une VM Linux
+- Configurer l'export IPFIX sur un firewall Stormshield SNS
+- Analyser le trafic réseau et identifier les flux principaux
+- Détecter des comportements réseau anormaux ou suspects
+- Produire un rapport d'analyse pour la direction
+
+## Architecture de la maquette
+
+**Configuration requise par étudiant (1 machine physique) :**
+```
+                    Internet (réseau du labo 172.25.0.0/16)
+                                   |
+                              [SNS EVA1]
+                         OUT: 172.25.X.254/16
+                         IN:  192.168.X.254/24
+                                   |
+                    +--------------+---------------+
+                    |                              |
+              [Réseau LAN]                   Export IPFIX
+           192.168.X.0/24                    UDP 4739
+                    |                              |
+        +-----------+-----------+                  ↓
+        |           |           |            [VM ntopng]
+   [VM Client1] [VM Client2]  ...        192.168.X.50
+   192.168.X.10 192.168.X.11              - nProbe (collecte IPFIX)
+                                          - ntopng (analyse web)
+```
+
+**Flux de données :**
+1. Les VMs clientes → SNS → Internet (trafic normal)
+2. SNS envoie une **copie** des métadonnées de flux → nProbe (IPFIX)
+3. nProbe → ntopng (via ZMQ)
+4. L'administrateur consulte ntopng via navigateur web
+
+**Machines virtuelles nécessaires (sur 1 seul PC) :**
+
+- SNS_EVA1 - firewall Stormshield SNS
+- VM Debian 12 - pour ntopng
+- 2 VMs Xubuntu - pour générer du trafic
+
+## Prérequis
+
+### Connaissances
+
+- Configuration de base SNS (interfaces, filtrage, NAT)
+- Commandes Linux de base
+- Configuration réseau IP
+- Notions de protocoles réseau (TCP/IP, HTTP, DNS, etc.)
+
+### Matériel
+
+- 1 ordinateur physique avec VirtualBox
+- Minimum 8 Go RAM (12 Go recommandés)
+- 80 Go d'espace disque disponible
+
+### Fichiers fournis
+
+- OVA SNS EVA1 (à récupérer et importer)
+- OVA Debian 12 (à récupérer et importer)
+- OVA VMs Xubuntu (à récupérer et importer)
+
+## Durée estimée
+
+- **Niveau normal :** 6 heures
+- **Étudiants rapides :** Activités bonus disponibles (analyse avancée, alertes)
+
+
+## Déroulement de l'activité
+
+Cette activité est divisée en 6 phases principales :
+
+1. **[Phase 1 : Configuration du SNS](/supervision-ntopng/phase1-config-sns/)** - Configuration initiale du firewall et création des objets réseau
+2. **[Phase 2 : Installation et configuration de ntopng](/supervision-ntopng/phase2-installation-ntopng/)** - Déploiement de la VM Debian et installation de ntopng/nProbe
+3. **[Phase 3 : Configuration de l'export IPFIX](/supervision-ntopng/phase3-config-ipfix/)** - Activation de l'export des flux sur le firewall SNS
+4. **[Phase 4 : Génération de trafic et analyse](/supervision-ntopng/phase4-analyse-trafic/)** - Simulation de trafic réseau et analyse dans ntopng
+5. **[Phase 5 : Détection d'anomalies](/supervision-ntopng/phase5-detection-anomalies/)** - Identification de comportements réseau suspects
+6. **[Phase 6 : Production du rapport](/supervision-ntopng/phase6-rapport/)** - Rédaction du livrable final
+
+:::tip[Ressources complémentaires]
+- [Activités bonus](/supervision-ntopng/activites-bonus/) pour les étudiants rapides
+- [Annexe : Dépannage](/supervision-ntopng/annexe-depannage/) pour l'enseignant
+- [Annexe : Serveur de simulation](/supervision-ntopng/annexe-serveur-simulation/) pour l'enseignant
+:::

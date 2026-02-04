@@ -1,0 +1,522 @@
+---
+title: "Phase 0 : Préparation de l'environnement VirtualBox"
+sidebar:
+  order: 2
+status: "draft"
+level: "BTS SIO 1"
+duration: "45 min"
+tags: ["exemple"]
+draft: true
+---
+
+## Phase 0 : Préparation de l'environnement VirtualBox
+
+### Durée estimée : 1h30
+
+### Objectifs de cette phase
+
+- ✅ Identifier vos numéros personnels X et Y
+- ✅ Créer les machines virtuelles nécessaires
+- ✅ Configurer les réseaux VirtualBox (Bridge et Réseau interne)
+- ✅ Installer les systèmes d'exploitation
+- ✅ Vérifier la connectivité de base
+
+### Étape 0.1 : Identification du binôme et des adresses réseau
+
+#### 🎯 Objectif
+Déterminer et noter les informations réseau qui seront utilisées dans toute l'activité.
+
+#### Instructions
+
+**1. Formez votre binôme**
+
+Concertez-vous avec votre binôme pour déterminer les rôles :
+- **Étudiant X** : Rôle Client VPN (utilisateur nomade)
+- **Étudiant Y** : Rôle Serveur VPN (infrastructure entreprise)
+
+**2. Complétez le tableau d'identification**
+
+Recopiez et complétez ce tableau dans votre compte-rendu en utilisant **vos numéros personnels** (ceux de vos adresses réseau attribuées en début d'année) :
+```
+╔═════════════════════════════════════════════════════════════╗
+║           IDENTIFICATION DU BINÔME - ACTIVITÉ VPN           ║
+╠═════════════════════════════════════════════════════════════╣
+║                                                             ║
+║ Étudiant X (Rôle : Client VPN)                              ║
+║   - Nom/Prénom : ___________________________________        ║
+║   - Mon numéro personnel X : _____                          ║
+║   - IP machine hôte : 172.25.___.1/16                       ║
+║   - IP VM Client VPN : 172.25.___.10/16                     ║
+║   - IP SNS OUT : 172.25.___.254/16                          ║
+║   - IP SNS IN : 10.___.0.254/24                             ║
+║                                                             ║
+╟─────────────────────────────────────────────────────────────╢
+║                                                             ║
+║ Étudiant Y (Rôle : Serveur VPN)                             ║
+║   - Nom/Prénom : ___________________________________        ║
+║   - Mon numéro personnel Y : _____                          ║
+║   - IP machine hôte : 172.25.___.1/16                       ║
+║   - IP VM Serveur Debian : 10.___.1.20/24                   ║
+║   - IP SNS OUT : 172.25.___.254/16  ← Serveur VPN ici       ║
+║   - IP SNS IN : 10.___.1.254/24                             ║
+║   - Pool VPN SSL : 10.___.100.0/26                          ║
+║                                                             ║
+╟─────────────────────────────────────────────────────────────╢
+║ URL du serveur VPN (pour connexion client) :               ║
+║   https://172.25.___.254:443                                ║
+║                                                             ║
+╚═════════════════════════════════════════════════════════════╝
+```
+
+**3. Validation par l'enseignant**
+
+:::tip[Checkpoint]
+👨‍🏫 Avant de continuer, faites valider votre tableau par l'enseignant pour éviter les conflits d'adressage.
+:::
+
+#### ✅ Critères de validation de l'étape 0.1
+
+Avant de passer à l'étape suivante, vérifiez que :
+
+- [ ] Vous avez noté votre numéro personnel X (celui de votre réseau 172.25.X.0)
+- [ ] Votre binôme a noté son numéro personnel Y
+- [ ] Tous les champs du tableau sont remplis avec les bons masques (/16 pour le LABO, /24 pour les réseaux internes)
+- [ ] Les deux numéros X et Y sont différents
+- [ ] L'enseignant a validé votre plan d'adressage
+
+:::danger[Attention aux masques]
+⚠️ Vérifiez bien les masques réseau dans votre tableau :
+- **Toutes les IPs en 172.25.x.x doivent être en /16** (réseau LABO)
+- **Toutes les IPs en 10.x.x.x doivent être en /24** (réseaux internes privés)
+
+Si vous vous trompez maintenant, toute l'activité devra être refaite !
+:::
+
+---
+
+
+### Étape 0.2 : Création des VMs pour l'Étudiant X (Client VPN)
+
+#### 🔧 Tâche : Importer et configurer la VM Client VPN (XUbuntu)
+
+**1. Importer l'image OVA**
+
+- Télécharger (si ce n'est pas déjà fait) l'image de la VM XUbuntu via Torrent
+- Dans VirtualBox : `Fichier` → `Importer un appareil virtuel`
+- Sélectionner le fichier `.ova`
+- **Avant d'importer**, modifier le nom : `VPN-Client-X` (remplacer X par votre numéro)
+- Importer
+
+**2. Configuration réseau de la VM**
+
+Avant de démarrer la VM, configurez les paramètres réseau :
+
+- Sélectionner la VM → `Configuration` → `Réseau`
+- **Adapter 1** :
+  - ✅ Activé
+  - Mode d'accès réseau : `Accès par pont`
+  - Nom : Sélectionner votre interface réseau physique (généralement `eno1` ou `eth0`)
+  - Type de carte : `Paravirtualized Network (virtio-net)`
+  - **⚠️ Régénérer l'adresse MAC** : Cliquer sur l'icône de rafraîchissement
+- Adapters 2, 3, 4 : Désactivés
+
+**3. Configurer l'IP fixe du Client VPN**
+
+Démarrer la VM et se connecter.
+
+Configurer l'adresse IP fixe de la VM en utilisant la méthode de votre choix (interface graphique ou terminal).
+
+**4. Vérification**
+```bash
+ip a                          # Vérifier l'IP : 172.25.X.10/16
+ip route                      # Vérifier la route par défaut
+ping -c 4 172.25.254.254      # Ping gateway LABO
+ping -c 4 8.8.8.8             # Ping Internet
+```
+
+:::tip[Validation Client VPN]
+✅ Vous devez obtenir :
+- IP : 172.25.X.10/16
+- Gateway : 172.25.254.254
+- Ping gateway : OK
+- Ping Internet : OK
+:::
+
+---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### 🔧 Tâche : Importer et configurer la VM SNS EVA1 (Étudiant X)
+
+**Contexte :** La VM SNS EVA1 de Stormshield Academy est livrée avec un client graphique et un serveur pré-configurés pour le contexte de la Stormshield Academy. Nous devons adapter cette configuration pour notre activité VPN.
+
+**1. Importer l'image OVA du pack EVA1**
+
+- Télécharger le pack EVA1 via Torrent (si ce n'est pas déjà fait)
+- Importer **uniquement** les VMs suivantes :
+  - Le **SNS (pare-feu)** : renommer en `SNS-Client-X`
+  - Le **client graphique** : renommer en `Client-Config-X` (utilisé temporairement pour la configuration)
+- **Ne pas importer** le serveur sur la DMZ (non utilisé dans cette activité) : il faut supprimer cette VM fournit dans le `.ova`
+
+**2. Configuration de la VM SNS**
+
+- Sélectionner `SNS-Client-X` → `Configuration`
+- **Système** : Augmenter si possible
+  - RAM : 2048 MB minimum
+  - Processeur : 2 CPU
+
+- **Réseau** :
+  - **Adapter 1** (Interface OUT - vers LABO/Internet) :
+    - ✅ Activé
+    - Mode : `Accès par pont`
+    - Nom : Votre interface physique
+    - **⚠️ Régénérer l'adresse MAC**
+
+  - **Adapter 2** (Interface IN - vers réseau interne) :
+    - ✅ Activé
+    - Mode : `Réseau interne`
+    - Nom : `reseau-interne-X` (⚠️ Remplacer X par votre numéro)
+    - **⚠️ Régénérer l'adresse MAC**
+
+  - Adapters 3 et 4 : Désactivés
+
+**3. Configuration de la VM Client graphique**
+
+- Sélectionner `Client-Config-X` → `Configuration`
+- **Réseau** :
+  - **Adapter 1** :
+    - Mode : `Réseau interne`
+    - Nom : `reseau-interne-X` (⚠️ Même nom que l'interface IN du SNS)
+    - **⚠️ Régénérer l'adresse MAC**
+
+**4. Configuration initiale du SNS**
+
+**Démarrage des VMs :**
+1. Démarrer d'abord la VM `SNS-Client-X`
+2. Démarrer ensuite la VM `Client-Config-X`
+
+**Depuis le client graphique :**
+1. Lancer le script de configuration réseau (généralement disponible sur le bureau)
+2. Choisir l'option `sns` pour obtenir une adresse IP temporaire en 10.0.0.0/8
+3. Ouvrir un navigateur web
+4. Se connecter à : `https://10.0.0.254/admin`
+   - Login : `admin`
+   - Mot de passe : `admin`
+
+**5. Reconfiguration des interfaces réseau du SNS**
+
+Une fois connecté à l'interface web du SNS :
+
+**Étape 1 : Sortir les interfaces du bridge**
+- Menu : `Configuration` → `Réseau` → `Interfaces`
+- Identifier les interfaces OUT et IN (généralement `eth0` et `eth1`)
+- Si elles sont en mode bridge, les dissocier du bridge
+
+**Étape 2 : Configurer l'interface OUT**
+- Sélectionner l'interface OUT (généralement `eth0`)
+- Type : `Statique`
+- Adresse IP : `172.25.X.254`
+- Masque : `255.255.0.0` (ou `/16`)
+- Gateway : `172.25.254.254`
+- DNS : `172.25.254.15`
+
+**Étape 3 : Configurer l'interface IN**
+- Sélectionner l'interface IN (généralement `eth1`)
+- Type : `Statique`
+- Adresse IP : `10.X.0.254`
+- Masque : `255.255.255.0` (ou `/24`)
+- Gateway : laisser vide
+
+**Étape 4 : Autoriser l'accès à l'interface web depuis l'interface OUT**
+
+:::danger[Configuration critique de l'accès]
+⚠️ Par défaut, l'interface web du SNS n'est accessible que depuis le réseau interne (IN).
+Pour pouvoir administrer le SNS depuis votre machine hôte ou votre VM Client (172.25.X.x), il faut autoriser explicitement l'accès depuis l'interface OUT.
+:::
+
+- Menu : `Configuration` → `Système` → `Administration`
+- Section `Interfaces réseau d'administration` :
+  - Cocher la case **OUT** (ou `eth0`) pour autoriser l'administration depuis cette interface
+  - ⚠️ Laisser **IN** cochée également
+- Vous pouvez également limiter l'accès par IP si nécessaire (optionnel) :
+  - Activer `Filtrage par adresse IP`
+  - Ajouter : `172.25.X.0/24` (votre sous-réseau personnel)
+
+**Étape 5 : Appliquer et redémarrer**
+- Appliquer la configuration
+- Le SNS va redémarrer les services réseau
+- ⚠️ Vous allez perdre la connexion depuis le client graphique (c'est normal)
+
+**6. Vérification de la nouvelle configuration**
+
+**Depuis votre machine hôte physique :**
+```bash
+ping 172.25.X.254     # Doit répondre
+```
+
+**Accéder à la nouvelle interface web :**
+- URL : `https://172.25.X.254/admin`
+- Login : `admin` / mot de passe : `admin` (ou celui que vous avez défini)
+
+**Depuis l'interface web du SNS, ouvrir une console système :**
+- Menu : `Outils` → `Console système`
+- Tester :
+```bash
+ping 172.25.254.254   # Gateway LABO
+ping 8.8.8.8          # Internet
+```
+
+**Depuis votre VM Client XUbuntu :**
+```bash
+ping 172.25.X.254     # Interface OUT du SNS
+```
+
+:::tip[Validation SNS Client]
+✅ Tous les pings doivent fonctionner
+✅ Vous pouvez accéder à l'interface web : `https://172.25.X.254/admin` depuis votre machine hôte ou la VM Client
+✅ Le client graphique n'est plus nécessaire, vous pouvez l'arrêter (mais le conserver pour un usage futur)
+:::
+
+:::caution[Régénération des adresses MAC]
+⚠️ **Très important** : Pensez à régénérer les adresses MAC de toutes vos VMs pour éviter les conflits réseau avec d'autres étudiants utilisant les mêmes images OVA.
+:::
+
+---
+
+### Étape 0.3 : Création des VMs pour l'Étudiant Y (Serveur VPN)
+
+#### 🔧 Tâche : Importer et configurer la VM SNS EVA1 (Serveur VPN principal)
+
+**⚠️ Cette VM est la plus importante de l'activité : c'est elle qui hébergera le serveur VPN SSL.**
+
+**1. Importer l'image OVA du pack EVA1**
+
+- Importer les VMs suivantes :
+  - Le **SNS (pare-feu)** : renommer en `SNS-Serveur-Y`
+  - Le **client graphique** : renommer en `Client-Config-Y`
+- **Ne pas importer** le serveur sur la DMZ (nous utiliserons un Debian personnalisé)
+
+**2. Configuration de la VM SNS**
+
+- Sélectionner `SNS-Serveur-Y` → `Configuration`
+- **Système** : Augmenter si possible
+  - RAM : 2048 MB minimum
+  - Processeur : 2 CPU
+
+- **Réseau** :
+  - **Adapter 1** (OUT - Interface publique VPN) :
+    - ✅ Activé
+    - Mode : `Accès par pont`
+    - Nom : Votre interface physique
+    - **⚠️ Régénérer l'adresse MAC**
+    - **Cette interface recevra les connexions VPN SSL**
+
+  - **Adapter 2** (IN - Réseau entreprise) :
+    - ✅ Activé
+    - Mode : `Réseau interne`
+    - Nom : `reseau-interne-Y` (⚠️ Remplacer Y par votre numéro)
+    - **⚠️ Régénérer l'adresse MAC**
+
+  - Adapters 3 et 4 : Désactivés
+
+**3. Configuration de la VM Client graphique**
+
+- Sélectionner `Client-Config-Y` → `Configuration`
+- **Réseau** :
+  - **Adapter 1** :
+    - Mode : `Réseau interne`
+    - Nom : `reseau-interne-Y` (⚠️ Même nom que l'interface IN du SNS)
+    - **⚠️ Régénérer l'adresse MAC**
+
+**4. Configuration initiale du SNS**
+
+**Démarrage des VMs :**
+1. Démarrer `SNS-Serveur-Y`
+2. Démarrer `Client-Config-Y`
+
+**Depuis le client graphique :**
+1. Lancer le script de configuration réseau
+2. Choisir `sns` pour obtenir une IP temporaire
+3. Se connecter à `https://10.0.0.254/admin`
+   - Login : `admin` / Mot de passe : `admin`
+
+**5. Reconfiguration des interfaces réseau**
+
+**Sortir les interfaces du bridge :**
+- Menu : `Configuration` → `Réseau` → `Interfaces`
+- Dissocier les interfaces du bridge si nécessaire
+
+**Configurer l'interface OUT :**
+- Adresse IP : `172.25.Y.254`
+- Masque : `255.255.0.0` (ou `/16`)
+- Gateway : `172.25.254.254`
+- DNS : `172.25.254.15`
+
+**Configurer l'interface IN :**
+- Adresse IP : `10.Y.1.254`
+- Masque : `255.255.255.0` (ou `/24`)
+- Gateway : laisser vide
+
+**Appliquer et redémarrer les services réseau**
+
+**6. Vérification**
+
+Depuis votre machine hôte :
+```bash
+ping 172.25.Y.254
+```
+
+Accéder à l'interface web : `https://172.25.Y.254/admin`
+
+Depuis la console système du SNS :
+```bash
+ping 172.25.254.254
+ping 8.8.8.8
+```
+
+:::tip[Validation SNS Serveur]
+✅ Les pings doivent réussir
+✅ Interface web accessible : `https://172.25.Y.254/admin`
+✅ C'est sur cette interface OUT que le serveur VPN écoutera (port 443)
+:::
+
+---
+
+#### 🔧 Tâche : Importer et configurer la VM Serveur Debian (Ressources entreprise)
+
+**1. Importer l'image OVA**
+
+- Télécharger l'image `.ova` de Debian via Torrent
+- Importer dans VirtualBox
+- Renommer : `Serveur-Debian-Y`
+
+**2. Configurer la VM**
+
+- **Réseau** :
+  - Adapter 1 : ✅ Activé
+  - Mode : `Réseau interne`
+  - Nom : `reseau-interne-Y` (⚠️ Même nom que l'interface IN du SNS)
+  - **⚠️ Régénérer l'adresse MAC**
+
+**3. Connexion et configuration IP**
+
+Démarrer la VM et se connecter :
+- Login : `sysadmin`
+- Mot de passe : `netlab123`
+
+**Configurer l'IP fixe :**
+
+Utiliser la méthode de votre choix pour configurer :
+- Adresse IP : `10.Y.1.20/24`
+- Gateway : `10.Y.1.254`
+- DNS : `172.25.254.15`
+
+**4. Installation d'Apache2**
+
+Instructions :
+1. Installer Docker si ce n'est pas déjà fait
+2. Cloner le dépôt https://github.com/manastria/docker-http-test
+3. Lancer le serveur avec `docker compose up -d`
+
+
+**5. Vérification**
+```bash
+ping 10.Y.1.254          # Ping vers le SNS IN
+ping 172.25.254.254      # Ping vers la gateway LABO (doit passer via le SNS)
+curl http://localhost    # Affiche la page web
+```
+
+:::tip[Validation Serveur Debian]
+✅ Ping vers le SNS : OK
+✅ Ping vers la gateway LABO : OK
+✅ Page web accessible en local : OK
+:::
+
+---
+
+
+
+### Étape 0.4 : Validation globale de la Phase 0
+
+#### Tests de connectivité à effectuer
+
+Complétez le tableau suivant dans votre compte-rendu :
+
+| Source         | Destination     | Commande              | Résultat attendu   | ✅/❌ |
+| -------------- | --------------- | --------------------- | ------------------ | ----- |
+| Client VPN (X) | Gateway LABO    | `ping 172.25.254.254` | OK                 |       |
+| Client VPN (X) | SNS Client OUT  | `ping 172.25.X.254`   | OK                 |       |
+| Client VPN (X) | SNS Serveur OUT | `ping 172.25.Y.254`   | OK                 |       |
+| Client VPN (X) | Serveur Debian  | `ping 10.Y.1.20`      | **ÉCHEC** (normal) |       |
+| SNS Serveur    | Gateway LABO    | `ping 172.25.254.254` | OK                 |       |
+| SNS Serveur    | Internet        | `ping 8.8.8.8`        | OK                 |       |
+| Serveur Debian | SNS IN          | `ping 10.Y.1.254`     | OK                 |       |
+| Serveur Debian | Gateway LABO    | `ping 172.25.254.254` | OK                 |       |
+
+:::caution[Point important]
+⚠️ Il est **NORMAL** que le Client VPN ne puisse pas pinguer le Serveur Debian (10.Y.1.20).
+**C'est justement le problème que le VPN va résoudre !**
+
+Le Client est sur le réseau 172.25.0.0/16 (Internet simulé).
+Le Serveur est sur le réseau 10.Y.1.0/24 (réseau privé entreprise).
+Sans VPN, ils ne peuvent pas communiquer.
+:::
+
+#### Captures d'écran à inclure dans le compte-rendu
+
+Pour cette Phase 0, incluez les captures suivantes :
+
+1. **VirtualBox** : Vue d'ensemble de vos VMs (les 2 pour X, les 2 pour Y)
+2. **VM Client** : Résultat de `ip a` et `ip route`
+3. **VM SNS Serveur** : Page de login de l'interface web (`https://172.25.Y.254/admin`)
+4. **VM Serveur Debian** : Page web Apache accessible en local (`curl http://localhost`)
+5. **Tableau de tests** complété ci-dessus
+
+---
+
+### ✅ Critères de validation de la Phase 0
+
+Avant de passer à la Phase 1, assurez-vous que :
+
+- [ ] Toutes les VMs sont créées et démarrées correctement
+- [ ] Les adresses IP sont correctement configurées selon votre plan d'adressage
+- [ ] Le Client VPN peut pinguer les interfaces OUT des deux SNS
+- [ ] Le Serveur Debian peut pinguer son SNS (10.Y.1.254) et la gateway LABO
+- [ ] Le service Apache fonctionne sur le Serveur Debian
+- [ ] Le Client VPN **ne peut PAS** pinguer le Serveur Debian (10.Y.1.20) ← **C'est normal !**
+- [ ] Vous pouvez accéder à l'interface web du SNS Serveur depuis votre machine hôte
+
+:::tip[Checkpoint enseignant]
+👨‍🏫 Avant de continuer, faites valider votre installation par l'enseignant.
+:::
+
+---
+
+## 🎯 Résumé de la Phase 0
+
+Vous avez maintenant :
+
+- ✅ Une infrastructure VirtualBox complète (4 VMs par binôme)
+- ✅ Un réseau "Internet" simulé (172.25.0.0/16 - réseau LABO)
+- ✅ Un réseau d'entreprise isolé (10.Y.1.0/24)
+- ✅ Un client VPN sur "Internet" qui ne peut pas accéder aux ressources internes
+- ✅ Un serveur web d'entreprise inaccessible depuis l'extérieur
+
+**Prochaine étape** : Phase 1 - Configuration réseau avancée et premières règles de filtrage
+
+
+
+

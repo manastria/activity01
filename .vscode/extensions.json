@@ -5,6 +5,9 @@
         "dbaeumer.vscode-eslint",
         "takumii.markdown-toc-num",
         "christian-kohler.path-intellisense",
-        "mushan.vscode-paste-image"
+        "mushan.vscode-paste-image",
+        "yzhang.markdown-all-in-one",
+        "darkriszty.markdown-table-prettify",
+        "takumii.markdowntable"
     ]
 }
