@@ -27,4 +27,6 @@ export default defineConfig({
       allowedHosts: ['n110-prof.local'],
     }
   },
+  site: 'https://manastria.github.io/activity01/',
+  base: '/activity01/'
 });
