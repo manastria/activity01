@@ -1,0 +1,148 @@
+---
+/**
+ * ImageFigureViewer.astro
+ * Image unique optimisée + Viewer.js pour zoom interactif au clic.
+ */
+import { withBase, loadManifest, resolveImage } from "@/utils/images";
+
+interface Props {
+  src: string;
+  alt: string;
+  caption?: string;
+  maxWidth?: string;
+  openInNewTab?: boolean;
+  scale?: number;
+  align?: "left" | "center" | "right";
+}
+
+const {
+  src,
+  alt,
+  caption = "",
+  maxWidth = "980px",
+  openInNewTab = true,
+  scale = 1,
+  align = "center",
+} = Astro.props;
+
+const manifest = await loadManifest();
+const full = resolveImage(manifest, src);
+
+const avifSrc = withBase(full.avif);
+const webpSrc = withBase(full.webp);
+const fallbackSrc = withBase(full.fallback)!;
+const inlineSrc = avifSrc ?? webpSrc ?? fallbackSrc;
+---
+
+<figure class={`img-figure align-${align}`} style={`--mw:${maxWidth}; --scale:${scale};`}>
+  <div class="img-wrap">
+    <picture>
+      {avifSrc && <source srcset={avifSrc} type="image/avif" />}
+      {webpSrc && <source srcset={webpSrc} type="image/webp" />}
+      <img
+        class="js-viewer"
+        src={inlineSrc}
+        alt={alt}
+        loading="lazy"
+        decoding="async"
+        data-original={fallbackSrc}
+      />
+    </picture>
+    {openInNewTab && (
+      <a class="open-link" href={fallbackSrc} target="_blank" rel="noopener">
+        Ouvrir
+      </a>
+    )}
+  </div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .img-figure {
+    max-width: var(--mw, 980px);
+    margin: 1rem auto;
+  }
+  .img-figure.align-left {
+    margin-left: 0;
+    margin-right: auto;
+  }
+  .img-figure.align-center {
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .img-figure.align-right {
+    margin-left: auto;
+    margin-right: 0;
+  }
+  .img-wrap {
+    position: relative;
+  }
+  .img-figure img {
+    width: auto;
+    max-width: min(100%, calc(100% * var(--scale, 1)));
+    height: auto;
+    display: block;
+    border-radius: 10px;
+    cursor: zoom-in;
+  }
+  .open-link {
+    position: absolute;
+    right: 0.5rem;
+    top: 0.5rem;
+    font-size: 0.9em;
+    padding: 0.25rem 0.5rem;
+    border-radius: 8px;
+    text-decoration: none;
+    background: color-mix(in oklab, white 88%, transparent);
+    color: inherit;
+    border: 1px solid color-mix(in oklab, currentColor 25%, transparent);
+  }
+  .open-link:focus-visible {
+    outline: 3px solid currentColor;
+    outline-offset: 2px;
+  }
+  .img-figure figcaption {
+    margin-top: 0.5rem;
+    font-size: 0.95em;
+    opacity: 0.85;
+  }
+</style>
+
+<script>
+  import Viewer from "viewerjs";
+  import "viewerjs/dist/viewer.css";
+
+  function initOne(img: HTMLImageElement) {
+    if (!img || img.dataset.viewerInit === "1") return;
+    img.dataset.viewerInit = "1";
+    new Viewer(img, {
+      url: "data-original",
+      navbar: false,
+      title: true,
+      toolbar: true,
+      movable: true,
+      zoomable: true,
+      rotatable: false,
+      scalable: false,
+      transition: true,
+    });
+  }
+
+  function scan(root: Document | Element = document) {
+    root.querySelectorAll<HTMLImageElement>("img.js-viewer[data-original]").forEach(initOne);
+  }
+
+  function start() {
+    if (window.__viewerjsStarted) return;
+    window.__viewerjsStarted = true;
+    scan();
+    const mo = new MutationObserver(() => scan());
+    mo.observe(document.documentElement, { subtree: true, childList: true });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start, { once: true });
+  } else {
+    start();
+  }
+</script>

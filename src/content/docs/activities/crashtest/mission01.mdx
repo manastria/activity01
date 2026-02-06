@@ -1,5 +1,5 @@
 ---
-title: Mission 1 - Déploiement initial de GLPI
+title: Mission 1 – Déploiement initial de GLPI
 description: Installation et sécurisation de base de GLPI en anticipant les besoins de haute disponibilité
 ---
 
@@ -20,7 +20,7 @@ Installer GLPI dans un environnement de test fonctionnel avec une sécurité de 
 
 ## Prérequis
 
-- Disposer d'un hyperviseur VirtualBox sur hôte XUbuntu
+- Disposer d'un hyperviseur VirtualBox
 - Accès aux VMs de base
 - Maîtriser les bases de l'administration Linux
 
@@ -60,8 +60,6 @@ Documentation :
 ├─ PHP (cache activé)
 ├─ Base de données (durcie)
 └─ Application GLPI (sécurisée)
-        │
-        └─→ [Serveur Syslog centralisé]
 ```
 
 ### ⭐⭐⭐ Niveau 3 : Architecture modulaire
@@ -244,19 +242,7 @@ Pour diagnostiquer des problèmes, vous devez savoir où trouver les logs.
 
 Créez un document « Où trouver quoi dans les logs ».
 
-#### Tâche 6.1 ⭐⭐ : Centralisation des logs
-
-Déployez un serveur Syslog centralisé en utilisant [docker_logs](https://github.com/manastria/docker_logs).
-
-**Configuration :**
-- Déployez le conteneur Syslog
-- Configurez vos services pour envoyer leurs logs vers ce serveur
-- Testez que les logs arrivent bien centralisés
-- Documentez comment consulter les logs centralisés
-
-Cette infrastructure sera réutilisée pour superviser le cluster en mission 5.
-
-#### Tâche 6.2 ⭐⭐⭐ : Rotation et archivage
+#### Tâche 6.1 ⭐⭐⭐ : Rotation et archivage
 
 Configurez la rotation automatique des logs avec `logrotate` :
 - Conservation 30 jours
@@ -356,9 +342,6 @@ Planifiez l'exécution quotidienne avec `cron`.
 <CardGrid>
   <Card title="Configuration optimisée" icon="rocket">
     Paramètres modifiés et justifications
-  </Card>
-  <Card title="Logs centralisés" icon="server">
-    Syslog déployé et configuré
   </Card>
   <Card title="Certificat SSL" icon="lock">
     Certificat généré et testé

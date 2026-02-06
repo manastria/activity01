@@ -1,0 +1,89 @@
+---
+/**
+ * ImageFigure.astro
+ * Image unique optimisée. Clic = ouvre l'image plein format dans un nouvel onglet.
+ */
+import { withBase, loadManifest, resolveImage } from "@/utils/images";
+
+interface Props {
+  src: string;
+  alt: string;
+  caption?: string;
+  openInNewTab?: boolean;
+  maxWidth?: string;
+  scale?: number;
+  align?: "left" | "center" | "right";
+}
+
+const {
+  src,
+  alt,
+  caption = "",
+  openInNewTab = true,
+  maxWidth = "980px",
+  scale = 1,
+  align = "center",
+} = Astro.props;
+
+const manifest = await loadManifest();
+const full = resolveImage(manifest, src);
+
+const avifSrc = withBase(full.avif);
+const webpSrc = withBase(full.webp);
+const fallbackSrc = withBase(full.fallback)!;
+const inlineSrc = avifSrc ?? webpSrc ?? fallbackSrc;
+---
+
+<figure class={`img-figure align-${align}`} style={`--mw:${maxWidth}; --scale:${scale};`}>
+  {openInNewTab ? (
+    <a class="img-link" href={fallbackSrc} target="_blank" rel="noopener">
+      <picture>
+        {avifSrc && <source srcset={avifSrc} type="image/avif" />}
+        {webpSrc && <source srcset={webpSrc} type="image/webp" />}
+        <img src={inlineSrc} alt={alt} loading="lazy" decoding="async" />
+      </picture>
+    </a>
+  ) : (
+    <picture>
+      {avifSrc && <source srcset={avifSrc} type="image/avif" />}
+      {webpSrc && <source srcset={webpSrc} type="image/webp" />}
+      <img src={inlineSrc} alt={alt} loading="lazy" decoding="async" />
+    </picture>
+  )}
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .img-figure {
+    max-width: var(--mw, 980px);
+    margin: 1rem auto;
+  }
+  .img-figure.align-left {
+    margin-left: 0;
+    margin-right: auto;
+  }
+  .img-figure.align-center {
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .img-figure.align-right {
+    margin-left: auto;
+    margin-right: 0;
+  }
+  .img-link {
+    display: inline-block;
+  }
+  .img-figure img {
+    width: auto;
+    max-width: min(100%, calc(100% * var(--scale, 1)));
+    height: auto;
+    display: block;
+    border-radius: 10px;
+    cursor: zoom-in;
+  }
+  .img-figure figcaption {
+    margin-top: 0.5rem;
+    font-size: 0.95em;
+    opacity: 0.85;
+  }
+</style>

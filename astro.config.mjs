@@ -19,7 +19,7 @@ export default defineConfig({
           items: [
             { label: 'Reset', link: 'activities/sns/reset' },
             { label: 'Configuration de base', link: 'activities/sns/init' },
-            
+
           ],
         },
       ],
@@ -36,6 +36,6 @@ export default defineConfig({
       allowedHosts: ['n110-prof.local'],
     }
   },
-  site: 'https://manastria.github.io/activity01/',
+  site: 'https://manastria.github.io',
   base: '/activity01/'
 });

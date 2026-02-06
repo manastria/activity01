@@ -1,11 +1,9 @@
 ---
-title: Mission 2 - Configuration de la DMZ
+title: Mission 2 – Configuration de la DMZ
 description: Mise en place d'une architecture réseau sécurisée avec pare-feu et zones de sécurité
 ---
 
 import { Steps, Card, CardGrid, Aside } from '@astrojs/starlight/components';
-
-# Mission 2 : Configuration de la DMZ
 
 ## Objectif
 
@@ -128,7 +126,7 @@ Avant toute configuration, concevez votre architecture réseau complète.
 
 **Travail à effectuer :**
 
-1. **Dessinez un schéma réseau** incluant :
+1. **Dessinez un schéma réseau** (avec [draw.io](https://app.diagrams.net/) par exemple) incluant :
    - Le pare-feu `fw-crash` avec ses 3 interfaces
    - Les zones de sécurité (OUT, DMZ, IN)
    - Vos serveurs GLPI (un ou deux selon Mission 1)
@@ -310,7 +308,7 @@ Depuis `glpi-srv01`, tentez d'accéder au LAN :
 - Essayez de pinguer une machine du LAN
 - Essayez de vous connecter en SSH à `admin-poste`
 
-✅ **Résultat attendu** : Toutes les tentatives doivent **échouer** (timeout). Vérifiez dans les logs du pare-feu qu'une **alarme** a été levée.
+✅ **Résultat attendu** : Toutes les tentatives doivent **échouer** (_timeout_). Vérifiez dans les logs du pare-feu qu'une **alarme** a été levée.
 
 **Test 6 : Vérification du NAT**
 
@@ -330,7 +328,7 @@ Pour chaque test, documentez dans votre portfolio :
 
 ---
 
-### Tâche 6 ⭐⭐ : Activation de l'IPS (Intrusion Prevention System)
+### Tâche 6 ⭐⭐ : Activation de l'IPS (_Intrusion Prevention System_)
 
 Activez la détection et le blocage automatique des attaques sur le pare-feu Stormshield.
 
@@ -377,7 +375,7 @@ Documentez les alertes IPS générées et expliquez leur signification.
 
 ### Tâche 7 ⭐⭐ : Centralisation des logs vers Syslog
 
-Envoyez les logs du pare-feu vers le serveur Syslog centralisé (déployé en Mission 1 ⭐⭐).
+Envoyez les logs du pare-feu vers un serveur Syslog.
 
 **Configuration à réaliser :**
 

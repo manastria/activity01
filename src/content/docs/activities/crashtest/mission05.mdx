@@ -1,12 +1,10 @@
 ---
-title: Mission 5 - Haute disponibilité de GLPI
+title: Mission 5 – Haute disponibilité de GLPI
 description: Mise en place d'une architecture haute disponibilité avec load balancing et réplication
 draft: true
 ---
 
 import { Steps, Card, CardGrid, Aside } from '@astrojs/starlight/components';
-
-# Mission 5 : Haute disponibilité de GLPI
 
 ## Objectif
 
@@ -544,7 +542,7 @@ En réplication Master-Slave :
 - Si le master tombe, vous devez **manuellement** :
   1. Promouvoir le slave en master
   2. Reconfigurer les serveurs web pour pointer vers le nouveau master
-  
+
 Ce n'est pas un failover automatique. Pour cela, il faudrait du Master-Master (niveau ⭐⭐⭐) ou un outil d'orchestration.
 :::
 
@@ -592,7 +590,7 @@ Pour une vraie réplication sans SPOF :
 3. Montez le volume GlusterFS sur tous les serveurs web
 4. Les fichiers sont automatiquement répliqués sur les 3 nœuds
 
-**Avantage** : Aucun SPOF, haute disponibilité complète du stockage.  
+**Avantage** : Aucun SPOF, haute disponibilité complète du stockage.
 **Inconvénient** : Plus complexe à configurer et maintenir.
 
 ---
@@ -616,7 +614,7 @@ Passez à une réplication bidirectionnelle pour permettre l'écriture sur les d
   # glpi-db01
   auto_increment_offset = 1
   auto_increment_increment = 2
-  
+
   # glpi-db02
   auto_increment_offset = 2
   auto_increment_increment = 2

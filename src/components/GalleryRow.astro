@@ -1,93 +1,85 @@
 ---
 /**
  * GalleryRow.astro
- * Rangée de miniatures (wrap), zoom + navigation (GLightbox).
- * Utilise src/data/images.manifest.json pour cibler AVIF/WebP/fallback.
- *
- * Props:
- * - images: { src: string; alt?: string; caption?: string }[]
- * - group?: string
- * - thumbHeight?: number (px) — utilisé si aucune thumb n’existe
- * - gap?: string
+ * Rangée de miniatures avec GLightbox pour zoom + navigation.
  */
-
-import 'glightbox/dist/css/glightbox.css';
+import { withBase, loadManifest, type ImageManifest } from "@/utils/images";
 
 interface ImgItem {
-  src: string;      // ex: "/images/win/etape1.png" (JPG/PNG original)
+  src: string;
   alt?: string;
   caption?: string;
 }
 
-const {
-  images = [],
-  group = 'gallery-row',
-  thumbHeight = 120,
-  gap = '0.5rem',
-} = Astro.props as {
+interface Props {
   images: ImgItem[];
   group?: string;
   thumbHeight?: number;
   gap?: string;
-};
-
-// Manifest généré par tools/build-images.mjs
-let manifest: Record<string, {
-  full: { avif: string | null; webp: string | null; fallback: string };
-  thumb: { avif: string | null; webp: string | null; fallback: string | null };
-}> = {};
-try {
-  manifest = (await import('../data/images.manifest.json')).default;
-} catch {
-  manifest = {};
 }
 
-function resolve(item: ImgItem) {
+const {
+  images = [],
+  group = "gallery-row",
+  thumbHeight = 120,
+  gap = "0.5rem",
+} = Astro.props;
+
+const manifest = await loadManifest();
+
+function resolve(item: ImgItem, manifest: ImageManifest) {
   const entry = manifest[item.src];
   if (!entry) {
-    // Pas dans le manifest (ex: source WebP ou chemin erroné) → fallback simple
     return {
       full: { avif: null, webp: null, fallback: item.src },
       thumb: { avif: null, webp: null, fallback: null },
-      alt: item.alt ?? '',
-      caption: item.caption ?? ''
+      alt: item.alt ?? "",
+      caption: item.caption ?? "",
     };
   }
   return {
     full: entry.full,
     thumb: entry.thumb,
-    alt: item.alt ?? '',
-    caption: item.caption ?? ''
+    alt: item.alt ?? "",
+    caption: item.caption ?? "",
   };
 }
 
-const resolved = images.map(resolve);
+const resolved = images.map((img) => resolve(img, manifest));
 ---
 
 <div class="gallery-row" style={`--gap:${gap}; --thumb-h:${thumbHeight}px;`}>
-  {resolved.map((img) => (
-    <a
-      class="glx-item"
-      href={img.full.avif ?? img.full.webp ?? img.full.fallback}
-      data-gallery={group}
-      data-title={img.caption}
-      title={img.caption || img.alt}
-    >
-      <picture>
-        {img.thumb.avif && <source srcset={img.thumb.avif} type="image/avif" />}
-        {img.thumb.webp && <source srcset={img.thumb.webp} type="image/webp" />}
-        <img
-          src={img.thumb.fallback ?? img.full.webp ?? img.full.fallback}
-          alt={img.alt}
-          loading="lazy"
-          decoding="async"
-          style={!img.thumb.avif && !img.thumb.webp && !img.thumb.fallback
-            ? `height: var(--thumb-h, 120px); width: auto;`
-            : undefined}
-        />
-      </picture>
-    </a>
-  ))}
+  {resolved.map((img) => {
+    const href = withBase(img.full.webp ?? img.full.fallback)!;
+    const thumbAvif = withBase(img.thumb.avif);
+    const thumbWebp = withBase(img.thumb.webp);
+    const thumbFallback = withBase(img.thumb.fallback);
+    const imgSrc = thumbFallback ?? withBase(img.full.webp) ?? withBase(img.full.fallback)!;
+    const needsFallbackSizing = !thumbAvif && !thumbWebp && !thumbFallback;
+
+    return (
+      <a
+        class="glx-item"
+        href={href}
+        data-type="image"
+        data-gallery={group}
+        data-title={img.caption}
+        title={img.caption || img.alt}
+      >
+        <picture>
+          {thumbAvif && <source srcset={thumbAvif} type="image/avif" />}
+          {thumbWebp && <source srcset={thumbWebp} type="image/webp" />}
+          <img
+            src={imgSrc}
+            alt={img.alt}
+            loading="lazy"
+            decoding="async"
+            style={needsFallbackSizing ? "height: var(--thumb-h, 120px); width: auto;" : undefined}
+          />
+        </picture>
+      </a>
+    );
+  })}
 </div>
 
 <style>
@@ -118,12 +110,24 @@ const resolved = images.map(resolve);
   }
 </style>
 
-<script client:load>
-  import GLightbox from 'glightbox';
-  GLightbox({
-    selector: `a.glx-item[data-gallery="${{group}}"]`,
-    touchNavigation: true,
-    loop: false,
-    zoomable: true
-  });
+<script>
+  import GLightbox from "glightbox";
+  import "glightbox/dist/css/glightbox.css";
+
+  function init() {
+    if (window.__glightboxInited) return;
+    window.__glightboxInited = true;
+    GLightbox({
+      selector: "a.glx-item",
+      touchNavigation: true,
+      loop: false,
+      zoomable: true,
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init, { once: true });
+  } else {
+    init();
+  }
 </script>

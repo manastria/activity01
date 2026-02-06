@@ -9,11 +9,15 @@
   "scripts": {
     "dev": "astro dev --host",
     "build": "astro build",
-    "deploy": "astro build && gh-pages -d dist",
     "preview": "astro preview",
+    "deploy": "astro build && gh-pages -d dist",
     "new": "node scripts/new-activity.mjs",
+    "images:organize": "python tools/organize_images.py --write",
     "images:build": "node tools/build-images.mjs",
-    "images:watch": "node tools/build-images.mjs --watch"
+    "images:all": "npm run images:organize && npm run images:build",
+    "images:watch": "node tools/build-images.mjs --watch",
+    "images:migrate": "python tools/migrate_markdown_images.py --write",
+    "images:migrate:viewer": "python tools/migrate_markdown_images.py --viewer --write"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.35.2",
@@ -21,6 +25,7 @@
     "gh-pages": "^6.3.0",
     "glightbox": "^3.3.1",
     "save-dev": "^0.0.1-security",
+    "viewerjs": "^1.11.7",
     "yaml": "^2.5.0",
     "zod": "^3.23.8"
   },
