@@ -13,6 +13,15 @@ export default defineConfig({
           label: 'CRASH Test',
           autogenerate: { directory: 'activities/crashtest', collapsed: true },
         },
+        // Ajout manuel de la catégorie SNS
+        {
+          label: 'SNS', // Le nom de la catégorie dans le menu
+          items: [
+            { label: 'Reset', link: 'activities/sns/reset' },
+            { label: 'Configuration de base', link: 'activities/sns/init' },
+            
+          ],
+        },
       ],
       tableOfContents: {
         heading: 'Sommaire',

@@ -1,0 +1,1137 @@
+---
+title: Mission 6 - Services complémentaires et optimisation
+description: Ajout de services professionnels sur le cluster et optimisation globale de l'infrastructure
+draft: true
+---
+
+import { Steps, Card, CardGrid, Aside } from '@astrojs/starlight/components';
+
+# Mission 6 : Services complémentaires et optimisation
+
+## Objectif
+
+Enrichir l'infrastructure haute disponibilité avec des services complémentaires professionnels et optimiser les performances globales du cluster GLPI.
+
+<CardGrid>
+  <Card title="Difficulté" icon="star">
+    Difficile 💪
+  </Card>
+  <Card title="Temps estimé" icon="clock">
+    6 heures
+  </Card>
+</CardGrid>
+
+## Prérequis
+
+- Avoir terminé la Mission 5 (cluster HA opérationnel)
+- Maîtriser l'administration système Linux avancée
+- Comprendre les concepts de reverse proxy et de cache
+- Connaître les bases de la sécurité applicative
+
+## Contexte
+
+Le cluster GLPI du CRASH est maintenant hautement disponible, mais plusieurs besoins complémentaires ont été identifiés :
+
+**Besoins de sécurité :**
+- Mise en place d'une PKI interne pour des certificats SSL professionnels
+- Renforcement de la sécurité applicative (WAF)
+- Authentification centralisée pour simplifier la gestion des utilisateurs
+
+**Besoins de performance :**
+- Les temps de chargement GLPI sont parfois lents (base de données volumineuse)
+- Certaines pages contiennent beaucoup de contenu statique (CSS, JS, images)
+- Les requêtes répétitives sollicitent inutilement la base de données
+
+**Besoins opérationnels :**
+- Sauvegarde automatisée de l'ensemble du cluster
+- Tests de restauration réguliers
+- Documentation de l'infrastructure à jour automatiquement
+
+:::caution[Cahier des charges]
+**Objectifs de cette mission :**
+- Remplacer les certificats auto-signés par des certificats d'une PKI interne
+- Améliorer les performances du portail GLPI (temps de chargement < 2 secondes)
+- Mettre en place une sauvegarde complète automatisée du cluster
+- Tester et valider les procédures de restauration
+
+**Contraintes :**
+- Ne pas perturber le service en production (déploiement progressif)
+- Conserver la haute disponibilité acquise en Mission 5
+- Limiter la consommation de ressources (budget serveurs limité)
+:::
+
+:::tip[Approche pédagogique]
+Cette mission propose trois niveaux de réalisation :
+- ⭐ PKI interne, cache web et sauvegarde de base
+- ⭐⭐ Optimisations avancées et WAF
+- ⭐⭐⭐ Authentification centralisée et infrastructure as code
+
+Chaque niveau inclut le précédent. Visez au minimum le niveau ⭐ pour valider la mission.
+:::
+
+---
+
+## Services à déployer
+
+### PKI (Public Key Infrastructure)
+
+Une infrastructure de clés publiques permet de gérer des certificats SSL/TLS internes sans dépendre d'autorités externes.
+
+**Composants d'une PKI :**
+
+**CA racine (Root CA) :**
+- Certificat auto-signé de plus haut niveau
+- Signe les certificats d'autorités intermédiaires
+- **Doit être hors ligne** et ultra-sécurisé en production
+
+**CA intermédiaire (Intermediate CA) :**
+- Signée par la CA racine
+- Signe les certificats finaux (serveurs, utilisateurs)
+- Peut être en ligne pour automatiser la signature
+
+**Certificats serveur :**
+- Certificats SSL/TLS pour les serveurs web
+- Signés par la CA intermédiaire
+- Installés sur HAProxy pour le HTTPS
+
+**Avantages d'une PKI interne :**
+- ✅ Pas d'avertissement navigateur (si CA racine installée sur les postes)
+- ✅ Contrôle total sur l'émission et la révocation
+- ✅ Gratuit et personnalisable
+- ✅ Durée de validité configurable
+
+### Reverse Proxy avec cache
+
+Un reverse proxy avec cache permet d'améliorer drastiquement les performances.
+
+**Varnish Cache :**
+- Proxy HTTP haute performance
+- Met en cache les réponses HTTP
+- Peut gérer des dizaines de milliers de requêtes/seconde
+- Langage de configuration puissant (VCL)
+
+**Où l'intégrer :**
+```
+Clients → HAProxy → Varnish → Serveurs GLPI
+```
+
+Ou :
+```
+Clients → Varnish → HAProxy → Serveurs GLPI
+```
+
+**Configuration type :**
+- Cache des éléments statiques (CSS, JS, images) pour longue durée
+- Cache des pages HTML pour courte durée (ou pas du tout selon la dynamicité)
+- Invalidation automatique du cache lors de modifications GLPI
+
+### WAF (Web Application Firewall)
+
+Un pare-feu applicatif protège contre les attaques web courantes.
+
+**ModSecurity :**
+- WAF open source intégrable à Nginx/Apache
+- Détecte et bloque les attaques OWASP Top 10
+- Utilise des règles (Core Rule Set - CRS)
+
+**Protections offertes :**
+- Injection SQL
+- Cross-Site Scripting (XSS)
+- Inclusion de fichiers (LFI/RFI)
+- Traversée de répertoires
+- Attaques par force brute
+
+**Où l'intégrer :**
+- Sur HAProxy (avec module Lua)
+- Sur les serveurs web eux-mêmes
+- Sur un reverse proxy dédié (Nginx + ModSecurity)
+
+### Authentification centralisée
+
+Centraliser l'authentification simplifie la gestion des utilisateurs.
+
+**Solutions possibles :**
+
+**LDAP/Active Directory :**
+- Annuaire centralisé des utilisateurs
+- GLPI peut s'authentifier contre LDAP/AD
+- Synchronisation automatique des utilisateurs
+
+**SSO (Single Sign-On) avec Keycloak :**
+- Solution moderne d'authentification
+- Support SAML, OAuth2, OpenID Connect
+- Interface d'administration complète
+
+**Avantages :**
+- ✅ Un seul mot de passe pour tous les services
+- ✅ Gestion centralisée des droits
+- ✅ Désactivation d'un compte = blocage partout
+
+---
+
+## Tâches à réaliser
+
+### Tâche 1 ⭐ : Mise en place d'une PKI interne
+
+Créez votre propre autorité de certification pour générer des certificats SSL professionnels.
+
+#### Étape 1.1 : Création de la CA racine
+
+**Sur une machine dédiée** (peut être votre hôte ou une VM temporaire) :
+
+1. Installez OpenSSL (normalement déjà présent)
+
+2. Créez une structure de répertoires pour la PKI :
+```
+   pki/
+   ├── ca/
+   │   ├── private/      # Clés privées (protégées)
+   │   ├── certs/        # Certificats signés
+   │   └── newcerts/     # Nouveaux certificats
+   ├── intermediate/
+   │   ├── private/
+   │   ├── certs/
+   │   └── csr/          # Certificate Signing Requests
+```
+
+3. Générez la clé privée de la CA racine :
+   - Algorithme : RSA 4096 bits ou Ed25519
+   - Protégée par passphrase robuste
+
+4. Créez le certificat auto-signé de la CA racine :
+   - Durée de validité : 10 ans (3650 jours)
+   - Distinguished Name (DN) : `CN=CRASH Root CA, O=CRASH, C=FR`
+
+:::caution[Sécurité de la CA racine]
+La clé privée de la CA racine est **ultra-sensible**. En production :
+- Elle doit être hors ligne (machine déconnectée)
+- Stockée dans un coffre-fort physique
+- Avec plusieurs copies de sauvegarde chiffrées
+
+Pour ce projet pédagogique, stockez-la dans un répertoire avec permissions restrictives (`chmod 400`).
+:::
+
+#### Étape 1.2 : Création de la CA intermédiaire
+
+La CA intermédiaire signe les certificats quotidiens (serveurs, utilisateurs).
+
+1. Générez une clé privée pour la CA intermédiaire
+
+2. Créez une CSR (Certificate Signing Request) pour la CA intermédiaire :
+   - DN : `CN=CRASH Intermediate CA, O=CRASH, C=FR`
+
+3. Signez la CSR avec la CA racine pour obtenir le certificat intermédiaire :
+   - Durée de validité : 5 ans
+   - Extension `basicConstraints = CA:TRUE, pathlen:0`
+
+4. Vérifiez la chaîne de certification :
+```bash
+   # Vérifier que le certificat intermédiaire est bien signé par la racine
+   openssl verify -CAfile ca/certs/root-ca.crt intermediate/certs/intermediate-ca.crt
+```
+
+#### Étape 1.3 : Génération des certificats serveur
+
+Créez un certificat SSL pour HAProxy couvrant tous les noms d'hôtes nécessaires.
+
+1. Générez une clé privée pour le serveur
+
+2. Créez une CSR avec Subject Alternative Names (SAN) :
+   - CN : `glpi.crash.lan` (ou votre nom de domaine)
+   - SAN : Ajoutez toutes les IP et noms d'hôtes nécessaires
+     - `DNS:glpi.crash.lan`
+     - `DNS:*.crash.lan` (wildcard si besoin)
+     - `IP:10.54.0.1` (VIP)
+
+3. Signez la CSR avec la CA intermédiaire :
+   - Durée de validité : 1 an (390 jours)
+   - Extension `keyUsage = digitalSignature, keyEncipherment`
+   - Extension `extendedKeyUsage = serverAuth`
+
+4. Créez le bundle de certificats pour HAProxy :
+   - Concaténez : clé privée + certificat serveur + certificat intermédiaire
+   - Format PEM
+
+:::tip[Format de certificat HAProxy]
+HAProxy nécessite un fichier unique contenant :
+```
+-----BEGIN PRIVATE KEY-----
+[clé privée du serveur]
+-----END PRIVATE KEY-----
+-----BEGIN CERTIFICATE-----
+[certificat du serveur]
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+[certificat CA intermédiaire]
+-----END CERTIFICATE-----
+```
+
+Créez ce fichier avec :
+```bash
+cat server-key.pem server-cert.pem intermediate-ca.crt > haproxy-bundle.pem
+chmod 600 haproxy-bundle.pem
+```
+:::
+
+#### Étape 1.4 : Installation sur HAProxy
+
+1. Copiez le bundle sur les serveurs HAProxy (`haproxy01`, `haproxy02`)
+
+2. Modifiez la configuration HAProxy pour utiliser le nouveau certificat :
+```
+   frontend https_front
+       bind *:443 ssl crt /etc/haproxy/certs/haproxy-bundle.pem
+```
+
+3. Rechargez HAProxy sans interruption de service :
+```bash
+   sudo systemctl reload haproxy
+```
+
+4. Testez l'accès HTTPS : `curl -v https://[VIP]`
+
+#### Étape 1.5 : Distribution de la CA racine
+
+Pour que les navigateurs acceptent vos certificats sans avertissement, installez la CA racine sur les postes clients.
+
+**Sur Linux :**
+```bash
+sudo cp ca/certs/root-ca.crt /usr/local/share/ca-certificates/crash-root-ca.crt
+sudo update-ca-certificates
+```
+
+**Sur Windows :**
+- Importer dans le magasin « Autorités de certification racines de confiance »
+
+**Sur navigateur :**
+- Firefox : Préférences → Certificats → Importer
+
+**Testez** : Accédez à `https://[VIP]` → Pas d'avertissement de sécurité.
+
+---
+
+### Tâche 2 ⭐ : Mise en cache avec Varnish
+
+Améliorez les performances en mettant en cache les contenus statiques et certaines pages dynamiques.
+
+#### Installation de Varnish
+
+Installez Varnish sur une ou plusieurs VMs dédiées (ou sur les HAProxy si ressources suffisantes).
+
+**Architecture cible :**
+```
+Clients → HAProxy:443 (HTTPS) → Varnish:80 (HTTP) → Serveurs GLPI:80
+```
+
+HAProxy fait la terminaison SSL, Varnish gère le cache en HTTP.
+
+#### Configuration de base
+
+Créez une configuration Varnish (VCL) adaptée à GLPI :
+
+**Éléments à configurer :**
+
+1. **Backend** : Définir les serveurs GLPI backend
+```vcl
+   backend glpi_web01 {
+       .host = "10.54.0.10";
+       .port = "80";
+   }
+```
+
+2. **Règles de cache** :
+   - **Mettre en cache** : CSS, JS, images, fonts (longue durée : 1 semaine)
+   - **Ne PAS mettre en cache** : Pages dynamiques avec sessions
+   - **Cache court** : Pages publiques peu modifiées (ex: liste des catégories)
+
+3. **Gestion des cookies** :
+   - GLPI utilise des cookies de session
+   - Ne pas mettre en cache les requêtes avec cookie de session actif
+
+4. **Purge du cache** :
+   - Permettre de vider le cache manuellement (commande `varnishadm`)
+   - Ou via une requête HTTP spécifique (PURGE)
+
+**Exemple de règle VCL :**
+```vcl
+sub vcl_recv {
+    # Ne pas mettre en cache les requêtes avec cookies de session
+    if (req.http.Cookie ~ "glpi_") {
+        return (pass);
+    }
+    
+    # Mettre en cache les fichiers statiques
+    if (req.url ~ "\.(css|js|png|jpg|jpeg|gif|ico|woff|woff2)$") {
+        return (hash);
+    }
+}
+
+sub vcl_backend_response {
+    # Cache des statiques : 1 semaine
+    if (bereq.url ~ "\.(css|js|png|jpg|jpeg|gif|ico|woff|woff2)$") {
+        set beresp.ttl = 7d;
+    }
+}
+```
+
+#### Reconfiguration de HAProxy
+
+Modifiez HAProxy pour qu'il envoie le trafic vers Varnish au lieu des serveurs web directement :
+```
+frontend https_front
+    bind *:443 ssl crt /etc/haproxy/certs/haproxy-bundle.pem
+    default_backend varnish_backend
+
+backend varnish_backend
+    server varnish01 10.54.0.20:80 check
+```
+
+#### Tests de performance
+
+Comparez les performances avant/après Varnish :
+
+**Avant Varnish :**
+```bash
+ab -n 1000 -c 10 https://[VIP]/
+```
+
+**Après Varnish :**
+```bash
+ab -n 1000 -c 10 https://[VIP]/
+```
+
+**Mesurez** :
+- Temps de réponse moyen
+- Requêtes par seconde
+- Taux de cache hit/miss (via `varnishstat`)
+
+**Objectif** : Temps de chargement < 2 secondes, amélioration d'au moins 30% pour le contenu statique.
+
+---
+
+### Tâche 3 ⭐ : Sauvegarde automatisée du cluster
+
+Mettez en place une stratégie de sauvegarde complète de l'infrastructure.
+
+#### Éléments à sauvegarder
+
+**Bases de données :**
+- Dump SQL de la base GLPI
+- Dump de toutes les bases système si nécessaire
+
+**Fichiers GLPI :**
+- Répertoire `/var/www/html/glpi` (application)
+- Répertoire `/var/www/html/glpi/files` (documents uploadés)
+- Fichiers de configuration GLPI
+
+**Configurations système :**
+- Configurations HAProxy, Keepalived, Varnish
+- Configurations MySQL/MariaDB
+- Configurations des serveurs web
+
+**Certificats et clés :**
+- Certificats SSL/TLS
+- Clés privées (chiffrées)
+
+#### Script de sauvegarde
+
+Créez un script de sauvegarde automatisé qui :
+
+1. **Dump la base de données** :
+   - Utilisez `mysqldump` ou `mariadb-dump`
+   - Option `--single-transaction` pour cohérence sans verrouillage
+   - Compression avec `gzip`
+
+2. **Archive les fichiers** :
+   - Utilisez `tar` avec compression (`tar czf`)
+   - Horodatage dans le nom du fichier (ex: `backup-20260206-143000.tar.gz`)
+
+3. **Copie vers serveur de sauvegarde distant** :
+   - Utilisez `rsync` sur SSH ou `scp`
+   - Serveur de sauvegarde hors du cluster (résilience)
+
+4. **Rotation des sauvegardes** :
+   - Conservation : 7 sauvegardes quotidiennes, 4 hebdomadaires, 3 mensuelles
+   - Suppression automatique des anciennes sauvegardes
+
+5. **Vérification d'intégrité** :
+   - Checksum MD5 ou SHA256 des archives
+   - Test de décompression
+
+**Planification** :
+- Sauvegarde quotidienne à 2h du matin (via `cron`)
+- Notification par email en cas d'échec
+
+:::tip[Serveur de sauvegarde]
+Créez une VM dédiée `backup-srv` :
+- Hors du cluster GLPI (résilience)
+- Grand stockage (plusieurs sauvegardes)
+- Accès SSH sécurisé par clés
+:::
+
+#### Test de restauration
+
+**Documentez et testez** la procédure de restauration complète :
+
+1. Détruisez une VM (ex: `glpi-web02`) pour simuler une perte totale
+
+2. Recréez une VM vierge
+
+3. Restaurez depuis la sauvegarde :
+   - Restaurer les fichiers GLPI
+   - Importer le dump SQL
+   - Restaurer les configurations
+
+4. Réintégrez le serveur dans le cluster
+
+5. Vérifiez que GLPI fonctionne normalement
+
+**Mesurez le RTO réel** : Temps total de restauration.
+
+---
+
+### Tâche 4 ⭐⭐ : Optimisation des performances MySQL
+
+Optimisez la base de données pour améliorer les performances globales.
+
+#### Analyse des performances actuelles
+
+**Identifiez les requêtes lentes :**
+
+1. Activez le slow query log MySQL :
+```ini
+   slow_query_log = 1
+   slow_query_log_file = /var/log/mysql/slow.log
+   long_query_time = 2
+```
+
+2. Analysez les requêtes lentes avec `mysqldumpslow` ou `pt-query-digest`
+
+3. Identifiez les tables sans index ou mal indexées
+
+**Analysez l'utilisation des ressources :**
+- `SHOW PROCESSLIST;` : Voir les requêtes en cours
+- `SHOW STATUS;` : Statistiques globales
+- `mysqltuner` : Script d'analyse automatique
+
+#### Optimisations à appliquer
+
+**Ajout d'index :**
+- Identifiez les colonnes fréquemment utilisées dans les `WHERE`, `JOIN`, `ORDER BY`
+- Créez des index appropriés (attention à ne pas sur-indexer)
+
+**Configuration MySQL** (`/etc/mysql/my.cnf` ou équivalent) :
+
+**Optimisations mémoire :**
+```ini
+innodb_buffer_pool_size = 70% de la RAM disponible
+innodb_log_file_size = 256M
+query_cache_size = 0  # Désactivé (deprecated en MySQL 8)
+max_connections = 200
+```
+
+**Optimisations performances :**
+```ini
+innodb_flush_log_at_trx_commit = 2  # Améliore perfs, léger risque
+innodb_file_per_table = 1
+```
+
+**Redémarrez MySQL** et testez les performances :
+```bash
+mysqlslap --auto-generate-sql --concurrency=50 --iterations=10
+```
+
+#### Mise en cache applicative
+
+**Cache Redis pour GLPI** (si supporté) :
+- Installez Redis sur un serveur dédié ou sur les nœuds web
+- Configurez GLPI pour utiliser Redis comme cache backend
+- Stockage des sessions PHP dans Redis (partagé entre serveurs web)
+
+---
+
+### Tâche 5 ⭐⭐ : Déploiement d'un WAF (Web Application Firewall)
+
+Protégez GLPI contre les attaques web courantes.
+
+#### Installation de ModSecurity
+
+**Option 1 : ModSecurity sur Nginx (reverse proxy dédié)**
+
+Créez un reverse proxy Nginx avec ModSecurity en amont de HAProxy :
+```
+Clients → Nginx + ModSecurity → HAProxy → Varnish → GLPI
+```
+
+**Option 2 : ModSecurity sur les serveurs web Apache**
+
+Installez ModSecurity directement sur `glpi-web01`, `glpi-web02`.
+
+#### Configuration du Core Rule Set (CRS)
+
+1. Téléchargez le OWASP ModSecurity Core Rule Set (CRS)
+
+2. Installez les règles dans ModSecurity
+
+3. Configurez le niveau de paranoia :
+   - Niveau 1 : Protection de base (peu de faux positifs)
+   - Niveau 2 : Protection renforcée
+   - Niveau 3-4 : Protection maximale (beaucoup de faux positifs)
+
+4. Mode de fonctionnement :
+   - **DetectionOnly** : Détecte et logue, ne bloque pas (phase de test)
+   - **On** : Bloque les requêtes malveillantes
+
+**Règles activées par défaut :**
+- Injection SQL (SQLi)
+- Cross-Site Scripting (XSS)
+- Remote File Inclusion (RFI)
+- Local File Inclusion (LFI)
+- Remote Code Execution (RCE)
+- Path Traversal
+
+#### Phase de tuning
+
+Le WAF peut générer des **faux positifs** (bloquer des requêtes légitimes).
+
+**Méthodologie de tuning :**
+
+1. Déployez en mode `DetectionOnly` pendant 1 semaine
+
+2. Analysez les logs ModSecurity pour identifier les faux positifs
+
+3. Créez des règles d'exclusion pour les faux positifs :
+```apache
+   # Exemple : désactiver une règle spécifique pour une URL
+   SecRuleRemoveById 942100
+```
+
+4. Passez en mode `On` (blocage actif)
+
+5. Surveillez les logs et ajustez
+
+**Testez le WAF** :
+- Tentez une injection SQL dans un champ de recherche GLPI
+- Tentez un XSS dans un champ texte
+- Vérifiez que les attaques sont bloquées et loguées
+
+---
+
+### Tâche 6 ⭐⭐ : Monitoring avancé et dashboards
+
+Améliorez la supervision avec des dashboards détaillés et des alertes pertinentes.
+
+#### Dashboards Grafana personnalisés
+
+Créez des dashboards spécifiques pour votre infrastructure :
+
+**Dashboard 1 : Vue d'ensemble du cluster**
+- Statut de chaque nœud (up/down)
+- Trafic global (requêtes/seconde)
+- Temps de réponse moyen
+- Taux d'erreurs HTTP
+- Utilisation CPU/RAM/Disque de chaque serveur
+
+**Dashboard 2 : Performance HAProxy**
+- Répartition du trafic entre backends
+- Nombre de connexions actives
+- Sessions en cours
+- Taux de basculement (failover)
+- Health checks status
+
+**Dashboard 3 : Performance MySQL**
+- Réplication lag (retard de réplication)
+- Connexions actives
+- Requêtes lentes
+- Cache hit ratio
+- Locks et deadlocks
+
+**Dashboard 4 : Performance Varnish**
+- Cache hit rate (%)
+- Backend connections
+- Requêtes en cache vs passthrough
+- Mémoire cache utilisée
+
+**Dashboard 5 : Sécurité**
+- Alertes ModSecurity (attaques bloquées)
+- Tentatives de connexion SSH échouées (depuis Mission 3)
+- Alertes IPS pare-feu (depuis Mission 2)
+
+#### Alertes intelligentes
+
+Configurez des alertes avec seuils adaptatifs :
+
+**Alertes critiques (notification immédiate) :**
+- Nœud du cluster down > 1 minute
+- Réplication MySQL cassée
+- Espace disque < 10%
+- Certificat SSL expire dans moins de 7 jours
+
+**Alertes warning (notification quotidienne regroupée) :**
+- Temps de réponse > 3 secondes pendant 10 minutes
+- CPU > 80% pendant 30 minutes
+- Requêtes lentes MySQL > 50/heure
+- Attaques WAF > 100/heure
+
+**Notifications :**
+- Email pour les alertes critiques
+- Slack/Mattermost/Discord pour les warnings
+- SMS (via service externe) pour les pannes critiques hors heures ouvrables
+
+---
+
+### Tâche 7 ⭐⭐⭐ : Authentification centralisée LDAP
+
+Intégrez GLPI avec un annuaire LDAP pour centraliser la gestion des utilisateurs.
+
+#### Déploiement d'un serveur LDAP
+
+**Option 1 : OpenLDAP**
+- Serveur LDAP classique et mature
+- Configuration manuelle (fichiers LDIF)
+
+**Option 2 : FreeIPA**
+- Solution complète (LDAP + Kerberos + DNS + CA)
+- Interface web d'administration
+- Plus simple à gérer
+
+**Option 3 : Active Directory (Windows Server)**
+- Si infrastructure Windows disponible
+
+**Pour ce projet, utilisez OpenLDAP ou FreeIPA.**
+
+#### Structure de l'annuaire LDAP
+
+Créez une structure adaptée au CRASH :
+```
+dc=crash,dc=lan
+├── ou=users
+│   ├── cn=Jean Dupont
+│   ├── cn=Marie Martin
+│   └── ...
+├── ou=groups
+│   ├── cn=admin
+│   ├── cn=techniciens
+│   └── cn=utilisateurs
+└── ou=services
+    └── cn=glpi (compte de service)
+```
+
+**Créez des utilisateurs de test** avec attributs appropriés (uid, mail, givenName, sn, etc.)
+
+#### Configuration GLPI pour LDAP
+
+Dans l'interface d'administration GLPI :
+
+1. **Configuration → Authentification → Annuaire LDAP**
+
+2. Ajoutez un annuaire LDAP :
+   - Serveur : `ldap://[IP_serveur_LDAP]:389`
+   - Base DN : `dc=crash,dc=lan`
+   - Filtre de recherche : `(objectClass=inetOrgPerson)`
+   - Compte de connexion : `cn=glpi,ou=services,dc=crash,dc=lan`
+
+3. Configurez le mapping des attributs :
+   - Login : `uid`
+   - Nom : `sn`
+   - Prénom : `givenName`
+   - Email : `mail`
+
+4. Configurez l'import automatique des utilisateurs
+
+5. Mappez les groupes LDAP vers les profils GLPI :
+   - Groupe LDAP `admin` → Profil GLPI `Super-Admin`
+   - Groupe LDAP `techniciens` → Profil GLPI `Technicien`
+   - Groupe LDAP `utilisateurs` → Profil GLPI `Self-Service`
+
+#### Tests
+
+1. Tentez de vous connecter à GLPI avec un compte LDAP
+2. Vérifiez que l'utilisateur est automatiquement créé dans GLPI
+3. Vérifiez que les droits sont correctement attribués selon le groupe LDAP
+4. Modifiez un attribut dans LDAP (email) et vérifiez la synchronisation
+
+---
+
+### Tâche 8 ⭐⭐⭐ : Infrastructure as Code avec Ansible
+
+Automatisez complètement le déploiement de votre infrastructure avec Ansible.
+
+#### Structure du projet Ansible
+
+Créez une structure de projet propre :
+```
+ansible-glpi-cluster/
+├── inventory/
+│   ├── production.yml
+│   └── staging.yml
+├── group_vars/
+│   ├── all.yml
+│   ├── haproxy.yml
+│   ├── web.yml
+│   └── db.yml
+├── roles/
+│   ├── common/
+│   ├── haproxy/
+│   ├── keepalived/
+│   ├── web/
+│   ├── mysql/
+│   ├── varnish/
+│   └── monitoring/
+├── playbooks/
+│   ├── deploy-cluster.yml
+│   ├── deploy-monitoring.yml
+│   └── backup.yml
+└── README.md
+```
+
+#### Rôles Ansible à créer
+
+**Rôle `common` :**
+- Configuration de base (hostname, timezone, NTP)
+- Packages systèmes
+- Utilisateurs et clés SSH
+- Configuration firewall de base
+
+**Rôle `haproxy` :**
+- Installation HAProxy
+- Déploiement de la configuration
+- Installation des certificats SSL
+- Tests de santé
+
+**Rôle `keepalived` :**
+- Installation Keepalived
+- Configuration VRRP
+- Scripts de vérification
+
+**Rôle `web` :**
+- Installation Apache/Nginx + PHP
+- Déploiement de GLPI
+- Configuration des Virtual Hosts
+- Intégration avec le stockage partagé
+
+**Rôle `mysql` :**
+- Installation MySQL/MariaDB
+- Configuration de la réplication
+- Création des bases et utilisateurs
+- Tuning des performances
+
+**Rôle `monitoring` :**
+- Installation des exporters Prometheus
+- Configuration des agents
+
+#### Playbook de déploiement complet
+
+Créez un playbook qui déploie l'infrastructure complète en une commande :
+```yaml
+# playbooks/deploy-cluster.yml
+---
+- name: Configure common settings
+  hosts: all
+  roles:
+    - common
+
+- name: Deploy HAProxy
+  hosts: haproxy
+  roles:
+    - haproxy
+    - keepalived
+
+- name: Deploy web servers
+  hosts: web
+  roles:
+    - web
+
+- name: Deploy database servers
+  hosts: db
+  roles:
+    - mysql
+
+- name: Deploy monitoring
+  hosts: monitoring
+  roles:
+    - monitoring
+```
+
+**Exécution :**
+```bash
+ansible-playbook -i inventory/production.yml playbooks/deploy-cluster.yml
+```
+
+#### Idempotence et tests
+
+Assurez-vous que vos playbooks sont **idempotents** :
+- Peuvent être rejoués sans effet de bord
+- Détectent l'état actuel avant de modifier
+- Utilisent les modules Ansible appropriés (pas de `shell` brut)
+
+**Testez** :
+1. Déployez le cluster complet avec Ansible
+2. Rejouez le playbook → Aucune modification ne doit être faite
+3. Modifiez une configuration manuellement
+4. Rejouez le playbook → La configuration doit être remise dans l'état voulu
+
+---
+
+### Tâche 9 ⭐⭐⭐ : Documentation automatisée
+
+Générez automatiquement la documentation de votre infrastructure.
+
+#### Diagrammes d'architecture
+
+Utilisez des outils de diagramme as code pour documenter l'architecture :
+
+**Avec Diagrams (Python) :**
+```python
+from diagrams import Cluster, Diagram
+from diagrams.onprem.network import HAProxy
+from diagrams.onprem.database import MySQL
+from diagrams.onprem.inmemory import Redis
+
+with Diagram("GLPI Cluster", show=False):
+    lb = HAProxy("HAProxy")
+    
+    with Cluster("Web Tier"):
+        web_group = [Server("web01"),
+                     Server("web02"),
+                     Server("web03")]
+    
+    with Cluster("Database"):
+        master = MySQL("master")
+        slave = MySQL("slave")
+        master >> slave
+    
+    lb >> web_group >> master
+```
+
+**Avec PlantUML :**
+```plantuml
+@startuml
+node "HAProxy" as lb {
+  [haproxy01]
+  [haproxy02]
+}
+
+node "Web" as web {
+  [glpi-web01]
+  [glpi-web02]
+  [glpi-web03]
+}
+
+database "MySQL" as db {
+  [glpi-db01] as master
+  [glpi-db02] as slave
+}
+
+lb --> web
+web --> master
+master .> slave : replication
+@enduml
+```
+
+#### Inventaire automatisé
+
+Utilisez Ansible pour générer un inventaire à jour :
+```bash
+ansible-inventory -i inventory/production.yml --list --yaml > inventory-export.yml
+```
+
+Ou créez un script qui génère un document Markdown avec :
+- Liste de tous les serveurs
+- Adresses IP
+- Rôles
+- Versions logicielles installées
+
+#### Documentation des procédures
+
+Documentez toutes les procédures opérationnelles en Markdown :
+
+**Runbook à créer :**
+- `procedures/deploiement-cluster.md` : Déploiement complet
+- `procedures/ajout-noeud-web.md` : Ajouter un serveur web
+- `procedures/basculement-bdd.md` : Basculer le master BDD
+- `procedures/mise-a-jour-glpi.md` : Mettre à jour GLPI
+- `procedures/restauration-backup.md` : Restaurer depuis sauvegarde
+- `procedures/renouvellement-certificats.md` : Renouveler les certificats SSL
+
+**Intégrez dans un wiki** (ex: GitLab Wiki, BookStack, DokuWiki) pour faciliter l'accès.
+
+---
+
+### Tâche 10 ⭐⭐⭐ : Tests finaux et validation
+
+Réalisez une batterie de tests pour valider l'ensemble de l'infrastructure.
+
+#### Test 1 : Performance globale
+
+Lancez un test de charge complet :
+```bash
+# Test de charge progressive
+wrk -t12 -c100 -d30s --latency https://[VIP]/
+wrk -t12 -c200 -d30s --latency https://[VIP]/
+wrk -t12 -c400 -d30s --latency https://[VIP]/
+```
+
+**Métriques à atteindre :**
+- Temps de réponse moyen < 500ms
+- 95e percentile < 1 seconde
+- 99e percentile < 2 secondes
+- Taux d'erreur < 0.1%
+- Débit > 1000 req/s
+
+#### Test 2 : Résilience multi-pannes
+
+Simulez des pannes simultanées multiples :
+
+**Scénario catastrophe :**
+1. Arrêtez `haproxy01` + `glpi-web01` simultanément
+2. Observez le basculement automatique
+3. Le service doit rester disponible (brève interruption acceptable)
+4. Arrêtez en plus `glpi-db01` (master)
+5. Promouvoir `glpi-db02` (automatique si Master-Master)
+6. Le service doit continuer de fonctionner
+
+**Documentez** :
+- Temps de reprise après chaque panne
+- RTO/RPO réels mesurés
+- Impact utilisateur
+
+#### Test 3 : Sécurité applicative
+
+Testez le WAF avec une suite d'attaques :
+```bash
+# Test injection SQL
+sqlmap -u "https://[VIP]/front/computer.form.php?id=1" --batch --risk=3
+
+# Test XSS
+curl "https://[VIP]/search?q=<script>alert(1)</script>"
+
+# Test Path Traversal
+curl "https://[VIP]/../../../../etc/passwd"
+```
+
+✅ **Attendu** : Toutes les attaques doivent être bloquées par ModSecurity.
+
+#### Test 4 : Restauration complète
+
+**Test de disaster recovery :**
+
+1. Prenez un snapshot complet de l'infrastructure
+2. **Détruisez complètement le cluster** (supprimez toutes les VMs)
+3. Restaurez depuis les sauvegardes uniquement
+4. Mesurez le temps total de restauration (RTO réel)
+5. Vérifiez l'intégrité des données (pas de perte)
+
+**Objectif** : RTO < 30 minutes, RPO < 5 minutes.
+
+#### Rapport final
+
+Rédigez un **rapport de validation finale** incluant :
+
+1. **Architecture déployée** : Schémas et description
+2. **Tests de performance** : Résultats des benchmarks
+3. **Tests de résilience** : RTO/RPO mesurés, scénarios de panne
+4. **Sécurité** : Tests WAF, PKI, authentification
+5. **Métriques atteintes** vs objectifs du cahier des charges
+6. **Améliorations futures** : Pistes d'optimisation
+
+---
+
+## Livrables attendus
+
+### ⭐ Livrables niveau 1 (obligatoires)
+
+<CardGrid>
+  <Card title="PKI complète" icon="key">
+    CA racine + intermédiaire + certificats serveur déployés
+  </Card>
+  <Card title="Configuration Varnish" icon="rocket">
+    Cache fonctionnel avec amélioration des performances mesurée
+  </Card>
+  <Card title="Script de sauvegarde" icon="backup">
+    Automatisation complète avec rotation et test de restauration
+  </Card>
+  <Card title="Documentation PKI" icon="document">
+    Procédure de génération et renouvellement des certificats
+  </Card>
+  <Card title="Tests de performance" icon="chart">
+    Benchmarks avant/après optimisations
+  </Card>
+</CardGrid>
+
+### ⭐⭐ Livrables niveau 2
+
+<CardGrid>
+  <Card title="Optimisation MySQL" icon="database">
+    Configuration tunée avec analyse des requêtes lentes
+  </Card>
+  <Card title="WAF ModSecurity" icon="shield">
+    Déployé et tuné avec tests d'attaques
+  </Card>
+  <Card title="Dashboards Grafana" icon="chart">
+    5 dashboards personnalisés déployés
+  </Card>
+  <Card title="Alertes configurées" icon="warning">
+    Alertes pertinentes avec notifications
+  </Card>
+</CardGrid>
+
+### ⭐⭐⭐ Livrables niveau 3
+
+<CardGrid>
+  <Card title="Authentification LDAP" icon="users">
+    Annuaire intégré avec synchronisation automatique
+  </Card>
+  <Card title="Infrastructure as Code" icon="code">
+    Playbooks Ansible complets et idempotents
+  </Card>
+  <Card title="Documentation automatisée" icon="open-book">
+    Diagrammes, inventaire et runbooks à jour
+  </Card>
+  <Card title="Rapport de validation" icon="document">
+    Tests complets avec métriques RTO/RPO
+  </Card>
+</CardGrid>
+
+---
+
+## Critères d'évaluation
+
+| Critère | ⭐ Niveau 1 | ⭐⭐ Niveau 2 | ⭐⭐⭐ Niveau 3 |
+|---------|------------|--------------|---------------|
+| **PKI** | CA + certificats fonctionnels | Documentation complète | Automatisation renouvellement |
+| **Performance** | Cache Varnish actif | + Optimisation MySQL | Objectifs cahier charges atteints |
+| **Sauvegarde** | Script automatisé | + Vérification intégrité | Disaster recovery testé |
+| **Sécurité** | Certificats valides | + WAF déployé et tuné | + Auth centralisée LDAP |
+| **Monitoring** | Dashboards de base | 5 dashboards + alertes | Monitoring proactif complet |
+| **Automatisation** | Scripts manuels | Playbooks Ansible basiques | Infrastructure as Code complète |
+| **Documentation** | Procédures écrites | + Documentation technique | Doc auto-générée + runbooks |
+
+:::tip[Conseils pour l'évaluation]
+- La **PKI interne** démontre une maîtrise de la cryptographie appliquée
+- Les **tests de performance** avant/après doivent montrer des gains mesurables
+- La **procédure de restauration** doit être testée réellement, pas théorique
+- L'**Infrastructure as Code** (⭐⭐⭐) valorise fortement le travail
+:::
+
+---
+
+## Ressources complémentaires
+
+- [OpenSSL CA Guide](https://jamielinux.com/docs/openssl-certificate-authority/)
+- [Varnish Configuration](https://varnish-cache.org/docs/)
+- [ModSecurity Handbook](https://www.feistyduck.com/books/modsecurity-handbook/)
+- [Ansible Best Practices](https://docs.ansible.com/ansible/latest/user_guide/playbooks_best_practices.html)
+- [MySQL Performance Tuning](https://dev.mysql.com/doc/refman/8.0/en/optimization.html)
+- [GLPI LDAP Configuration](https://glpi-project.org/)
+
+:::tip[Conclusion du projet]
+Avec cette mission, vous avez construit une infrastructure professionnelle complète :
+- ✅ Haute disponibilité (Mission 5)
+- ✅ Sécurité renforcée (Missions 2, 3, 6)
+- ✅ Performance optimisée (Mission 6)
+- ✅ Supervision complète (Mission 6)
+- ✅ Automatisation (Mission 6)
+
+Votre infrastructure est maintenant prête pour un environnement de production !
+:::
