@@ -1,0 +1,909 @@
+---
+title: Mission 5 - Haute disponibilité de GLPI
+description: Mise en place d'une architecture haute disponibilité avec load balancing et réplication
+draft: true
+---
+
+import { Steps, Card, CardGrid, Aside } from '@astrojs/starlight/components';
+
+# Mission 5 : Haute disponibilité de GLPI
+
+## Objectif
+
+Mettre en place une architecture haute disponibilité pour garantir la continuité de service du portail GLPI même en cas de panne d'un serveur.
+
+<CardGrid>
+  <Card title="Difficulté" icon="star">
+    Difficile 💪
+  </Card>
+  <Card title="Temps estimé" icon="clock">
+    8 heures
+  </Card>
+</CardGrid>
+
+## Prérequis
+
+- Avoir terminé les Missions 1, 2 et 3
+- Maîtriser l'administration Linux avancée
+- Comprendre les concepts de réplication de bases de données
+- Connaître les principes du load balancing
+
+## Contexte
+
+Actuellement, le portail GLPI du CRASH repose sur une architecture avec des **points de défaillance uniques** (_Single Point of Failure_ - SPOF) :
+- Un seul serveur web : si celui-ci tombe, le service est indisponible
+- Une seule base de données : en cas de panne, plus aucune opération possible
+- Aucun mécanisme de basculement automatique
+
+Le CRASH a connu plusieurs incidents ces derniers mois :
+- Panne matérielle d'un serveur → 4 heures d'indisponibilité
+- Mise à jour système mal préparée → 2 heures d'interruption
+- Saturation disque → Service dégradé pendant 6 heures
+
+**Les associations sportives dépendent du portail GLPI pour :**
+- Déclarer des incidents urgents (panne réseau, problème d'accès)
+- Suivre leurs demandes de support
+- Consulter la base de connaissances
+- Gérer leur inventaire informatique
+
+Une indisponibilité prolongée perturbe gravement leur activité.
+
+:::caution[Cahier des charges haute disponibilité]
+**Objectifs de disponibilité :**
+- **RTO** (_Recovery Time Objective_) : Temps de reprise < 2 minutes
+- **RPO** (_Recovery Point Objective_) : Perte de données < 1 minute
+- **Disponibilité cible** : 99,9% (≈ 8h d'indisponibilité par an maximum)
+
+**Contraintes techniques :**
+- Budget limité : utilisation de solutions open source
+- Infrastructure existante : VirtualBox, serveurs Debian/Ubuntu
+- Réseau : DMZ (10.54.0.0/24) et LAN (172.17.0.0/16)
+:::
+
+:::tip[Approche pédagogique]
+Cette mission propose trois niveaux de réalisation :
+- ⭐ Architecture HA de base avec load balancing web
+- ⭐⭐ Réplication de base de données et élimination des SPOF critiques
+- ⭐⭐⭐ Architecture production-ready avec monitoring et automatisation
+
+Chaque niveau inclut le précédent. Visez au minimum le niveau ⭐ pour valider la mission.
+:::
+
+---
+
+## Concepts de haute disponibilité
+
+### Composants d'une architecture HA
+
+#### Load Balancer (répartiteur de charge)
+
+Distribue le trafic entre plusieurs serveurs backend.
+
+**Technologies disponibles :**
+- **HAProxy** : Load balancer TCP/HTTP mature et performant
+- **Nginx** : Serveur web avec fonctions de load balancing
+- **Traefik** : Load balancer moderne pour conteneurs
+
+**Algorithmes de répartition :**
+- **Round-robin** : Distribution circulaire équitable
+- **Least connections** : Vers le serveur le moins chargé
+- **IP hash** : Même client → même serveur (affinité de session)
+
+#### IP virtuelle flottante (VRRP)
+
+Adresse IP qui « flotte » entre plusieurs machines grâce au protocole VRRP (_Virtual Router Redundancy Protocol_).
+
+**Principe :**
+- Deux serveurs partagent une IP virtuelle (VIP)
+- Un seul est « maître » à la fois et possède la VIP
+- Si le maître tombe, le backup prend automatiquement la VIP
+- Transparent pour les clients (même IP, pas de coupure)
+
+**Technologies disponibles :**
+- **Keepalived** : Implémentation VRRP simple et fiable
+- **Corosync/Pacemaker** : Solution clustering avancée (complexe)
+
+#### Réplication de base de données
+
+Copie automatique des données d'une base vers une ou plusieurs autres.
+
+**Topologies MySQL/MariaDB :**
+
+**Master-Slave (réplication unidirectionnelle) :**
+- Un serveur maître (écriture)
+- Un ou plusieurs esclaves (lecture seule)
+- Réplication asynchrone des modifications
+
+**Master-Master (réplication bidirectionnelle) :**
+- Deux serveurs maîtres (écriture sur les deux)
+- Réplication mutuelle
+- Plus complexe (gestion des conflits)
+
+#### Synchronisation des fichiers
+
+Les fichiers uploadés dans GLPI (documents, images) doivent être accessibles par tous les serveurs web.
+
+**Solutions possibles :**
+
+**NFS (Network File System) :**
+- Partage de répertoire réseau
+- Simple à mettre en place
+- ⚠️ Constitue un SPOF si le serveur NFS tombe
+
+**GlusterFS :**
+- Système de fichiers distribué et répliqué
+- Pas de SPOF
+- Plus complexe à configurer
+
+**Lsyncd (Live Syncing Daemon) :**
+- Synchronisation temps réel via rsync
+- Simple et léger
+- Unidirectionnel (master → slaves)
+
+---
+
+## Architecture cible
+
+### Architecture par niveau
+
+#### ⭐ Niveau 1 : Load balancing web de base
+```
+                    [Utilisateurs]
+                          |
+                     [HAProxy]
+                    /          \
+           [glpi-web01]    [glpi-web02]
+                    \          /
+                  [glpi-db01] (SPOF)
+                         |
+              [NFS ou synchronisation] (SPOF)
+```
+
+**Gains :**
+- ✅ Redondance des serveurs web
+- ✅ Répartition de charge
+- ❌ Base de données = SPOF
+- ❌ Stockage fichiers = SPOF
+
+---
+
+#### ⭐⭐ Niveau 2 : Élimination des SPOF critiques
+```
+                    [Utilisateurs]
+                          |
+                 [IP Virtuelle VRRP]
+                    /          \
+          [haproxy01]      [haproxy02]
+           (master)         (backup)
+                |                |
+        +-------+----------------+-------+
+        |                                |
+   [glpi-web01]                    [glpi-web02]
+        |                                |
+        +-------+----------------+-------+
+                |                |
+          [glpi-db01]      [glpi-db02]
+           (master)         (slave)
+        Master-Slave replication
+```
+
+**Gains :**
+- ✅ Redondance HAProxy avec IP flottante
+- ✅ Réplication base de données
+- ✅ Basculement automatique si panne
+- ⚠️ Stockage peut rester SPOF (acceptable)
+
+---
+
+#### ⭐⭐⭐ Niveau 3 : Architecture production-ready
+```
+                    [Utilisateurs]
+                          |
+                 [IP Virtuelle VRRP]
+                    /          \
+          [haproxy01]      [haproxy02]
+           + Keepalived   + Keepalived
+                |                |
+        +-------+--------+-------+-------+
+        |                |               |
+   [glpi-web01]    [glpi-web02]    [glpi-web03]
+        |                |               |
+        +-------+--------+-------+-------+
+                         |
+                    [GlusterFS]
+                  réplication 3 voies
+                         |
+        +-------+--------+-------+
+        |                        |
+   [glpi-db01]            [glpi-db02]
+    (master)               (master)
+      Master-Master replication
+```
+
+**Gains :**
+- ✅ Aucun SPOF
+- ✅ 3+ serveurs web
+- ✅ Stockage répliqué (GlusterFS)
+- ✅ BDD Master-Master
+- ✅ Monitoring (Prometheus/Grafana)
+- ✅ Automatisation complète
+
+---
+
+## Plan d'adressage recommandé
+
+:::tip[Conventions de nommage]
+Utilisez des noms cohérents pour faciliter la gestion :
+
+**Load balancers :**
+- `haproxy01`, `haproxy02`
+
+**Serveurs web :**
+- `glpi-web01`, `glpi-web02`, `glpi-web03`
+
+**Bases de données :**
+- `glpi-db01`, `glpi-db02`
+
+**Services partagés :**
+- `glpi-nfs01` (si NFS)
+- `glpi-gluster01`, `glpi-gluster02`, `glpi-gluster03` (si GlusterFS)
+:::
+
+**Tableau d'adressage à compléter :**
+
+| Équipement | Zone | Adresse IP | Rôle |
+|------------|------|------------|------|
+| VIP (IP virtuelle) | DMZ | | IP publique du cluster |
+| haproxy01 | DMZ | | Load balancer principal |
+| haproxy02 | DMZ | | Load balancer backup |
+| glpi-web01 | DMZ | | Serveur web 1 |
+| glpi-web02 | DMZ | | Serveur web 2 |
+| glpi-web03 | DMZ | | Serveur web 3 (niveau 3) |
+| glpi-db01 | DMZ | | Base de données master |
+| glpi-db02 | DMZ | | Base de données slave/master |
+| glpi-nfs01 | DMZ | | Serveur NFS (si utilisé) |
+
+---
+
+## Tâches à réaliser
+
+### Tâche 1 ⭐ : Analyse et justification de l'architecture
+
+Avant de déployer, analysez les besoins et choisissez vos technologies.
+
+#### Étape 1.1 : Identification des SPOF actuels
+
+**Analysez votre infrastructure actuelle** (issue de la Mission 1) et identifiez tous les points de défaillance uniques.
+
+Pour chaque composant, répondez :
+- Que se passe-t-il si ce composant tombe ?
+- Quel est l'impact métier ?
+- Quelle est la probabilité de panne ?
+
+Créez un tableau d'analyse des risques :
+
+| Composant | Impact si panne | Probabilité | Niveau de risque | Mitigation prévue |
+|-----------|----------------|-------------|------------------|-------------------|
+| Serveur web unique | | | | |
+| Base de données unique | | | | |
+| Stockage fichiers | | | | |
+| Load balancer | | | | |
+
+#### Étape 1.2 : Choix des technologies
+
+Pour chaque brique de votre architecture HA, justifiez votre choix technologique :
+
+**Load balancer :**
+- HAProxy, Nginx ou Traefik ?
+- Pourquoi ?
+
+**IP virtuelle :**
+- Keepalived, Corosync/Pacemaker ou autre ?
+- Pourquoi ?
+
+**Réplication BDD :**
+- Master-Slave ou Master-Master ?
+- MySQL natif ou MariaDB ?
+- Pourquoi ?
+
+**Synchronisation fichiers :**
+- NFS, GlusterFS, Lsyncd ou autre ?
+- Pourquoi ?
+
+:::note[Critères de choix]
+Considérez :
+- La **simplicité** de mise en œuvre (temps disponible)
+- La **fiabilité** et maturité de la solution
+- Vos **compétences** et expérience
+- La **documentation** disponible
+- La compatibilité avec votre infrastructure existante
+:::
+
+---
+
+### Tâche 2 ⭐ : Préparation de l'infrastructure
+
+Créez les machines virtuelles nécessaires à votre architecture.
+
+#### Création des VMs
+
+**Niveau ⭐ minimum :**
+- 1 VM HAProxy : `haproxy01`
+- 1 VM serveur web supplémentaire : `glpi-web02`
+- Réutilisation de `glpi-srv01` ou `glpi-web01` (Mission 1)
+
+**Niveau ⭐⭐ :**
+- Ajoutez : `haproxy02`, `glpi-db02`
+
+**Niveau ⭐⭐⭐ :**
+- Ajoutez : `glpi-web03`, nodes GlusterFS si nécessaire
+
+#### Configuration réseau
+
+Toutes les machines du cluster doivent être dans la **DMZ** (10.54.0.0/24).
+
+Configurez les interfaces réseau selon votre plan d'adressage.
+
+#### Synchronisation temporelle
+
+**Critique pour la réplication** : tous les serveurs doivent avoir l'heure exacte.
+
+Configurez NTP sur toutes les machines :
+- Même serveur NTP pour tout le cluster
+- Vérifiez la synchronisation avec `ntpdate -q` ou `timedatectl`
+
+---
+
+### Tâche 3 ⭐ : Clonage et configuration des serveurs web
+
+Vous devez avoir au moins **2 serveurs web identiques** pour le load balancing.
+
+#### Clonage du serveur existant
+
+Si vous avez déjà `glpi-web01` (ou `glpi-srv01`) fonctionnel depuis la Mission 1 :
+
+**Option 1 : Clonage de VM (VirtualBox)**
+- Clonez la VM existante pour créer `glpi-web02`
+- Régénérez les identifiants machine (UUID, clés SSH, etc.)
+- Modifiez le hostname et l'adresse IP
+
+**Option 2 : Automatisation (niveau ⭐⭐⭐)**
+- Utilisez votre script d'installation automatisé (Mission 1 ⭐⭐⭐)
+- Déployez `glpi-web02` et `glpi-web03` automatiquement
+
+#### Configuration GLPI pour environnement clusterisé
+
+**Désactivez les tâches cron GLPI** sur les serveurs web secondaires :
+- Les tâches automatiques (notifications, mises à jour) ne doivent s'exécuter que sur **un seul** serveur
+- Sur `glpi-web02` (et web03), désactivez le cron GLPI
+
+**Configurez les sessions PHP** :
+- Par défaut, PHP stocke les sessions en fichiers locaux → problème en cluster
+- Solution 1 : Sessions en base de données (recommandé pour GLPI)
+- Solution 2 : Memcached ou Redis partagé (plus performant)
+
+:::tip[Sessions GLPI en base de données]
+Dans le fichier de configuration GLPI, activez le stockage des sessions en BDD :
+```php
+// config/config_db.php
+$CFG_GLPI['session_use_db'] = true;
+```
+Ainsi, un utilisateur peut changer de serveur web sans perdre sa session.
+:::
+
+---
+
+### Tâche 4 ⭐ : Installation et configuration de HAProxy
+
+Installez HAProxy pour répartir le trafic entre vos serveurs web.
+
+#### Installation de HAProxy
+
+Sur la VM `haproxy01`, installez HAProxy.
+
+#### Configuration de base
+
+Créez une configuration HAProxy (`/etc/haproxy/haproxy.cfg`) qui :
+
+**Frontend (écoute des connexions entrantes) :**
+- Écoute sur le port 443 (HTTPS)
+- Écoute sur le port 80 (HTTP) avec redirection vers HTTPS
+
+**Backend (serveurs web GLPI) :**
+- Liste des serveurs : `glpi-web01`, `glpi-web02`
+- Algorithme de load balancing à choisir (round-robin, least-conn, etc.)
+- Health checks HTTP (vérification que les serveurs répondent)
+
+**Options importantes :**
+- Persistance de session (stick-table ou cookie)
+- Détection automatique des pannes (health checks)
+- Timeouts adaptés
+
+:::caution[Certificats SSL/TLS]
+Pour le HTTPS, HAProxy a besoin des certificats SSL :
+- Réutilisez les certificats de la Mission 1 (auto-signés)
+- Ou générez de nouveaux certificats pour le cluster
+- HAProxy peut faire la terminaison SSL (clients → HAProxy en HTTPS, HAProxy → backends en HTTP)
+:::
+
+#### Tests de fonctionnement
+
+**Testez le load balancing :**
+
+1. Accédez à GLPI via l'IP de HAProxy
+2. Vérifiez que les requêtes sont bien réparties entre glpi-web01 et glpi-web02
+3. Arrêtez `glpi-web01` et vérifiez que le service reste disponible via `glpi-web02`
+4. Redémarrez `glpi-web01` et vérifiez qu'il reprend automatiquement du trafic
+
+_Astuce :_ Consultez les statistiques HAProxy via l'interface web (si activée) ou les logs.
+
+---
+
+### Tâche 5 ⭐⭐ : Mise en place de l'IP virtuelle avec Keepalived
+
+Créez une IP virtuelle flottante pour éliminer HAProxy comme SPOF.
+
+#### Principe de fonctionnement
+
+- Deux HAProxy : `haproxy01` (master) et `haproxy02` (backup)
+- Une seule IP virtuelle (VIP) partagée
+- Keepalived gère le protocole VRRP :
+  - `haproxy01` possède la VIP en temps normal
+  - Si `haproxy01` tombe, `haproxy02` prend automatiquement la VIP
+  - Basculement en quelques secondes, transparent pour les clients
+
+#### Installation et configuration de Keepalived
+
+Sur **les deux** HAProxy (`haproxy01` et `haproxy02`) :
+
+1. Installez Keepalived
+2. Créez la configuration VRRP :
+   - Définissez l'IP virtuelle
+   - Priorité : `haproxy01` (ex: 100) > `haproxy02` (ex: 90)
+   - Intervalle de vérification (advertisement)
+   - Script de vérification de l'état de HAProxy
+
+**Configuration à adapter :**
+- Interface réseau
+- Adresse IP virtuelle (VIP)
+- Authentification VRRP (mot de passe partagé)
+
+#### Mise à jour du pare-feu
+
+Modifiez les règles Stormshield (Mission 2) :
+- Le NAT entrant (DNAT) doit pointer vers la **VIP** et non plus vers une IP fixe
+- Autorisez le protocole VRRP (protocole 112) entre `haproxy01` et `haproxy02`
+
+#### Tests de basculement
+
+**Testez le failover automatique :**
+
+1. Identifiez quel HAProxy possède actuellement la VIP (commande `ip addr`)
+2. Accédez à GLPI via la VIP
+3. **Arrêtez brutalement le HAProxy master** (simuler une panne)
+```bash
+   sudo systemctl stop haproxy
+   # ou plus brutal : sudo poweroff
+```
+4. Vérifiez que :
+   - Le backup prend la VIP en moins de 5 secondes
+   - Le service GLPI reste accessible via la VIP (brève coupure acceptable)
+   - Les utilisateurs connectés ne perdent pas leur session
+5. Redémarrez le master et vérifiez qu'il reprend la VIP
+
+**Documentez** le temps de basculement observé et les éventuelles interruptions.
+
+---
+
+### Tâche 6 ⭐⭐ : Réplication de la base de données MySQL/MariaDB
+
+Mettez en place la réplication Master-Slave pour sécuriser les données.
+
+#### Configuration du serveur Master (glpi-db01)
+
+**Activez la réplication :**
+- Configurez MySQL/MariaDB pour écrire les binlogs
+- Définissez un `server-id` unique
+- Créez un utilisateur de réplication avec les privilèges appropriés
+
+**Configuration à modifier** (généralement dans `/etc/mysql/mariadb.conf.d/50-server.cnf` ou équivalent) :
+```ini
+[mysqld]
+server-id = 1
+log_bin = /var/log/mysql/mysql-bin.log
+binlog_do_db = glpidb
+```
+
+#### Configuration du serveur Slave (glpi-db02)
+
+**Configurez le Slave :**
+- `server-id` différent du master (ex: 2)
+- Pointez vers le master avec les identifiants de réplication
+- Démarrez la réplication
+
+**Vérifiez l'état de la réplication :**
+```sql
+SHOW SLAVE STATUS\G
+```
+
+Surveillez particulièrement :
+- `Slave_IO_Running: Yes`
+- `Slave_SQL_Running: Yes`
+- `Seconds_Behind_Master: 0` (ou valeur faible)
+
+#### Tests de réplication
+
+1. **Sur le master** : Créez un ticket de test dans GLPI
+2. **Sur le slave** : Vérifiez que le ticket apparaît (quasi instantanément)
+3. **Simulez une panne du master** : Arrêtez `glpi-db01`
+4. **Promouvez le slave en master** (processus manuel pour niveau ⭐⭐)
+
+:::caution[Limitation Master-Slave]
+En réplication Master-Slave :
+- Le slave est **lecture seule** (read-only)
+- Si le master tombe, vous devez **manuellement** :
+  1. Promouvoir le slave en master
+  2. Reconfigurer les serveurs web pour pointer vers le nouveau master
+  
+Ce n'est pas un failover automatique. Pour cela, il faudrait du Master-Master (niveau ⭐⭐⭐) ou un outil d'orchestration.
+:::
+
+---
+
+### Tâche 7 ⭐⭐ : Synchronisation des fichiers GLPI
+
+Les fichiers uploadés dans GLPI (documents, images de tickets, etc.) doivent être accessibles par tous les serveurs web.
+
+#### Solution 1 : NFS (simple, SPOF acceptable)
+
+**Sur un serveur NFS dédié** (`glpi-nfs01`) ou sur `glpi-db01` :
+
+1. Installez le serveur NFS
+2. Exportez le répertoire des fichiers GLPI (généralement `/var/www/html/glpi/files`)
+3. Configurez les permissions et les ACL
+
+**Sur chaque serveur web** (`glpi-web01`, `glpi-web02`) :
+
+1. Installez le client NFS
+2. Montez le partage NFS sur `/var/www/html/glpi/files`
+3. Configurez le montage automatique au boot (`/etc/fstab`)
+
+**Testez** :
+- Uploadez un document dans GLPI via `glpi-web01`
+- Vérifiez qu'il est accessible en passant par `glpi-web02`
+
+#### Solution 2 : Lsyncd (synchronisation temps réel)
+
+Alternative sans serveur NFS central (évite un SPOF) :
+
+1. Installez Lsyncd sur `glpi-web01` (source)
+2. Configurez la synchronisation vers `glpi-web02` et `glpi-web03` (cibles)
+3. Utilisez rsync + SSH pour le transfert
+4. Lsyncd surveille les modifications et les propage automatiquement
+
+**Limitation** : Unidirectionnel. Si un utilisateur upload via `glpi-web02`, le fichier doit être synchronisé vers `glpi-web01` puis vers les autres (topologie en étoile).
+
+#### Solution 3 : GlusterFS (niveau ⭐⭐⭐)
+
+Pour une vraie réplication sans SPOF :
+
+1. Installez GlusterFS sur 3 nœuds minimum
+2. Créez un volume répliqué (replica 3)
+3. Montez le volume GlusterFS sur tous les serveurs web
+4. Les fichiers sont automatiquement répliqués sur les 3 nœuds
+
+**Avantage** : Aucun SPOF, haute disponibilité complète du stockage.  
+**Inconvénient** : Plus complexe à configurer et maintenir.
+
+---
+
+### Tâche 8 ⭐⭐⭐ : Réplication Master-Master MySQL
+
+Passez à une réplication bidirectionnelle pour permettre l'écriture sur les deux serveurs BDD.
+
+#### Configuration Master-Master
+
+**Principe** :
+- `glpi-db01` et `glpi-db02` sont tous deux masters
+- Chaque serveur réplique vers l'autre
+- Les deux peuvent recevoir des écritures
+
+**Configuration à réaliser** :
+- Sur `glpi-db01` : Configurer la réplication vers `glpi-db02`
+- Sur `glpi-db02` : Configurer la réplication vers `glpi-db01`
+- Activer l'auto-increment offset pour éviter les conflits d'ID :
+```ini
+  # glpi-db01
+  auto_increment_offset = 1
+  auto_increment_increment = 2
+  
+  # glpi-db02
+  auto_increment_offset = 2
+  auto_increment_increment = 2
+```
+
+:::caution[Gestion des conflits]
+En Master-Master, des conflits peuvent survenir si :
+- Même ligne modifiée simultanément sur les deux masters
+- Contraintes d'unicité violées
+
+**Bonnes pratiques** :
+- Utilisez un load balancer pour la BDD (ProxySQL) qui dirige les écritures vers un seul master à la fois
+- Surveillez les logs de réplication (`SHOW SLAVE STATUS`)
+- Testez les scénarios de bascule
+:::
+
+#### Configuration HAProxy pour la base de données
+
+Ajoutez un frontend/backend dans HAProxy pour la base de données :
+- Frontend sur port 3306
+- Backend : `glpi-db01` (master actif) et `glpi-db02` (backup)
+- Health check MySQL
+
+Les serveurs web pointent vers HAProxy (IP:3306) plutôt que directement vers un serveur BDD.
+
+---
+
+### Tâche 9 ⭐⭐⭐ : Monitoring et supervision
+
+Mettez en place une surveillance complète du cluster.
+
+#### Monitoring avec Prometheus + Grafana
+
+**Déployez la stack de monitoring :**
+
+1. **Prometheus** : Collecte des métriques
+   - Installez Prometheus (VM dédiée ou sur un nœud existant)
+   - Configurez les targets (HAProxy, serveurs web, BDD)
+   - Installez les exporters :
+     - `node_exporter` sur chaque VM (métriques système)
+     - `mysqld_exporter` sur les serveurs BDD
+     - `haproxy_exporter` ou utilisez les stats HAProxy
+
+2. **Grafana** : Visualisation
+   - Installez Grafana
+   - Connectez-le à Prometheus (source de données)
+   - Importez des dashboards pré-faits ou créez les vôtres
+
+**Métriques importantes à surveiller :**
+
+**Serveurs web :**
+- CPU, RAM, disque
+- Nombre de requêtes HTTP/s
+- Temps de réponse
+- Erreurs 5xx
+
+**Base de données :**
+- État de la réplication (lag, erreurs)
+- Nombre de connexions actives
+- Requêtes lentes
+- Utilisation disque
+
+**HAProxy :**
+- Nombre de connexions actives
+- Santé des backends (up/down)
+- Répartition du trafic
+- Erreurs de connexion
+
+#### Alertes automatiques
+
+Configurez des alertes (Prometheus Alertmanager ou Grafana Alerts) :
+- Serveur web down
+- Réplication MySQL cassée ou en retard
+- HAProxy backend down
+- Disque > 80% plein
+- CPU > 90% pendant 5 minutes
+
+**Canaux de notification :**
+- Email
+- Slack/Discord/Mattermost (webhook)
+- SMS (via service externe)
+
+---
+
+### Tâche 10 ⭐⭐⭐ : Tests de charge et scénarios de panne
+
+Validez la robustesse de votre architecture par des tests approfondis.
+
+#### Test 1 : Charge normale et répartition
+
+**Objectif** : Vérifier que HAProxy répartit bien la charge.
+
+Utilisez un outil de test de charge :
+```bash
+# Avec Apache Bench
+ab -n 10000 -c 100 https://[VIP]/
+
+# Avec wrk (plus moderne)
+wrk -t4 -c100 -d30s https://[VIP]/
+```
+
+**Vérifiez** :
+- Le trafic est réparti entre les serveurs web
+- Aucune erreur 5xx
+- Temps de réponse acceptable
+- Pas de saturation CPU/RAM
+
+#### Test 2 : Panne d'un serveur web
+
+**Scénario** : Un serveur web tombe en production.
+
+1. Lancez un test de charge continu
+2. **Arrêtez brutalement `glpi-web01`** (simuler crash matériel)
+3. Observez :
+   - HAProxy détecte la panne (health check)
+   - Le trafic est redirigé vers `glpi-web02`
+   - Les utilisateurs connectés ne sont pas déconnectés (sessions en BDD)
+   - Nombre d'erreurs minimal (acceptable pendant la détection de panne)
+4. Redémarrez `glpi-web01` et vérifiez qu'il reprend du trafic automatiquement
+
+**Documentez** :
+- Temps de détection de la panne
+- Nombre de requêtes échouées
+- Comportement des sessions utilisateur
+
+#### Test 3 : Panne du HAProxy master
+
+**Scénario** : Le load balancer principal tombe.
+
+1. Identifiez le HAProxy master (qui possède la VIP)
+2. Accédez à GLPI via la VIP
+3. **Arrêtez le HAProxy master**
+4. Observez :
+   - Keepalived détecte la panne (VRRP)
+   - Le backup prend la VIP
+   - Temps de bascule (devrait être < 5 secondes)
+   - Le service reste accessible avec une brève interruption
+
+**Documentez** :
+- Temps de basculement observé
+- Ressenti utilisateur (coupure perceptible ?)
+
+#### Test 4 : Panne de la base de données master
+
+**Scénario** : Le serveur BDD master tombe.
+
+**En Master-Slave (niveau ⭐⭐) :**
+
+1. **Arrêtez `glpi-db01`** (master)
+2. **Procédure manuelle** :
+   - Promouvoir `glpi-db02` en master
+   - Reconfigurer les serveurs web ou HAProxy pour pointer vers `glpi-db02`
+   - Tester que GLPI fonctionne en lecture/écriture
+3. **Documentez** le temps d'intervention et les étapes
+
+**En Master-Master (niveau ⭐⭐⭐) :**
+
+1. **Arrêtez `glpi-db01`**
+2. HAProxy (frontend BDD) détecte la panne et bascule vers `glpi-db02`
+3. Le service reste disponible automatiquement
+4. **Documentez** le temps de bascule automatique
+
+#### Test 5 : Panne simultanée (test ultime)
+
+**Scénario** : Plusieurs composants tombent en même temps (panne électrique, problème réseau...).
+
+**Exemple** : `glpi-web01` + `haproxy01` tombent simultanément.
+
+1. Arrêtez les deux VMs en même temps
+2. Observez :
+   - HAProxy backup prend la VIP
+   - `glpi-web02` gère tout le trafic web
+   - Le service reste accessible (peut-être dégradé si charge élevée)
+3. **Documentez** la résilience du système
+
+#### Rapport de tests
+
+Rédigez un **rapport de tests de résilience** incluant :
+
+1. **Méthodologie** : Scénarios testés, outils utilisés
+2. **Résultats** : Temps de bascule, erreurs observées, impact utilisateur
+3. **Métriques** : RTO/RPO réels mesurés
+4. **Analyse** : Points forts et points faibles de l'architecture
+5. **Recommandations** : Améliorations possibles
+
+---
+
+## Livrables attendus
+
+### ⭐ Livrables niveau 1 (obligatoires)
+
+<CardGrid>
+  <Card title="Analyse des SPOF" icon="warning">
+    Identification des points de défaillance avec matrice de risques
+  </Card>
+  <Card title="Justification des choix" icon="pencil">
+    Choix technologiques argumentés (HAProxy, Keepalived, réplication...)
+  </Card>
+  <Card title="Schéma d'architecture HA" icon="diagram">
+    Architecture complète avec tous les composants et flux
+  </Card>
+  <Card title="Plan d'adressage cluster" icon="table">
+    Tableau IP complet de tous les nœuds
+  </Card>
+  <Card title="Configuration HAProxy" icon="document">
+    Fichier de config commenté et expliqué
+  </Card>
+  <Card title="Tests de load balancing" icon="checkmark">
+    Validation du fonctionnement et de la répartition
+  </Card>
+</CardGrid>
+
+### ⭐⭐ Livrables niveau 2
+
+<CardGrid>
+  <Card title="Configuration Keepalived" icon="network">
+    IP virtuelle fonctionnelle avec tests de basculement
+  </Card>
+  <Card title="Réplication MySQL" icon="database">
+    Master-Slave configuré et validé
+  </Card>
+  <Card title="Synchronisation fichiers" icon="folder">
+    Solution déployée et testée (NFS ou Lsyncd)
+  </Card>
+  <Card title="Tests de panne" icon="scan">
+    Scénarios de failover documentés (web, HAProxy)
+  </Card>
+  <Card title="Procédures de reprise" icon="open-book">
+    Documentation pour promouvoir slave en master
+  </Card>
+</CardGrid>
+
+### ⭐⭐⭐ Livrables niveau 3
+
+<CardGrid>
+  <Card title="Architecture sans SPOF" icon="template">
+    Aucun point de défaillance unique
+  </Card>
+  <Card title="Master-Master MySQL" icon="database">
+    Réplication bidirectionnelle avec ProxySQL
+  </Card>
+  <Card title="Monitoring complet" icon="chart">
+    Prometheus + Grafana avec dashboards et alertes
+  </Card>
+  <Card title="GlusterFS" icon="folder">
+    Stockage répliqué sans SPOF (optionnel)
+  </Card>
+  <Card title="Rapport de tests de charge" icon="document">
+    Tests de résilience avec métriques RTO/RPO
+  </Card>
+  <Card title="Automatisation" icon="rocket">
+    Scripts de déploiement et de reprise automatiques
+  </Card>
+</CardGrid>
+
+---
+
+## Critères d'évaluation
+
+| Critère | ⭐ Niveau 1 | ⭐⭐ Niveau 2 | ⭐⭐⭐ Niveau 3 |
+|---------|------------|--------------|---------------|
+| **Architecture** | Load balancing web fonctionnel | + IP virtuelle + réplication BDD | Architecture sans SPOF |
+| **Disponibilité** | Service web redondant | RTO < 5 min, RPO < 5 min | RTO < 2 min, RPO < 1 min |
+| **Basculement** | Manuel (redémarrage service) | Automatique HAProxy, manuel BDD | Tout automatique |
+| **Synchronisation** | Fichiers non traités (acceptable) | Solution implémentée (NFS/Lsyncd) | GlusterFS ou équivalent HA |
+| **Tests** | Load balancing validé | Tests de panne web + HAProxy | Tests de charge + scénarios multiples |
+| **Monitoring** | Logs consultables | Supervision de base | Prometheus/Grafana + alertes |
+| **Documentation** | Schéma + justifications | + Procédures de reprise | Runbook complet + rapport tests |
+
+:::tip[Conseils pour l'évaluation]
+- L'**analyse initiale** des SPOF et la **justification** des choix sont essentielles
+- Les **tests de panne** doivent être rigoureux et documentés avec métriques
+- La **qualité de la documentation** permet la reprise par un autre admin
+- Le **rapport de tests** (⭐⭐⭐) démontre la maîtrise professionnelle
+:::
+
+---
+
+## Ressources complémentaires
+
+- [Documentation HAProxy](http://www.haproxy.org/#docs)
+- [Guide Keepalived](https://www.keepalived.org/documentation.html)
+- [Réplication MySQL](https://dev.mysql.com/doc/refman/8.0/en/replication.html)
+- [GlusterFS Documentation](https://docs.gluster.org/)
+- [Prometheus Documentation](https://prometheus.io/docs/)
+- [GLPI HA Best Practices](https://glpi-project.org/) (forums communautaires)
+
+:::tip[Prochaine étape]
+Une fois cette mission terminée et validée, vous pourrez passer à la [Mission 6 - Services sur le cluster](/missions/mission-6) où vous ajouterez des services complémentaires sur votre infrastructure haute disponibilité.
+:::

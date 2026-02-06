@@ -1,0 +1,79 @@
+---
+title: "Initialisation d'un pare-feu Stormshield Network Security (SNS)"
+description: "Guide étape par étape pour configurer un pare-feu SNS, incluant la connexion initiale, la configuration système, réseau et des traces."
+---
+
+Pour initialiser la configuration d'un pare-feu Stormshield Network Security (SNS), qu'il s'agisse d'un boîtier physique ou d'une machine virtuelle, il convient de suivre plusieurs étapes clés allant de la connexion initiale au paramétrage des services essentiels.
+
+## 1. Choix du point de départ
+Selon la provenance de votre appliance, deux scénarios sont possibles pour l'accès initial :
+
+**Option A : Utilisation de la configuration d'usine**
+
+C'est le mode par défaut des équipements neufs ou des images virtuelles non modifiées.
+- Adresse IP (Internet Protocol) : « 10.0.0.254/8 ».
+- Accès : Directement via l'interface web d'administration via une machine dans le réseau `in`
+
+**Option B : Après une remise à zéro (Reset)**
+Si vous avez besoin de définir des paramètres personnalisés avant le premier accès web (comme une adresse IP spécifique), vous devez suivre la procédure de [remise à zéro](reset.mdx).
+
+- Assistant initial : Lors du redémarrage après un reset, un assistant en CLI (_Command-Line Interface — Interface en ligne de commande_) s'exécute.
+- Personnalisation : Cet assistant vous permet de paramétrer votre propre adresse IP ou d'activer le DHCP (_Dynamic Host Configuration Protocol — Protocole de configuration dynamique des hôtes_).
+
+## 2. Connexion Initiale
+
+Une fois l'adresse IP identifiée ou configurée, suivez ces étapes pour accéder à l'interface de gestion :
+
+- **Branchement :** Il est indispensable de connecter votre poste d'administration sur une interface interne (**IN** ou **DMZ**). Si vous vous connectez sur l'interface externe (OUT), le pare-feu bloquera le trafic car il détectera une tentative d'usurpation d'adresse IP.
+- **Accès Web :** Depuis un navigateur, accédez à l'URL `https://10.0.0.254/admin`.
+- **Authentification :** L'identifiant par défaut est **admin** et le mot de passe est **admin**. Se connecter en choisissant l'interface en français dans **Options**.
+
+## 3. Configuration Générale et Administration
+
+Une fois connecté, il est conseillé de régler immédiatement les préférences de l'utilisateur pour éviter les coupures, puis de procéder à la configuration système.
+
+### Préférences de l'administrateur (Anti-déconnexion)
+
+Pour éviter d'être déconnecté trop rapidement lors de la phase de configuration initiale (le délai par défaut est de 30 minutes) :
+
+- Cliquez sur la flèche à droite de l'icône représentant l'utilisateur connecté (en haut à droite), puis sur **Préférences**,,.
+- Dans la zone **Paramètres de connexion**, sélectionnez dans la liste **« Déconnexion en cas d’inactivité : »** la valeur **Toujours rester connecté**,.
+
+> [!note]
+> En production, un délai de 5 minutes est recommandé pour la sécurité__._
+
+### Configuration Système
+
+Rendez-vous dans le menu **Configuration > Système > Configuration**,.
+
+- **Nom :** Donnez un nom à votre boîtier.
+
+- **Date et Heure :** Réglez le fuseau horaire sur **Europe/Paris**. La modification du fuseau horaire nécessite un redémarrage immédiat. Activez ensuite la synchronisation NTP (« Maintenir le firewall à l'heure (NTP) »),,.
+
+- **Administration du firewall :** Dans l'onglet **Administration du firewall**, vous pouvez définir les options de sécurité d'accès, :
+
+   - **Port d'écoute :** Par défaut sur le port HTTPS 443, il peut être modifié.   
+   - **Accès restreint :** Par défaut, seuls les réseaux internes (`Network_internals`) sont autorisés à accéder à l'interface d'administration. Vous pouvez ajouter ou supprimer des réseaux/machines autorisés dans la liste « Poste d’administration autorisé »,.    
+    **SSH :** Il est possible d'activer l'accès SSH et d'en modifier le port (22 par défaut).
+
+- **Mot de passe :**
+
+> [!note ]
+> Laisser le mot de passe par défaut pendant les activités pratiques : c'est plus simple pour débugger.
+
+- Pour des raisons de sécurité en production, modifiez le mot de passe de l'administrateur via le menu **Configuration > Système > Administrateurs** (onglet Compte ADMIN),.
+
+## 4. Configuration Réseau
+
+Cette étape permet d'intégrer le pare-feu dans votre architecture.
+
+- **Interfaces :** Dans **Configuration > Réseau > Interfaces**, configurez vos interfaces (IN, OUT, DMZ) en leur attribuant des adresses IP statiques (ex: 192.168.x.254 pour l'interface IN). Il est nécessaire de sortir les interfaces du « bridge » par défaut.
+- **Route par défaut :** Dans **Configuration > Réseau > Routage** (onglet Routes statiques IPv4), définissez la passerelle par défaut (*gateway*) pour permettre l'accès à Internet.
+- **DNS :** Dans **Système > Configuration > Paramètres réseaux**, ajoutez les serveurs DNS. Ces serveurs sont nécessaires pour que le pare-feu puisse effectuer ses mises à jour (*Active Update*).
+
+## 5. Configuration des Traces et Journaux
+
+Pour conserver l'historique de l'activité :
+
+- Allez dans **Configuration > Notifications > Traces – Syslog - IPFIX**.
+- Activez le **Stockage local**. Sur un boîtier physique, cela nécessite l'insertion et le formatage d'une carte SD. Sur une VM, le disque virtuel est utilisé par défaut.
