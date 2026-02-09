@@ -4,6 +4,9 @@ description: "Procédure guidée pour réinitialiser une VM SNS EVA1, simplifier
 ---
 
 import { Steps } from '@astrojs/starlight/components';
+import ImageFigure from "@/components/ImageFigure.astro";
+import ImageFigureViewer from "@/components/ImageFigureViewer.astro";
+import GalleryRow from "@/components/GalleryRow.astro";
 
 ## Objectifs pédagogiques
 
@@ -35,7 +38,12 @@ import { Steps } from '@astrojs/starlight/components';
 - VirtualBox installé sur votre poste.
 - Connaissances de base : adresse IP, réseau, passerelle, notion de service.
 
-[IMAGE : Groupe « OVA_virtual_lab » dans VirtualBox avec les 3 VMs visibles]
+<ImageFigureViewer
+  src="/images/activities/sns/reset/reset-2026-02-09-12-27-11.png"
+  alt="Schéma réseau"
+  caption="Cliquez sur l’image pour zoomer (Viewer.js) ou sur « Ouvrir » pour un onglet."
+  scale={1}
+/>
 
 ---
 
@@ -63,13 +71,13 @@ Les choix suivants peuvent être acceptés en TP (environnement isolé, machines
 
 ## Procédure détaillée
 
-<Steps>
 1. **Importer l’appliance _OVA_ dans VirtualBox**
 
    1. Dans VirtualBox, importer le fichier `CSNx-v4.3-FW-DEBIANS.ova`.
    2. Vérifier que les 3 VMs apparaissent dans le groupe **« OVA_virtual_lab »**.
 
-   [IMAGE : Assistant d’import VirtualBox montrant le fichier .ova sélectionné]
+   <ImageFigure src="/images/activities/sns/reset/reset-2026-02-09-11-28-50.png" alt="Schéma réseau" caption="Cliquez pour ouvrir dans un onglet et zoomer." />
+
 
 2. **Ajuster les ressources matérielles de la VM SNS**
 
@@ -78,7 +86,9 @@ Les choix suivants peuvent être acceptés en TP (environnement isolé, machines
    - Mémoire : **2048 Mo de _RAM_** (_Random Access Memory_, mémoire vive)
    - Processeur : **2 _CPU_** (_Central Processing Unit_, processeur)
 
-   [IMAGE : Paramètres VirtualBox → Système → Mémoire à 2048 Mo et Processeur à 2]
+   <GalleryRow group="sns-reset" images={[ { src: "/images/activities/sns/reset/reset-2026-02-09-13-11-56.png", alt: "Étape 1" }, { src: "/images/activities/sns/reset/reset-2026-02-09-13-12-35.png", alt: "Étape 2" } ]} />
+
+
 
    :::caution
    **Mise en garde — dimensionnement en production**
@@ -112,9 +122,9 @@ Les choix suivants peuvent être acceptés en TP (environnement isolé, machines
 
    ```bash
    defaultconfig -f -r -p -c -L
-   ````
+   ```
 
-   [IMAGE : Saisie de la commande defaultconfig dans la console]
+   <ImageFigure src="/images/activities/sns/reset/20260207230513.png" alt="" />
 
    **Détail de la commande**
 
@@ -135,13 +145,13 @@ Les choix suivants peuvent être acceptés en TP (environnement isolé, machines
 
    * Sélectionner « fr » : **choisir 4** (touche « 4 » sans Maj).
 
-   [IMAGE : Écran de sélection du clavier avec l’option fr correspondante à 4]
+   <ImageFigure src="/images/activities/sns/reset/20260207230634.png" alt="" />
 
    **Définir un mot de passe**
 
    * Pour le TP : saisir « netlab123 » puis confirmer.
 
-   [IMAGE : Écran de définition du mot de passe (sans révéler le mot de passe sur la capture)]
+   <ImageFigure src="/images/activities/sns/reset/20260207230705.png" alt="" />
 
 6. **Configurer les interfaces réseau en *DHCP* pour le premier démarrage**
 
@@ -150,22 +160,20 @@ Les choix suivants peuvent être acceptés en TP (environnement isolé, machines
    * Pour ce premier démarrage, **laisser les interfaces en *DHCP***.
    * Répondre « N » ou appuyer sur Entrée, même si aucun serveur *DHCP* n’est présent sur le réseau.
 
-   [IMAGE : Écran de configuration réseau demandant le mode DHCP / statique]
+   <ImageFigure src="/images/activities/sns/reset/20260207230820.png" alt="" />
 
 7. **Autoriser l’administration sur l’interface « OUT » (uniquement pour le TP)**
 
    * Répondre « Y » à la question autorisant l’administration sur l’interface « OUT ».
 
-   [IMAGE : Question « Autoriser l’administration sur l’interface OUT ? (Y/N) »]
+   <ImageFigure src="/images/activities/sns/reset/20260207230837.png" alt="" />
 
 8. **Vérifier la prise en compte (clavier et accès)**
 
    1. Tester la saisie au clavier (accents, chiffres, etc.).
    2. Se reconnecter avec votre login/mot de passe pour valider que tout est cohérent.
 
-   [IMAGE : Écran de connexion après configuration initiale]
-
-</Steps>
+   <ImageFigure src="/images/activities/sns/reset/20260207230857.png" alt="" />
 
 ---
 
@@ -226,7 +234,7 @@ Affiche un résumé des paramètres des interfaces (pratique pour vérifier rapi
 | ---------- | ------------------------------------------------------------------------------ |
 | `portinfo` | Affiche les informations principales des interfaces réseau (état, paramètres). |
 
-[IMAGE : Exemple de sortie de portinfo affichant les interfaces]
+<ImageFigure src="/images/activities/sns/reset/20260207230921.png" alt="" />
 
 ---
 

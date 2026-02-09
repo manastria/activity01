@@ -1,11 +1,9 @@
 ---
-title: Mission 3 - Sécurisation de l'accès SSH
+title: Mission 3 – Sécurisation de l'accès SSH
 description: Configuration d'un accès d'administration à distance sécurisé par SSH avec analyse des risques
 ---
 
 import { Steps, Card, CardGrid, Aside } from '@astrojs/starlight/components';
-
-# Mission 3 : Sécurisation de l'accès SSH
 
 ## Objectif
 
@@ -94,6 +92,12 @@ Internet
                          |
                     [glpi-srv01]
 ```
+
+**Principe du bastion :**
+Un bastion SSH (aussi appelé *jump host* ou *jump server*) est une machine dédiée qui sert de **point d'entrée unique** pour accéder aux serveurs internes depuis l'extérieur.
+
+C'est une machine **durcie** et **fortement surveillée** placée dans la DMZ, dont le seul rôle est de relayer les connexions SSH vers les serveurs de production. L'administrateur se connecte d'abord au bastion, puis depuis celui-ci, accède aux serveurs cibles.
+
 
 **Avantages :**
 - ✅ Serveurs de production non exposés directement
@@ -208,7 +212,7 @@ Plusieurs algorithmes sont disponibles :
 Pour ce projet, privilégiez **Ed25519** ou **RSA 4096 bits**.
 :::
 
-**Installez la clé publique** sur les serveurs à administrer (glpi-srv01 ou glpi-web01/glpi-db01).
+**Installez la clé publique** sur les serveurs à administrer (`glpi-srv01` ou `glpi-web01`/`glpi-db01`).
 
 **Testez** la connexion SSH avec authentification par clés depuis le LAN.
 
@@ -248,12 +252,21 @@ Configurez le pare-feu `fw-crash` pour autoriser les connexions SSH depuis Inter
 - Configurez l'authentification VPN (certificats)
 
 :::tip[Changement de port SSH]
-Changer le port SSH par défaut (22) vers un port non standard (ex: 2222, 22022) réduit drastiquement les scans automatisés. Ce n'est pas une sécurité en soi (« security through obscurity »), mais cela réduit le bruit dans les logs.
+Changer le port SSH par défaut (22) vers un port non standard réduit drastiquement les scans automatisés. Ce n'est pas une sécurité en soi (« _security through obscurity_ »), mais cela réduit le bruit dans les logs.
 
-Attention : Si vous changez le port, pensez à :
-- Modifier la configuration SSH du serveur (`/etc/ssh/sshd_config` : `Port 2222`)
+**Choix du port :**
+- Évitez les ports couramment utilisés comme 2222 (souvent ciblé par les scanners)
+- Privilégiez un port aléatoire entre 10000 et 65535
+- Vérifiez qu'il n'est pas déjà utilisé par un autre service
+
+**Attention : Si vous changez le port, pensez à :**
+- Modifier la configuration SSH du serveur (`/etc/ssh/sshd_config` : `Port XXXXX`)
 - Adapter les règles de pare-feu
 - Documenter ce changement pour les futurs administrateurs
+:::
+
+:::note[Convention pour ce document]
+Dans ce document, nous utilisons le port **2222** dans les exemples pour faciliter la compréhension. En situation réelle, choisissez un port aléatoire et documentez-le dans votre plan d'adressage.
 :::
 
 #### Tests de connexion

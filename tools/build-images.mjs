@@ -122,7 +122,11 @@ async function exists(p) {
 async function buildOnce() {
   await ensureDir(path.dirname(MANIFEST_DST));
 
-  const files = await fg(pattern, { dot: false });
+  const files = await fg(pattern, {
+    dot: false,
+    ignore: ['**/_inbox/**']
+  });
+
   const manifest = {}; // key: original (web path, ex: /images/win/etape1.png)
 
   for (const absPath of files) {

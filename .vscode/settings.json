@@ -6,6 +6,9 @@
     "path-intellisense.mappings": {
         "/": "${workspaceFolder}/public"
     },
-    "pasteImage.path": "${projectRoot}/public/images/activities/${currentFileNameNoExt}",
-    "pasteImage.insertPattern": "/images/activities/${currentFileNameNoExt}/${fileName}"
+
+    "pasteImage.path": "${projectRoot}/public/images/_inbox",
+    "pasteImage.forceUnixStyleSeparator": true,
+    "pasteImage.namePrefix": "${currentFileNameWithoutExt}-",
+    "pasteImage.insertPattern": "/images/_inbox/${imageFileName}"
 }
