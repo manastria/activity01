@@ -6,7 +6,7 @@ Ce dépôt est un **starter** prêt à l'emploi pour publier des activités péd
 - Section **Activités** auto‑générée depuis `src/content/docs/activities/`
 - Script **`npm run new`** pour créer une activité à partir d'un modèle
 - Déploiement **GitHub Pages** (workflow fourni)
-- Déploiement **Infomaniak** via SFTP/SSH (workflow fourni, à activer)
+- Déploiement **SSH/rsync** vers tout hébergeur (script local)
 
 ## Prérequis
 
@@ -235,11 +235,29 @@ node tools/build-images.mjs --watch
 2. Activer Pages (Settings → Pages → "GitHub Actions").
 3. Pousser sur `main`. Le workflow `.github/workflows/deploy-gh-pages.yml` fera le reste.
 
-### Infomaniak (SFTP/SSH)
+### Hébergeur SSH (rsync)
 
-- Créer un utilisateur SSH/SFTP (console Infomaniak) et relever **host**, **user** et le **chemin** cible (`/web/…`).
-- Ajouter les secrets GitHub : `HOST`, `USER`, `SSH_PRIVATE_KEY` (clef au format OpenSSH), `REMOTE_PATH`.
-- Activer (décommenter si besoin) le job `deploy-infomaniak` dans `.github/workflows/deploy-infomaniak.yml`.
+Déploiement local vers n'importe quel hébergeur accessible en SSH (Infomaniak, OVH, VPS…).
+Le site est déployé dans le même sous-chemin `/activity01/` que GitHub Pages, un seul build suffit.
+
+1. Copier `.env.example` vers `.env` et adapter :
+   ```bash
+   cp .env.example .env
+   ```
+   ```env
+   DEPLOY_HOST=user@host.example.com
+   DEPLOY_PATH=/web/activity01
+   ```
+
+2. Lancer le déploiement :
+   ```bash
+   npm run deploy:ssh
+   ```
+   Le script build le site puis synchronise `dist/` via rsync.
+
+**Sous Windows** : le script utilise `bash` et `rsync`. Deux options :
+- **WSL** (recommandé) : `wsl npm run deploy:ssh`
+- **Git Bash** : exécuter depuis le terminal Git Bash
 
 ---
 

@@ -11,6 +11,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "deploy": "astro build && gh-pages -d dist",
+    "deploy:ssh": "bash scripts/deploy-ssh.sh",
     "new": "node scripts/new-activity.mjs",
     "images:organize": "python tools/organize_images.py --write",
     "images:build": "node tools/build-images.mjs",

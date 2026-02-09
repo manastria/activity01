@@ -7,6 +7,9 @@ dist/
 .output/
 .astro/
 
+# Environment
+.env
+
 # Editor
 #.vscode/
 #.idea/
