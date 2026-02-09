@@ -1,7 +1,6 @@
 ---
 title: Mission 6 - Services complémentaires et optimisation
 description: Ajout de services professionnels sur le cluster et optimisation globale de l'infrastructure
-draft: true
 ---
 
 import { Steps, Card, CardGrid, Aside } from '@astrojs/starlight/components';
@@ -359,7 +358,7 @@ sub vcl_recv {
     if (req.http.Cookie ~ "glpi_") {
         return (pass);
     }
-    
+
     # Mettre en cache les fichiers statiques
     if (req.url ~ "\.(css|js|png|jpg|jpeg|gif|ico|woff|woff2)$") {
         return (hash);
@@ -890,17 +889,17 @@ from diagrams.onprem.inmemory import Redis
 
 with Diagram("GLPI Cluster", show=False):
     lb = HAProxy("HAProxy")
-    
+
     with Cluster("Web Tier"):
         web_group = [Server("web01"),
                      Server("web02"),
                      Server("web03")]
-    
+
     with Cluster("Database"):
         master = MySQL("master")
         slave = MySQL("slave")
         master >> slave
-    
+
     lb >> web_group >> master
 ```
 
