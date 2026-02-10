@@ -54,11 +54,11 @@ src/content/docs/
 
 Le workflow d'images se déroule en 3 phases :
 
-| Phase | Emplacement | État |
-|-------|-------------|------|
-| **Rédaction** | `public/images/_inbox/` | Collage rapide, non optimisé |
-| **Organisation** | `public/images/activities/<slug>/<page>/` | Fichiers rangés, liens réécrits |
-| **Optimisation** | Même emplacement + variantes | AVIF/WebP + miniatures + manifest |
+| Phase            | Emplacement                               | État                              |
+| ---------------- | ----------------------------------------- | --------------------------------- |
+| **Rédaction**    | `public/images/_inbox/`                   | Collage rapide, non optimisé      |
+| **Organisation** | `public/images/activities/<slug>/<page>/` | Fichiers rangés, liens réécrits   |
+| **Optimisation** | Même emplacement + variantes              | AVIF/WebP + miniatures + manifest |
 
 ### Scripts npm disponibles
 
@@ -113,11 +113,35 @@ import GalleryRow from "@/components/GalleryRow.astro";
 />
 ```
 
+### Créer une image qui s'ouvre dans un nouvel onglet lors du clic 
+
+```mdx
+import ImageFigure from "@/components/ImageFigure.astro";
+
+<ImageFigure
+  src="/images/_inbox/2026-02-09-12-27-11.png"
+  alt="Écran de démarrage"
+  scale={1}
+/>
+```
+
+### Créer une image qui ouvre Viewer.js pour la visualisation
+
+```mdx
+import ImageFigureViewer from "@/components/ImageFigureViewer.astro";
+
+<ImageFigureViewer
+  src="/images/_inbox/2026-02-09-12-27-11.png"
+  alt="Écran de démarrage"
+  scale={1}
+/>
+```
+
 ### Workflow recommandé
 
 **Pendant la rédaction :**
 1. Coller les images (→ `_inbox`)
-2. Utiliser les composants avec les chemins `/images/_inbox/...`
+2. Utiliser les composants Astro avec les chemins `/images/_inbox/...`
 3. Continuer à rédiger (le site reste visualisable)
 
 **Après la rédaction :**
@@ -154,11 +178,11 @@ python tools/organize_images.py --write --strict
 - Réécrit les liens dans les fichiers MDX
 
 **Options :**
-| Option | Description |
-|--------|-------------|
-| `--write` | Applique les modifications (sans cette option = dry-run) |
-| `--strict` | Échoue si une image référencée n'existe pas |
-| `--root PATH` | Spécifie la racine du projet |
+| Option        | Description                                              |
+| ------------- | -------------------------------------------------------- |
+| `--write`     | Applique les modifications (sans cette option = dry-run) |
+| `--strict`    | Échoue si une image référencée n'existe pas              |
+| `--root PATH` | Spécifie la racine du projet                             |
 
 ### migrate_markdown_images.py
 
@@ -182,11 +206,11 @@ python tools/migrate_markdown_images.py --viewer --write
 - Ajoute l'import du composant si absent
 
 **Options :**
-| Option | Description |
-|--------|-------------|
-| `--write` | Applique les modifications (sans cette option = dry-run) |
-| `--viewer` | Utilise ImageFigureViewer au lieu de ImageFigure |
-| `--root PATH` | Spécifie la racine du projet |
+| Option        | Description                                              |
+| ------------- | -------------------------------------------------------- |
+| `--write`     | Applique les modifications (sans cette option = dry-run) |
+| `--viewer`    | Utilise ImageFigureViewer au lieu de ImageFigure         |
+| `--root PATH` | Spécifie la racine du projet                             |
 
 **Exemple de transformation :**
 ```markdown
@@ -216,11 +240,11 @@ node tools/build-images.mjs --watch
 - Écrit le manifest dans `src/data/images.manifest.json`
 
 **Variables d'environnement :**
-| Variable | Défaut | Description |
-|----------|--------|-------------|
-| `THUMB_HEIGHT` | 120 | Hauteur des miniatures en pixels |
-| `QUALITY_WEBP` | 82 | Qualité WebP (0-100) |
-| `QUALITY_AVIF` | 45 | Qualité AVIF (0-100) |
+| Variable       | Défaut | Description                      |
+| -------------- | ------ | -------------------------------- |
+| `THUMB_HEIGHT` | 120    | Hauteur des miniatures en pixels |
+| `QUALITY_WEBP` | 82     | Qualité WebP (0-100)             |
+| `QUALITY_AVIF` | 45     | Qualité AVIF (0-100)             |
 
 ---
 
