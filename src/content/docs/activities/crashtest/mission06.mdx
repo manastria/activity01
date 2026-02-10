@@ -309,7 +309,7 @@ sudo update-ca-certificates
 
 ---
 
-### Tâche 2 ⭐ : Mise en cache avec Varnish
+### Tâche 2 ⭐⭐⭐ : Mise en cache avec Varnish
 
 Améliorez les performances en mettant en cache les contenus statiques et certaines pages dynamiques.
 
@@ -331,7 +331,7 @@ Créez une configuration Varnish (VCL) adaptée à GLPI :
 **Éléments à configurer :**
 
 1. **Backend** : Définir les serveurs GLPI backend
-```vcl
+```txt
    backend glpi_web01 {
        .host = "10.54.0.10";
        .port = "80";
@@ -352,7 +352,7 @@ Créez une configuration Varnish (VCL) adaptée à GLPI :
    - Ou via une requête HTTP spécifique (PURGE)
 
 **Exemple de règle VCL :**
-```vcl
+```txt
 sub vcl_recv {
     # Ne pas mettre en cache les requêtes avec cookies de session
     if (req.http.Cookie ~ "glpi_") {
@@ -408,7 +408,7 @@ ab -n 1000 -c 10 https://[VIP]/
 
 ---
 
-### Tâche 3 ⭐ : Sauvegarde automatisée du cluster
+### Tâche 3 ⭐⭐⭐ : Sauvegarde automatisée du cluster
 
 Mettez en place une stratégie de sauvegarde complète de l'infrastructure.
 
@@ -489,7 +489,7 @@ Créez une VM dédiée `backup-srv` :
 
 ---
 
-### Tâche 4 ⭐⭐ : Optimisation des performances MySQL
+### Tâche 4 ⭐⭐⭐ : Optimisation des performances MySQL
 
 Optimisez la base de données pour améliorer les performances globales.
 
@@ -549,7 +549,7 @@ mysqlslap --auto-generate-sql --concurrency=50 --iterations=10
 
 ---
 
-### Tâche 5 ⭐⭐ : Déploiement d'un WAF (Web Application Firewall)
+### Tâche 5 ⭐⭐⭐ : Déploiement d'un WAF (_Web Application Firewall_)
 
 Protégez GLPI contre les attaques web courantes.
 
@@ -616,7 +616,7 @@ Le WAF peut générer des **faux positifs** (bloquer des requêtes légitimes).
 
 ---
 
-### Tâche 6 ⭐⭐ : Monitoring avancé et dashboards
+### Tâche 6 ⭐⭐⭐ : Monitoring avancé et dashboards
 
 Améliorez la supervision avec des dashboards détaillés et des alertes pertinentes.
 
@@ -904,7 +904,7 @@ with Diagram("GLPI Cluster", show=False):
 ```
 
 **Avec PlantUML :**
-```plantuml
+```txt
 @startuml
 node "HAProxy" as lb {
   [haproxy01]
@@ -1033,85 +1033,6 @@ Rédigez un **rapport de validation finale** incluant :
 4. **Sécurité** : Tests WAF, PKI, authentification
 5. **Métriques atteintes** vs objectifs du cahier des charges
 6. **Améliorations futures** : Pistes d'optimisation
-
----
-
-## Livrables attendus
-
-### ⭐ Livrables niveau 1 (obligatoires)
-
-<CardGrid>
-  <Card title="PKI complète" icon="key">
-    CA racine + intermédiaire + certificats serveur déployés
-  </Card>
-  <Card title="Configuration Varnish" icon="rocket">
-    Cache fonctionnel avec amélioration des performances mesurée
-  </Card>
-  <Card title="Script de sauvegarde" icon="backup">
-    Automatisation complète avec rotation et test de restauration
-  </Card>
-  <Card title="Documentation PKI" icon="document">
-    Procédure de génération et renouvellement des certificats
-  </Card>
-  <Card title="Tests de performance" icon="chart">
-    Benchmarks avant/après optimisations
-  </Card>
-</CardGrid>
-
-### ⭐⭐ Livrables niveau 2
-
-<CardGrid>
-  <Card title="Optimisation MySQL" icon="database">
-    Configuration tunée avec analyse des requêtes lentes
-  </Card>
-  <Card title="WAF ModSecurity" icon="shield">
-    Déployé et tuné avec tests d'attaques
-  </Card>
-  <Card title="Dashboards Grafana" icon="chart">
-    5 dashboards personnalisés déployés
-  </Card>
-  <Card title="Alertes configurées" icon="warning">
-    Alertes pertinentes avec notifications
-  </Card>
-</CardGrid>
-
-### ⭐⭐⭐ Livrables niveau 3
-
-<CardGrid>
-  <Card title="Authentification LDAP" icon="users">
-    Annuaire intégré avec synchronisation automatique
-  </Card>
-  <Card title="Infrastructure as Code" icon="code">
-    Playbooks Ansible complets et idempotents
-  </Card>
-  <Card title="Documentation automatisée" icon="open-book">
-    Diagrammes, inventaire et runbooks à jour
-  </Card>
-  <Card title="Rapport de validation" icon="document">
-    Tests complets avec métriques RTO/RPO
-  </Card>
-</CardGrid>
-
----
-
-## Critères d'évaluation
-
-| Critère | ⭐ Niveau 1 | ⭐⭐ Niveau 2 | ⭐⭐⭐ Niveau 3 |
-|---------|------------|--------------|---------------|
-| **PKI** | CA + certificats fonctionnels | Documentation complète | Automatisation renouvellement |
-| **Performance** | Cache Varnish actif | + Optimisation MySQL | Objectifs cahier charges atteints |
-| **Sauvegarde** | Script automatisé | + Vérification intégrité | Disaster recovery testé |
-| **Sécurité** | Certificats valides | + WAF déployé et tuné | + Auth centralisée LDAP |
-| **Monitoring** | Dashboards de base | 5 dashboards + alertes | Monitoring proactif complet |
-| **Automatisation** | Scripts manuels | Playbooks Ansible basiques | Infrastructure as Code complète |
-| **Documentation** | Procédures écrites | + Documentation technique | Doc auto-générée + runbooks |
-
-:::tip[Conseils pour l'évaluation]
-- La **PKI interne** démontre une maîtrise de la cryptographie appliquée
-- Les **tests de performance** avant/après doivent montrer des gains mesurables
-- La **procédure de restauration** doit être testée réellement, pas théorique
-- L'**Infrastructure as Code** (⭐⭐⭐) valorise fortement le travail
-:::
 
 ---
 
