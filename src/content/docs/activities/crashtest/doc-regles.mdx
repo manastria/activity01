@@ -1,0 +1,42 @@
+---
+title: Documentation des règles de pare-feu et NAT
+description: Documentation détaillée des règles de filtrage et de NAT pour l'architecture de sécurité réseau du projet CrashTest
+draft: true
+---
+
+# Documentation des règles de pare-feu et NAT
+
+## Tableau de documentation des règles de filtrage
+
+```markdown
+| #   | Nom de la règle      | Source                | Destination                 | Services               | Action | Logs             | IPS | Justification                                                                          |
+| --- | -------------------- | --------------------- | --------------------------- | ---------------------- | ------ | ---------------- | --- | -------------------------------------------------------------------------------------- |
+| 1   | Anti-spoofing        | Internet (OUT)        | Tous                        | Tous                   | BLOCK  | Oui              | Non | Bloquer les paquets entrants avec IP source interne (usurpation d'identité)            |
+| 99  | Blocage implicite    | Tous                  | Tous                        | Tous                   | BLOCK  | Oui              | Non | Règle par défaut - tout ce qui n'est pas explicitement autorisé est bloqué             |
+```
+
+## Tableau de documentation des règles NAT/PAT
+
+```markdown
+| #   | Type                     | Interface source | IP/Réseau source        | Interface destination | IP destination   | Port source | Port destination | IP traduite                 | Port traduit | Service | Justification                                                         |
+| --- | ------------------------ | ---------------- | ----------------------- | --------------------- | ---------------- | ----------- | ---------------- | --------------------------- | ------------ | ------- | --------------------------------------------------------------------- |
+| 1   | PAT sortant (SNAT)       | IN (LAN)         | net_lan (172.17.0.0/16) | OUT (Internet)        | Tous             | Tous        | Tous             | IP interface OUT            | Dynamique    | Tous    | Permettre au LAN d'accéder à Internet via l'IP publique du pare-feu   |
+| 2   | DNAT entrant (optionnel) | OUT (Internet)   | Tous                    | DMZ                   | IP interface OUT | Tous        | 2222             | host (10.0.0.x)             | 22           | SSH     | Accès SSH externe sur port non-standard (Mission 3)                   |
+```
+
+## Légende et conventions
+
+**Actions :**
+- **PASS** : Autoriser le trafic
+- **BLOCK** : Bloquer le trafic
+
+**Types de NAT :**
+- **PAT sortant (SNAT)** : Source NAT - Traduction de l'IP source pour le trafic sortant (_masquerading_)
+- **DNAT entrant** : Destination NAT - Redirection du trafic entrant vers un serveur interne
+
+**Symboles de criticité :**
+- 🔴 **Alarme activée** : Événements de sécurité critiques nécessitant une alerte immédiate
+- ⚠️ **Logs obligatoires** : Traçabilité essentielle pour l'audit
+
+
+Ces tableaux constituent la base documentaire de votre architecture de sécurité réseau et doivent être maintenus à jour lors de chaque modification.
