@@ -19,6 +19,7 @@ export default defineConfig({
           items: [
             { label: 'Reset', link: 'activities/sns/reset' },
             { label: 'Configuration de base', link: 'activities/sns/init' },
+            { label: 'Modèles pare-feu et NAT', link: 'activities/sns/doc-regles' },
 
           ],
         },
