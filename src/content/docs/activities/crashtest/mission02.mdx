@@ -67,10 +67,10 @@ Si vous avez séparé les services web et base de données en Mission 1 (⭐⭐�
 
 ### Zones de sécurité
 
-| Zone | Réseau CRASH | Niveau de confiance |
-|------|--------------|---------------------|
-| **OUT** | 172.25.x.y/16 | ❌ Non fiable (Internet) |
-| **DMZ** | 10.54.0.0/24 | ⚠️ Partiellement fiable |
+| Zone         | Réseau CRASH  | Niveau de confiance        |
+| ------------ | ------------- | -------------------------- |
+| **OUT**      | 172.25.x.y/16 | ❌ Non fiable (Internet)   |
+| **DMZ**      | 10.54.0.0/24  | ⚠️ Partiellement fiable  |
 | **IN** (LAN) | 172.17.0.0/16 | ✅ Fiable (réseau interne) |
 
 ### Conventions de nommage recommandées
@@ -100,15 +100,15 @@ Pour faciliter la gestion de votre infrastructure, adoptez des conventions de no
 
 Cette matrice définit **qui peut communiquer avec qui** et **sur quels services**. C'est le cahier des charges de votre politique de pare-feu.
 
-| Source | Destination | Services autorisés | Justification |
-|--------|-------------|-------------------|---------------|
-| **Internet** → **DMZ** | HTTPS (443) vers serveur GLPI | Accès public au portail GLPI |
-| **LAN** → **DMZ** | HTTPS (443), SSH (22), MySQL (3306)* | Administration des serveurs |
-| **LAN** → **Internet** | HTTP (80), HTTPS (443), DNS (53), NTP (123), SSH (22) | Navigation, mises à jour, admin distante |
-| **DMZ** → **Internet** | HTTP (80), HTTPS (443), DNS (53), NTP (123) | Mises à jour système |
-| **DMZ** → **DMZ** | MySQL (3306)* | Communication web → base de données |
-| **DMZ** → **LAN** | ❌ **INTERDIT** | Isolation : un serveur compromis ne doit pas attaquer le LAN |
-| **Internet** → **LAN** | ❌ **INTERDIT** | Pas d'accès direct depuis l'extérieur |
+| Source                 | Destination                                           | Services autorisés                                           |
+| ---------------------- | ----------------------------------------------------- | ------------------------------------------------------------ |
+| **Internet** → **DMZ** | HTTPS (443) vers serveur GLPI                         | Accès public au portail GLPI                                 |
+| **LAN** → **DMZ**      | HTTPS (443), SSH (22), MySQL (3306)*                  | Administration des serveurs                                  |
+| **LAN** → **Internet** | HTTP (80), HTTPS (443), DNS (53), NTP (123), SSH (22) | Navigation, mises à jour, admin distante                     |
+| **DMZ** → **Internet** | HTTP (80), HTTPS (443), DNS (53), NTP (123)           | Mises à jour système                                         |
+| **DMZ** → **DMZ**      | MySQL (3306)*                                         | Communication web → base de données                          |
+| **DMZ** → **LAN**      | ❌ **INTERDIT**                                       | Isolation : un serveur compromis ne doit pas attaquer le LAN |
+| **Internet** → **LAN** | ❌ **INTERDIT**                                       | Pas d'accès direct depuis l'extérieur                        |
 
 _* MySQL (3306) : uniquement si architecture modulaire (Mission 1 ⭐⭐⭐)_
 
@@ -140,14 +140,14 @@ Avant toute configuration, concevez votre architecture réseau complète.
 :::tip[Plan d'adressage à compléter]
 Utilisez ce tableau dans votre portfolio pour documenter votre plan d'adressage :
 
-| Équipement | Interface/Zone | Adresse IP | Masque | Passerelle | DNS |
-|------------|----------------|------------|--------|------------|-----|
-| fw-crash | eth0 (OUT) | | | | |
-| fw-crash | eth1 (DMZ) | | | - | - |
-| fw-crash | eth2 (IN) | | | - | - |
-| glpi-srv01 (ou glpi-web01) | DMZ | | | | |
-| glpi-db01 (si séparé) | DMZ | | | | |
-| admin-poste | LAN | | | | |
+| Équipement                 | Interface/Zone | Adresse IP | Masque | Passerelle | DNS |
+| -------------------------- | -------------- | ---------- | ------ | ---------- | --- |
+| fw-crash                   | eth0 (OUT)     |            |        |            |     |
+| fw-crash                   | eth1 (DMZ)     |            |        | -          | -   |
+| fw-crash                   | eth2 (IN)      |            |        | -          | -   |
+| glpi-srv01 (ou glpi-web01) | DMZ            |            |        |            |     |
+| glpi-db01 (si séparé)      | DMZ            |            |        |            |     |
+| admin-poste                | LAN            |            |        |            |     |
 
 **Note :** L'adresse IP de l'interface OUT sera fournie par votre formateur.
 :::
@@ -341,10 +341,10 @@ L'IPS doit analyser le trafic pour détecter :
 
 **Configurez des profils IPS** adaptés à chaque type de flux :
 
-| Flux | Profil recommandé | Objectif |
-|------|-------------------|----------|
-| Internet → DMZ | « Serveur Web » | Détecter attaques web |
-| LAN → Internet | « Poste client » | Détecter malware, exfiltration |
+| Flux           | Profil recommandé | Objectif                       |
+| -------------- | ----------------- | ------------------------------ |
+| Internet → DMZ | « Serveur Web »   | Détecter attaques web          |
+| LAN → Internet | « Poste client »  | Détecter malware, exfiltration |
 
 **Mode IPS** : Choisissez le mode « Prévention » (pas seulement détection) pour bloquer automatiquement les attaques détectées.
 
@@ -576,16 +576,16 @@ Rédigez un **rapport d'audit de sécurité** professionnel incluant :
 
 ## Critères d'évaluation
 
-| Critère | ⭐ Niveau 1 | ⭐⭐ Niveau 2 | ⭐⭐⭐ Niveau 3 |
-|---------|------------|--------------|---------------|
-| **Architecture réseau** | 3 zones fonctionnelles | + Architecture modulaire gérée | + Optimisations (QoS, géo) |
-| **Plan d'adressage** | Cohérent et documenté | + Justifications des choix | + Plan évolutif documenté |
-| **Règles pare-feu** | 8 règles de base conformes à la matrice | + Règles affinées (IP source) | + Règles avancées (ICMP, etc.) |
-| **NAT/PAT** | Fonctionnel et testé | + Documentation technique détaillée | + Tests de validation avancés |
-| **Sécurité** | Blocage DMZ→LAN validé | + IPS activé et testé | + Audit complet avec outils pros |
-| **Tests** | 6 tests de base réussis | + Tests d'attaque documentés | + 5 tests d'audit avancés |
-| **Logs** | Consultés et compris | + Centralisation + exploitation | + Corrélation et dashboards |
-| **Documentation** | Schémas + procédures | + Analyse technique | + Rapport d'audit professionnel |
+| Critère                 | ⭐ Niveau 1                             | ⭐⭐ Niveau 2                       | ⭐⭐⭐ Niveau 3                  |
+| ----------------------- | --------------------------------------- | ----------------------------------- | -------------------------------- |
+| **Architecture réseau** | 3 zones fonctionnelles                  | + Architecture modulaire gérée      | + Optimisations (QoS, géo)       |
+| **Plan d'adressage**    | Cohérent et documenté                   | + Justifications des choix          | + Plan évolutif documenté        |
+| **Règles pare-feu**     | 8 règles de base conformes à la matrice | + Règles affinées (IP source)       | + Règles avancées (ICMP, etc.)   |
+| **NAT/PAT**             | Fonctionnel et testé                    | + Documentation technique détaillée | + Tests de validation avancés    |
+| **Sécurité**            | Blocage DMZ→LAN validé                  | + IPS activé et testé               | + Audit complet avec outils pros |
+| **Tests**               | 6 tests de base réussis                 | + Tests d'attaque documentés        | + 5 tests d'audit avancés        |
+| **Logs**                | Consultés et compris                    | + Centralisation + exploitation     | + Corrélation et dashboards      |
+| **Documentation**       | Schémas + procédures                    | + Analyse technique                 | + Rapport d'audit professionnel  |
 
 :::tip[Conseils pour l'évaluation]
 - La **qualité de la documentation** compte autant que la réalisation technique
