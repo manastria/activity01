@@ -5,7 +5,6 @@ description: "Procédure guidée pour réinitialiser une VM SNS EVA1, simplifier
 
 import { Steps } from '@astrojs/starlight/components';
 import ImageFigure from "@/components/ImageFigure.astro";
-import ImageFigureViewer from "@/components/ImageFigureViewer.astro";
 import GalleryRow from "@/components/GalleryRow.astro";
 
 ## Objectifs pédagogiques
@@ -38,10 +37,9 @@ import GalleryRow from "@/components/GalleryRow.astro";
 - VirtualBox installé sur votre poste.
 - Connaissances de base : adresse IP, réseau, passerelle, notion de service.
 
-<ImageFigureViewer
+<ImageFigure
   src="/images/activities/sns/reset/reset-2026-02-09-12-27-11.png"
   alt="Schéma réseau"
-  caption="Cliquez sur l’image pour zoomer (Viewer.js) ou sur « Ouvrir » pour un onglet."
   scale={1}
 />
 
@@ -59,9 +57,9 @@ L’objectif de la remise à zéro est, dans un premier temps, de **simplifier l
 
 Les choix suivants peuvent être acceptés en TP (environnement isolé, machines éphémères), mais sont proscrits en production :
 
-- identifiants par défaut (« admin/admin »),
-- mot de passe faible ou partagé (« netlab123 »),
-- administration autorisée sur une interface exposée (« OUT »),
+- identifiants par défaut (« `admin/admin` »),
+- mot de passe faible ou partagé (« `netlab123` »),
+- administration autorisée sur une interface exposée (« `OUT` »),
 - dépendance à un _DHCP_ non maîtrisé.
 
 **Risques en production** : compromission du pare-feu, prise de contrôle à distance, exposition de l’administration sur un réseau non fiable, interception ou détournement de configuration, perte de traçabilité.
@@ -70,7 +68,7 @@ Les choix suivants peuvent être acceptés en TP (environnement isolé, machines
 ---
 
 ## Procédure détaillée
-
+<Steps>
 1. **Importer l’appliance _OVA_ dans VirtualBox**
 
    1. Dans VirtualBox, importer le fichier `CSNx-v4.3-FW-DEBIANS.ova`.
@@ -101,14 +99,14 @@ Les choix suivants peuvent être acceptés en TP (environnement isolé, machines
 
    1. Démarrer **SNS_EVA1_V4.3**.
    2. Accéder à la console.
-   3. Se connecter avec les identifiants par défaut : « admin/admin ».
+   3. Se connecter avec les identifiants par défaut : « `admin/admin` ».
 
    [IMAGE : Console SNS EVA1 au démarrage, invite de connexion]
 
    :::caution
    **Mise en garde — identifiants par défaut**
 
-   En production, laisser « admin/admin » est une vulnérabilité critique : un attaquant peut prendre le contrôle immédiatement.
+   En production, laisser « `admin/admin` » est une vulnérabilité critique : un attaquant peut prendre le contrôle immédiatement.
    En TP, c’est toléré uniquement si :
 
    - le réseau est isolé,
@@ -174,7 +172,7 @@ Les choix suivants peuvent être acceptés en TP (environnement isolé, machines
    2. Se reconnecter avec votre login/mot de passe pour valider que tout est cohérent.
 
    <ImageFigure src="/images/activities/sns/reset/20260207230857.png" alt="" />
-
+</Steps>
 ---
 
 ## Points d’attention et erreurs fréquentes

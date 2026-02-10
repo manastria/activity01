@@ -54,11 +54,11 @@ src/content/docs/
 
 Le workflow d'images se déroule en 3 phases :
 
-| Phase | Emplacement | État |
-|-------|-------------|------|
-| **Rédaction** | `public/images/_inbox/` | Collage rapide, non optimisé |
-| **Organisation** | `public/images/activities/<slug>/<page>/` | Fichiers rangés, liens réécrits |
-| **Optimisation** | Même emplacement + variantes | AVIF/WebP + miniatures + manifest |
+| Phase            | Emplacement                               | État                              |
+| ---------------- | ----------------------------------------- | --------------------------------- |
+| **Rédaction**    | `public/images/_inbox/`                   | Collage rapide, non optimisé      |
+| **Organisation** | `public/images/activities/<slug>/<page>/` | Fichiers rangés, liens réécrits   |
+| **Optimisation** | Même emplacement + variantes              | AVIF/WebP + miniatures + manifest |
 
 ### Scripts npm disponibles
 
@@ -113,11 +113,48 @@ import GalleryRow from "@/components/GalleryRow.astro";
 />
 ```
 
+### Créer une image qui s'ouvre dans un nouvel onglet lors du clic 
+
+Utiliser `ImageFigure` pour afficher une image optimisée et ouvrir le fichier original dans un nouvel onglet au clic. Ce composant est idéal pour les captures d’écran et schémas que l’on souhaite consulter en grand format. Les images pointant vers `/images/_inbox/...` restent valides pendant la rédaction.
+
+**Options utiles :**
+- `caption` pour afficher une légende
+- `maxWidth` pour limiter la largeur (ex. `"640px"`)
+- `align` pour l’alignement (`"left" | "center" | "right"`)
+
+```mdx
+import ImageFigure from "@/components/ImageFigure.astro";
+
+<ImageFigure
+  src="/images/_inbox/2026-02-09-12-27-11.png"
+  alt="Écran de démarrage"
+  scale={1}
+/>
+```
+
+### Créer une image qui ouvre Viewer.js pour la visualisation
+
+Utiliser `ImageFigureViewer` quand vous voulez un zoom interactif (Viewer.js) directement dans la page. C’est pratique pour les schémas détaillés ou les captures nécessitant un zoom sans quitter la page.
+
+**Bon à savoir :**
+- Le composant accepte les mêmes props que `ImageFigure` (`src`, `alt`, `caption`, `maxWidth`, `scale`, `align`).
+- Après la rédaction, lancez `npm run images:all` pour générer les variantes optimisées et miniatures.
+
+```mdx
+import ImageFigureViewer from "@/components/ImageFigureViewer.astro";
+
+<ImageFigureViewer
+  src="/images/_inbox/2026-02-09-12-27-11.png"
+  alt="Écran de démarrage"
+  scale={1}
+/>
+```
+
 ### Workflow recommandé
 
 **Pendant la rédaction :**
 1. Coller les images (→ `_inbox`)
-2. Utiliser les composants avec les chemins `/images/_inbox/...`
+2. Utiliser les composants Astro avec les chemins `/images/_inbox/...`
 3. Continuer à rédiger (le site reste visualisable)
 
 **Après la rédaction :**
@@ -154,11 +191,11 @@ python tools/organize_images.py --write --strict
 - Réécrit les liens dans les fichiers MDX
 
 **Options :**
-| Option | Description |
-|--------|-------------|
-| `--write` | Applique les modifications (sans cette option = dry-run) |
-| `--strict` | Échoue si une image référencée n'existe pas |
-| `--root PATH` | Spécifie la racine du projet |
+| Option        | Description                                              |
+| ------------- | -------------------------------------------------------- |
+| `--write`     | Applique les modifications (sans cette option = dry-run) |
+| `--strict`    | Échoue si une image référencée n'existe pas              |
+| `--root PATH` | Spécifie la racine du projet                             |
 
 ### migrate_markdown_images.py
 
@@ -182,11 +219,11 @@ python tools/migrate_markdown_images.py --viewer --write
 - Ajoute l'import du composant si absent
 
 **Options :**
-| Option | Description |
-|--------|-------------|
-| `--write` | Applique les modifications (sans cette option = dry-run) |
-| `--viewer` | Utilise ImageFigureViewer au lieu de ImageFigure |
-| `--root PATH` | Spécifie la racine du projet |
+| Option        | Description                                              |
+| ------------- | -------------------------------------------------------- |
+| `--write`     | Applique les modifications (sans cette option = dry-run) |
+| `--viewer`    | Utilise ImageFigureViewer au lieu de ImageFigure         |
+| `--root PATH` | Spécifie la racine du projet                             |
 
 **Exemple de transformation :**
 ```markdown
@@ -216,11 +253,11 @@ node tools/build-images.mjs --watch
 - Écrit le manifest dans `src/data/images.manifest.json`
 
 **Variables d'environnement :**
-| Variable | Défaut | Description |
-|----------|--------|-------------|
-| `THUMB_HEIGHT` | 120 | Hauteur des miniatures en pixels |
-| `QUALITY_WEBP` | 82 | Qualité WebP (0-100) |
-| `QUALITY_AVIF` | 45 | Qualité AVIF (0-100) |
+| Variable       | Défaut | Description                      |
+| -------------- | ------ | -------------------------------- |
+| `THUMB_HEIGHT` | 120    | Hauteur des miniatures en pixels |
+| `QUALITY_WEBP` | 82     | Qualité WebP (0-100)             |
+| `QUALITY_AVIF` | 45     | Qualité AVIF (0-100)             |
 
 ---
 
@@ -258,32 +295,6 @@ Le site est déployé dans le même sous-chemin `/activity01/` que GitHub Pages,
 **Sous Windows** : le script utilise `bash` et `rsync`. Deux options :
 - **WSL** (recommandé) : `wsl npm run deploy:ssh`
 - **Git Bash** : exécuter depuis le terminal Git Bash
-
----
-
-## Dépannage
-
-### L'image se colle au mauvais endroit
-- Vérifier que le raccourci appelle bien l'extension **Paste Image** (mushan)
-- Vérifier que le fichier `.mdx` est enregistré (Ctrl+S)
-- Vérifier la config dans `.vscode/settings.json`
-
-### La galerie affiche l'image sans miniatures / AVIF / WebP
-Normal si :
-- L'image est encore dans `_inbox`
-- `npm run images:build` n'a pas été relancé après le rangement
-
-Solution :
-```bash
-npm run images:all
-```
-
-### Erreur "image référencée introuvable"
-Le script `organize_images.py` signale les images manquantes. Vérifier que :
-- Le fichier existe dans `public/images/_inbox/`
-- Le chemin dans le MDX correspond exactement au nom du fichier
-
----
 
 ---
 
