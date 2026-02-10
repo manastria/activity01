@@ -1,0 +1,77 @@
+---
+title: Documentation des règles de pare-feu et NAT
+description: Modèles de documentation pour les règles de filtrage et de NAT
+---
+
+# Documentation des règles de pare-feu et NAT
+
+## Tableau de documentation des règles de filtrage
+```markdown
+| # | Nom de la règle | Source | Destination | Services | Action | Logs | IPS | Justification |
+|---|-----------------|--------|-------------|----------|--------|------|-----|---------------|
+| 1 | Anti-spoofing | Internet (OUT) | Tous | Tous | BLOCK | Oui | Non | Bloquer les paquets entrants avec IP source interne (usurpation d'identité) |
+| 2 | Accès public service | Internet (OUT) | host_serveur (DMZ) | HTTPS (443) | PASS | Oui | Oui | Exemple : Permettre l'accès public au service web |
+| ... | ... | ... | ... | ... | ... | ... | ... | ... |
+| 98 | BLOCAGE DMZ→LAN | net_dmz (DMZ) | net_lan (IN) | Tous | BLOCK | **Oui + Alarme** | Non | **CRITIQUE** - Isoler la DMZ du LAN |
+| 99 | Blocage implicite | Tous | Tous | Tous | BLOCK | Oui | Non | Règle par défaut - deny all |
+```
+
+**Notes importantes :**
+- Numérotez vos règles en laissant des intervalles (1, 5, 10, 15...) pour faciliter les insertions ultérieures
+- L'ordre des règles est **CRUCIAL** : placez les règles de sécurité (blocages, anti-spoofing) en premier
+- Placez les règles spécifiques avant les règles générales
+- Documentez systématiquement la justification métier de chaque règle
+
+## Tableau de documentation des règles NAT/PAT
+```markdown
+| # | Type | Interface source | IP/Réseau source | Interface destination | IP destination | Port source | Port destination | IP traduite | Port traduit | Service | Justification |
+|---|------|------------------|------------------|----------------------|----------------|-------------|------------------|-------------|--------------|---------|---------------|
+| 1 | PAT sortant (SNAT) | IN (LAN) | net_lan (172.17.0.0/16) | OUT (Internet) | Tous | Tous | Tous | IP interface OUT | Dynamique | Tous | Permettre au LAN d'accéder à Internet |
+| 2 | DNAT entrant | OUT (Internet) | Tous | DMZ | IP interface OUT | Tous | 443 | host_serveur (IP_privée) | 443 | HTTPS | Exemple : Redirection HTTPS vers serveur web interne |
+| ... | ... | ... | ... | ... | ... | ... | ... | ... | ... | ... | ... |
+```
+
+**Notes importantes :**
+- Chaque service exposé sur Internet nécessite généralement une règle DNAT
+- Les règles PAT sortantes sont essentielles pour que les réseaux privés accèdent à Internet
+- Documentez l'IP privée réelle dans la colonne « IP traduite »
+
+## Légende et conventions
+
+### Actions
+- **PASS** : Autoriser le trafic
+- **BLOCK** : Bloquer le trafic
+
+### Types de NAT
+- **PAT sortant (SNAT)** : Source NAT - Traduction de l'IP source pour le trafic sortant (_masquerading_)
+- **DNAT entrant** : Destination NAT - Redirection du trafic entrant vers un serveur interne
+- **DNAT+SNAT** : Double NAT - Traduction source ET destination (cas particuliers)
+
+### Niveaux de criticité
+- 🔴 **Alarme activée** : Événements de sécurité critiques nécessitant une alerte immédiate
+- ⚠️ **Logs obligatoires** : Traçabilité essentielle pour l'audit de sécurité
+- 📊 **Logs recommandés** : Traçabilité utile pour le diagnostic
+
+### Bonnes pratiques de documentation
+
+1. **Maintenez la cohérence** : Utilisez toujours les mêmes noms d'objets réseau
+2. **Justifiez chaque règle** : Expliquez le besoin métier, pas seulement la technique
+3. **Marquez les règles temporaires** : Ajoutez "[TEMP]" pour les règles à revoir
+4. **Datez les modifications** : Conservez un historique des changements majeurs
+5. **Référencez les missions** : Indiquez quelle mission a nécessité la règle (ex: "Mission 3")
+
+### Exemple de convention de nommage
+
+**Objets réseau :**
+- `net_` : Réseaux (ex: `net_lan`, `net_dmz`)
+- `host_` : Machines individuelles (ex: `host_glpi_srv01`)
+- `grp_` : Groupes d'objets (ex: `grp_serveurs_dmz`)
+
+**Services :**
+- `srv_` : Services ou groupes de services (ex: `srv_web_standard`)
+
+Ces tableaux constituent la base documentaire de votre architecture de sécurité réseau et doivent être maintenus à jour lors de chaque modification.
+
+:::tip[Conseil de documentation]
+Exportez régulièrement la configuration de votre pare-feu et conservez ces exports avec votre documentation. En cas de problème, vous pourrez comparer la configuration actuelle avec la configuration documentée.
+:::
