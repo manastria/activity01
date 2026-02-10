@@ -1,3 +1,6 @@
+Le site est publié à l'adresse <https://manastria.github.io/activity01/>
+
+
 # Template Astro/Starlight — Activités pédagogiques
 
 Ce dépôt est un **starter** prêt à l'emploi pour publier des activités pédagogiques avec **Astro + Starlight**.
