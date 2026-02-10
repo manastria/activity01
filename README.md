@@ -115,6 +115,13 @@ import GalleryRow from "@/components/GalleryRow.astro";
 
 ### Créer une image qui s'ouvre dans un nouvel onglet lors du clic 
 
+Utiliser `ImageFigure` pour afficher une image optimisée et ouvrir le fichier original dans un nouvel onglet au clic. Ce composant est idéal pour les captures d’écran et schémas que l’on souhaite consulter en grand format. Les images pointant vers `/images/_inbox/...` restent valides pendant la rédaction.
+
+**Options utiles :**
+- `caption` pour afficher une légende
+- `maxWidth` pour limiter la largeur (ex. `"640px"`)
+- `align` pour l’alignement (`"left" | "center" | "right"`)
+
 ```mdx
 import ImageFigure from "@/components/ImageFigure.astro";
 
@@ -126,6 +133,12 @@ import ImageFigure from "@/components/ImageFigure.astro";
 ```
 
 ### Créer une image qui ouvre Viewer.js pour la visualisation
+
+Utiliser `ImageFigureViewer` quand vous voulez un zoom interactif (Viewer.js) directement dans la page. C’est pratique pour les schémas détaillés ou les captures nécessitant un zoom sans quitter la page.
+
+**Bon à savoir :**
+- Le composant accepte les mêmes props que `ImageFigure` (`src`, `alt`, `caption`, `maxWidth`, `scale`, `align`).
+- Après la rédaction, lancez `npm run images:all` pour générer les variantes optimisées et miniatures.
 
 ```mdx
 import ImageFigureViewer from "@/components/ImageFigureViewer.astro";
