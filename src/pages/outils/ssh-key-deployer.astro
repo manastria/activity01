@@ -309,7 +309,7 @@ chmod 600 ~/.ssh/authorized_keys`;
       onelinerOutput.textContent = `mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '${escaped}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`;
       
       // Remote deployment
-      remoteOutput.textContent = `ssh user@remote-host 'bash -s' << 'EOF'
+      remoteOutput.textContent = `ssh -o PubkeyAuthentication=no user@remote-host 'bash -s' << 'EOF'
 mkdir -p ~/.ssh && chmod 700 ~/.ssh
 echo '${escaped}' >> ~/.ssh/authorized_keys
 chmod 600 ~/.ssh/authorized_keys

@@ -27,6 +27,7 @@ export default defineConfig({
           label: 'Outils',
           items: [
             { label: 'Déploiement clé SSH', link: '/outils/ssh-key-deployer' },
+            { label: 'Mémo', link: '/memo' },
           ],
         },
       ],
@@ -44,5 +45,6 @@ export default defineConfig({
     }
   },
   site: 'https://manastria.github.io',
-  base: '/activity01/'
+  base: '/activity01/',
+  trailingSlash: 'always',
 });
