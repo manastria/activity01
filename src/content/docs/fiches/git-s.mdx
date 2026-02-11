@@ -1,0 +1,296 @@
+---
+title: Interpréter git status --short --branch
+description: Guide complet pour comprendre et interpréter les sorties de la commande git status en format court avec suivi de branche
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+## Présentation
+
+La commande `git status --short --branch` (ou `git status -sb`) fournit un aperçu condensé et lisible de l'état de votre dépôt Git, incluant la position de votre branche par rapport à son origine distante et l'état des fichiers.
+
+:::tip[Pourquoi utiliser le format court ?]
+Le format court est idéal pour :
+- Vérifier rapidement l'état de synchronisation avec le dépôt distant
+- Identifier en un coup d'œil les fichiers modifiés
+- Intégrer dans des scripts ou des alias Git
+- Réduire le "bruit" visuel dans le terminal
+:::
+
+## Syntaxe de base
+```bash
+git status --short --branch
+# ou la version abrégée
+git status -sb
+```
+
+## Interpréter la ligne de branche
+
+### Format général
+```
+## <branche-locale>...<branche-distante> [informations de synchronisation]
+```
+
+### Cas de figure
+
+#### Branche synchronisée
+```
+## dev...origin/dev
+```
+
+**Signification :** Votre branche locale `dev` est parfaitement à jour avec `origin/dev`. Aucune action requise.
+
+#### Commits en avance (ahead)
+```
+## dev...origin/dev [ahead 2]
+```
+
+**Signification :** Vous avez **2 commits locaux** qui n'ont pas encore été poussés vers `origin/dev`.
+
+**Action recommandée :** `git push`
+
+#### Commits en retard (behind)
+```
+## dev...origin/dev [behind 3]
+```
+
+**Signification :** Il y a **3 commits sur origin/dev** que vous n'avez pas encore récupérés localement.
+
+**Action recommandée :** `git pull` ou `git fetch` puis `git merge`
+
+#### Divergence (ahead et behind)
+```
+## dev...origin/dev [ahead 1, behind 2]
+```
+
+**Signification :** Vos branches ont **divergé**. Vous avez 1 commit local et il y a 2 commits distants.
+
+**Action recommandée :**
+- `git pull --rebase` pour réécrire votre historique
+- ou `git pull` pour créer un commit de fusion
+
+:::caution[Attention à la divergence]
+Une divergence nécessite une résolution manuelle. Privilégiez le rebase si vous travaillez seul sur la branche, ou la fusion si plusieurs personnes collaborent.
+:::
+
+#### Branche sans tracking
+```
+## dev
+```
+
+**Signification :** Votre branche locale n'a pas de branche distante associée (pas de `origin/dev`).
+
+**Actions possibles :**
+```bash
+# Créer et pousser la branche distante
+git push -u origin dev
+
+# Ou configurer le tracking sur une branche existante
+git branch --set-upstream-to=origin/dev dev
+```
+
+## Interpréter l'état des fichiers
+
+### Format des lignes de fichiers
+
+Chaque fichier modifié apparaît sur une ligne avec **deux caractères** d'état :
+```
+XY nom-du-fichier
+```
+
+- **X** : État dans l'index (staging area)
+- **Y** : État dans le working directory
+
+### Codes d'état principaux
+
+| Code | Signification | Explication |
+|------|---------------|-------------|
+| `??` | Untracked | Fichier non suivi par Git |
+| `A ` | Added (staged) | Nouveau fichier ajouté à l'index |
+| `M ` | Modified (staged) | Fichier modifié et ajouté à l'index |
+| ` M` | Modified (unstaged) | Fichier modifié mais pas encore staged |
+| `MM` | Modified (both) | Modifié dans l'index ET dans le working directory |
+| `D ` | Deleted (staged) | Suppression ajoutée à l'index |
+| ` D` | Deleted (unstaged) | Fichier supprimé du working directory |
+| `R ` | Renamed | Fichier renommé |
+| `C ` | Copied | Fichier copié |
+| `!!` | Ignored | Fichier ignoré (avec `--ignored`) |
+
+### Exemples concrets
+
+#### Exemple 1 : Workflow typique
+```
+## main...origin/main
+ M README.md
+?? nouveau-script.sh
+```
+
+**Interprétation :**
+- Branche synchronisée avec origin
+- `README.md` modifié mais pas encore staged
+- `nouveau-script.sh` est un nouveau fichier non tracké
+
+**Actions :**
+```bash
+git add README.md nouveau-script.sh
+git commit -m "Mise à jour documentation et ajout script"
+```
+
+#### Exemple 2 : Modifications partielles
+```
+## dev...origin/dev [ahead 1]
+MM config.yaml
+A  nouveau-module.py
+ D ancien-fichier.txt
+```
+
+**Interprétation :**
+- 1 commit local à pousser
+- `config.yaml` : modifié et staged, puis modifié à nouveau
+- `nouveau-module.py` : nouveau fichier ajouté à l'index
+- `ancien-fichier.txt` : supprimé du working directory (pas staged)
+
+**Actions :**
+```bash
+# Option 1 : Ajouter toutes les modifications
+git add -A
+git commit -m "Restructuration modules"
+
+# Option 2 : Commit partiel
+git commit -m "Ajout nouveau module"  # Commit seulement ce qui est staged
+git add -u                             # Puis ajouter les suppressions
+```
+
+#### Exemple 3 : État complexe
+```
+## feature/api...origin/feature/api [ahead 2, behind 1]
+M  src/api.py
+ M src/utils.py
+MM tests/test_api.py
+?? docs/api-spec.md
+```
+
+**Interprétation :**
+- Divergence : 2 commits locaux, 1 commit distant
+- `src/api.py` : modifié et staged
+- `src/utils.py` : modifié, pas staged
+- `tests/test_api.py` : staged + nouvelles modifications
+- `docs/api-spec.md` : nouveau fichier non tracké
+
+**Workflow recommandé :**
+
+<Steps>
+
+1. **Sauvegarder les modifications en cours**
+```bash
+   git stash push -u -m "WIP avant sync"
+```
+
+2. **Synchroniser avec le distant**
+```bash
+   git pull --rebase origin feature/api
+```
+
+3. **Restaurer les modifications**
+```bash
+   git stash pop
+```
+
+4. **Résoudre les conflits éventuels et finaliser**
+```bash
+   git add -A
+   git commit -m "Finalisation API et tests"
+   git push
+```
+
+</Steps>
+
+## Cas particuliers
+
+### Fichiers renommés
+```
+## main...origin/main
+R  old-name.py -> new-name.py
+```
+
+Git détecte automatiquement les renommages (seuil de similarité par défaut : 50%).
+
+### Conflits de fusion
+```
+## main...origin/main
+UU fichier-en-conflit.py
+```
+
+**`UU`** indique un conflit non résolu. Les deux versions (locale et distante) sont en conflit.
+
+:::danger[Résolution obligatoire]
+Vous devez éditer le fichier, choisir les modifications à conserver, puis :
+```bash
+git add fichier-en-conflit.py
+git commit
+```
+:::
+
+### Détachement HEAD
+```
+## HEAD (no branch)
+```
+
+Vous n'êtes pas sur une branche mais sur un commit spécifique (état détaché).
+
+**Pour revenir sur une branche :**
+```bash
+git checkout main  # ou n'importe quelle branche
+```
+
+## Utilisation avancée
+
+### Alias pratique
+
+Ajoutez cet alias à votre configuration Git :
+```bash
+git config --global alias.s 'status -sb'
+```
+
+Ensuite, utilisez simplement :
+```bash
+git s
+```
+
+### Combiner avec d'autres options
+```bash
+# Inclure les fichiers ignorés
+git status -sb --ignored
+
+# Afficher aussi les sous-modules
+git status -sb --submodule
+
+# Format vraiment minimal (seulement les fichiers)
+git status -s
+```
+
+## Tableau récapitulatif
+
+| Sortie | État branche | État fichiers | Action recommandée |
+|--------|-------------|---------------|-------------------|
+| `## main...origin/main` | Synchronisé | Aucun | Continue à travailler |
+| `## main...origin/main [ahead 2]` | 2 commits à pousser | - | `git push` |
+| `## main...origin/main [behind 1]` | 1 commit à récupérer | - | `git pull` |
+| `?? file.txt` | - | Nouveau fichier | `git add file.txt` |
+| ` M file.txt` | - | Modifié, pas staged | `git add file.txt` |
+| `M  file.txt` | - | Modifié et staged | `git commit` |
+| `MM file.txt` | - | Staged + modifs | `git add file.txt` puis commit |
+
+:::tip[Bonne pratique pédagogique]
+Faites exécuter `git status -sb` systématiquement à vos étudiants :
+- **Avant** chaque `git add` ou `git commit`
+- **Après** chaque `git pull` ou `git fetch`
+- Quand ils ne sont **pas sûrs** de l'état de leur dépôt
+
+C'est le réflexe n°1 à développer pour éviter les erreurs !
+:::
+
+## Ressources complémentaires
+
+- [Documentation officielle git-status](https://git-scm.com/docs/git-status)
+- [Format court dans Pro Git](https://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository)
