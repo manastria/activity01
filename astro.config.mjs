@@ -11,7 +11,7 @@ export default defineConfig({
         { label: 'Accueil', link: '/' },
         {
           label: 'CRASH Test',
-          autogenerate: { directory: 'activities/crashtest', collapsed: true },
+          autogenerate: { directory: 'activities/crashtest', collapsed: false },
         },
         // Ajout manuel de la catégorie SNS
         {
@@ -21,6 +21,12 @@ export default defineConfig({
             { label: 'Configuration de base', link: 'activities/sns/init' },
             { label: 'Modèles pare-feu et NAT', link: 'activities/sns/doc-regles' },
 
+          ],
+        },
+        {
+          label: 'Outils',
+          items: [
+            { label: 'Déploiement clé SSH', link: '/outils/ssh-key-deployer' },
           ],
         },
       ],

@@ -1,0 +1,361 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+---
+
+<StarlightPage frontmatter={{
+  title: "Générateur de snippet SSH",
+  description: "Outil pour générer rapidement un snippet de déploiement de clé SSH"
+}}>
+
+<div class="ssh-key-generator">
+  <h1>Générateur de snippet de déploiement SSH</h1>
+  
+  <div class="instructions">
+    <p><strong>Mode d'emploi :</strong></p>
+    <ol>
+      <li>Copiez votre clé publique depuis 1Password</li>
+      <li>Collez-la dans le champ ci-dessous</li>
+      <li>Le snippet se génère automatiquement</li>
+      <li>Copiez-le et exécutez-le sur la machine cible</li>
+    </ol>
+  </div>
+
+  <div class="input-section">
+    <label for="ssh-key-input">
+      <strong>Clé SSH publique :</strong>
+      <span class="hint">Format attendu : ssh-ed25519 AAAA... commentaire</span>
+    </label>
+    <textarea 
+      id="ssh-key-input" 
+      rows="3" 
+      placeholder="Collez votre clé publique ici (ssh-ed25519, ssh-rsa, ecdsa-sha2-nistp256...)"
+    ></textarea>
+    <div id="validation-message" class="validation"></div>
+  </div>
+
+  <div class="output-section">
+    <div class="output-header">
+      <strong>Snippet généré :</strong>
+      <button id="copy-btn" class="copy-button" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        Copier
+      </button>
+    </div>
+    <pre id="snippet-output" class="snippet-code"><code>Collez votre clé SSH ci-dessus pour générer le snippet...</code></pre>
+  </div>
+
+  <div class="variants-section">
+    <details>
+      <summary><strong>Variantes du snippet</strong></summary>
+      
+      <h3>Version one-liner (sans vérification doublon)</h3>
+      <pre id="oneliner-output" class="snippet-code"><code>mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo "VOTRE_CLE" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys</code></pre>
+      <button class="copy-button" data-target="oneliner-output">Copier</button>
+
+      <h3>Version avec déploiement distant</h3>
+      <pre id="remote-output" class="snippet-code"><code>ssh user@remote-host 'bash -s' << 'EOF'
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+echo "VOTRE_CLE" >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+EOF</code></pre>
+      <button class="copy-button" data-target="remote-output">Copier</button>
+    </details>
+  </div>
+</div>
+
+
+<style>
+  .ssh-key-generator {
+    max-width: 900px;
+    margin: 2rem auto;
+    padding: 2rem;
+  }
+
+  .instructions {
+    background: #f8f9fa;
+    border-left: 4px solid #0066cc;
+    padding: 1rem 1.5rem;
+    margin-bottom: 2rem;
+    border-radius: 4px;
+  }
+
+  .instructions ol {
+    margin: 0.5rem 0 0 0;
+    padding-left: 1.5rem;
+  }
+
+  .instructions li {
+    margin: 0.25rem 0;
+  }
+
+  .input-section, .output-section {
+    margin-bottom: 2rem;
+  }
+
+  label {
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  .hint {
+    display: block;
+    font-size: 0.875rem;
+    color: #666;
+    font-weight: normal;
+    margin-top: 0.25rem;
+  }
+
+  textarea {
+    width: 100%;
+    padding: 0.75rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    resize: vertical;
+  }
+
+  textarea:focus {
+    outline: none;
+    border-color: #0066cc;
+  }
+
+  .validation {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    display: none;
+  }
+
+  .validation.error {
+    display: block;
+    background: #fee;
+    color: #c33;
+    border: 1px solid #fcc;
+  }
+
+  .validation.success {
+    display: block;
+    background: #efe;
+    color: #373;
+    border: 1px solid #cfc;
+  }
+
+  .output-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+
+  .snippet-code {
+    background: #2d2d2d;
+    color: #f8f8f2;
+    padding: 1rem;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .snippet-code code {
+    color: inherit;
+    background: none;
+  }
+
+  .copy-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: #0066cc;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: background 0.2s;
+  }
+
+  .copy-button:hover:not(:disabled) {
+    background: #0052a3;
+  }
+
+  .copy-button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+  }
+
+  .copy-button.copied {
+    background: #28a745;
+  }
+
+  .variants-section {
+    margin-top: 3rem;
+  }
+
+  details {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 1rem;
+  }
+
+  summary {
+    cursor: pointer;
+    user-select: none;
+    margin-bottom: 1rem;
+  }
+
+  details h3 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+  }
+
+  details .copy-button {
+    margin-top: 0.5rem;
+  }
+</style>
+
+<script>
+  const sshKeyInput = document.getElementById('ssh-key-input');
+  const snippetOutput = document.getElementById('snippet-output');
+  const onelinerOutput = document.getElementById('oneliner-output');
+  const remoteOutput = document.getElementById('remote-output');
+  const copyBtn = document.getElementById('copy-btn');
+  const validationMsg = document.getElementById('validation-message');
+
+  // Regex pour valider les clés SSH publiques
+  const sshKeyRegex = /^(ssh-rsa|ssh-dss|ssh-ed25519|ecdsa-sha2-nistp256|ecdsa-sha2-nistp384|ecdsa-sha2-nistp521)\s+[A-Za-z0-9+/]+={0,2}(\s+.*)?$/;
+
+  function validateSSHKey(key) {
+    const trimmed = key.trim();
+    if (!trimmed) return { valid: false, message: '' };
+    
+    if (!sshKeyRegex.test(trimmed)) {
+      return { 
+        valid: false, 
+        message: '⚠️ Format de clé invalide. Vérifiez que vous avez copié la clé publique complète.' 
+      };
+    }
+    
+    // Extraction du type de clé
+    const keyType = trimmed.split(' ')[0];
+    return { 
+      valid: true, 
+      message: `✓ Clé ${keyType} valide détectée` 
+    };
+  }
+
+  function escapeShellArg(arg) {
+    // Échapper les caractères spéciaux pour le shell
+    return arg.replace(/'/g, "'\\''");
+  }
+
+  function generateSnippet(sshKey) {
+    const escaped = escapeShellArg(sshKey);
+    return `#!/bin/bash
+# Script de déploiement de clé SSH
+
+SSH_KEY='${escaped}'
+
+# Créer le répertoire .ssh avec les bonnes permissions
+mkdir -p ~/.ssh
+chmod 700 ~/.ssh
+
+# Créer authorized_keys s'il n'existe pas
+touch ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+
+# Vérifier si la clé existe déjà (éviter les doublons)
+if ! grep -qF "$SSH_KEY" ~/.ssh/authorized_keys 2>/dev/null; then
+    echo "$SSH_KEY" >> ~/.ssh/authorized_keys
+    echo "✓ Clé SSH ajoutée avec succès"
+else
+    echo "ℹ Clé SSH déjà présente"
+fi
+
+# S'assurer des bonnes permissions finales
+chmod 600 ~/.ssh/authorized_keys`;
+  }
+
+  function updateSnippets(sshKey) {
+    const validation = validateSSHKey(sshKey);
+    
+    // Afficher le message de validation
+    if (!validation.message) {
+      validationMsg.style.display = 'none';
+      validationMsg.className = 'validation';
+    } else {
+      validationMsg.style.display = 'block';
+      validationMsg.className = validation.valid ? 'validation success' : 'validation error';
+      validationMsg.textContent = validation.message;
+    }
+    
+    // Générer les snippets si la clé est valide
+    if (validation.valid) {
+      const escaped = escapeShellArg(sshKey.trim());
+      
+      // Snippet principal
+      snippetOutput.textContent = generateSnippet(sshKey.trim());
+      
+      // One-liner
+      onelinerOutput.textContent = `mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '${escaped}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`;
+      
+      // Remote deployment
+      remoteOutput.textContent = `ssh user@remote-host 'bash -s' << 'EOF'
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+echo '${escaped}' >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+EOF`;
+      
+      copyBtn.disabled = false;
+    } else {
+      snippetOutput.textContent = 'Collez votre clé SSH ci-dessus pour générer le snippet...';
+      copyBtn.disabled = true;
+    }
+  }
+
+  // Écouter les changements dans le textarea
+  sshKeyInput.addEventListener('input', (e) => {
+    updateSnippets(e.target.value);
+  });
+
+  // Fonction de copie
+  async function copyToClipboard(text, button) {
+    try {
+      await navigator.clipboard.writeText(text);
+      const originalText = button.textContent;
+      button.classList.add('copied');
+      button.textContent = '✓ Copié !';
+      setTimeout(() => {
+        button.classList.remove('copied');
+        button.innerHTML = originalText.includes('Copier') ? 
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copier' : 
+          'Copier';
+      }, 2000);
+    } catch (err) {
+      alert('Erreur lors de la copie. Utilisez Ctrl+C manuellement.');
+    }
+  }
+
+  // Bouton copier principal
+  copyBtn.addEventListener('click', () => {
+    copyToClipboard(snippetOutput.textContent, copyBtn);
+  });
+
+  // Boutons copier des variantes
+  document.querySelectorAll('.copy-button[data-target]').forEach(button => {
+    button.addEventListener('click', () => {
+      const targetId = button.getAttribute('data-target');
+      const targetElement = document.getElementById(targetId);
+      copyToClipboard(targetElement.textContent, button);
+    });
+  });
+</script>
