@@ -180,29 +180,27 @@ MM tests/test_api.py
 **Workflow recommandé :**
 
 <Steps>
-
 1. **Sauvegarder les modifications en cours**
-```bash
+   ```bash
    git stash push -u -m "WIP avant sync"
-```
+   ```
 
 2. **Synchroniser avec le distant**
-```bash
+   ```bash
    git pull --rebase origin feature/api
-```
+   ```
 
 3. **Restaurer les modifications**
-```bash
+   ```bash
    git stash pop
-```
+   ```
 
 4. **Résoudre les conflits éventuels et finaliser**
-```bash
+   ```bash
    git add -A
    git commit -m "Finalisation API et tests"
    git push
-```
-
+   ```
 </Steps>
 
 ## Cas particuliers
