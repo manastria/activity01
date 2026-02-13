@@ -17,11 +17,13 @@ git config alias.start "!git checkout $SOURCE_BRANCH && git pull $REMOTE $SOURCE
 git config alias.stop  "!git add -A && git commit -m \"wip: sauvegarde \$(hostname) \$(date +%H:%M)\" && git push $REMOTE $SOURCE_BRANCH"
 git config alias.sync  "!git pull $REMOTE $SOURCE_BRANCH --rebase && git push $REMOTE $SOURCE_BRANCH"
 git config alias.wip   "!git add -A && git commit -m \"wip: \$(date +%Y-%m-%d_%H:%M)\""
+git config alias.s     "!git status --short --branch"
 
 echo "✅ Alias locaux configurés :"
 echo "   git start  → checkout $SOURCE_BRANCH + pull rebase"
 echo "   git stop   → commit wip + push"
 echo "   git sync   → pull rebase + push"
 echo "   git wip    → commit wip horodaté (sans push)"
+echo "   git s      → statut court avec nom de branche"
 echo ""
 echo "💡 Ces alias sont locaux à ce dépôt et écrasent les alias globaux du même nom."

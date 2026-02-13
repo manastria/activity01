@@ -1,11 +1,14 @@
 ---
 title: "Initialisation d'un pare-feu Stormshield Network Security (SNS)"
-description: "Guide étape par étape pour configurer un pare-feu SNS, incluant la connexion initiale, la configuration système, réseau et des traces."
+description: "Guide étape par étape pour configurer un pare-feu SNS, incluant la connexion initiale, la configuration système, réseau, DNS proxy et des traces."
 ---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
 
 Pour initialiser la configuration d'un pare-feu Stormshield Network Security (SNS), qu'il s'agisse d'un boîtier physique ou d'une machine virtuelle, il convient de suivre plusieurs étapes clés allant de la connexion initiale au paramétrage des services essentiels.
 
 ## 1. Choix du point de départ
+
 Selon la provenance de votre appliance, deux scénarios sont possibles pour l'accès initial :
 
 **Option A : Utilisation de la configuration d'usine**
@@ -15,6 +18,7 @@ C'est le mode par défaut des équipements neufs ou des images virtuelles non mo
 - Accès : Directement via l'interface web d'administration via une machine dans le réseau `in`
 
 **Option B : Après une remise à zéro (Reset)**
+
 Si vous avez besoin de définir des paramètres personnalisés avant le premier accès web (comme une adresse IP spécifique), vous devez suivre la procédure de [remise à zéro](reset.mdx).
 
 - Assistant initial : Lors du redémarrage après un reset, un assistant en CLI (_Command-Line Interface — Interface en ligne de commande_) s'exécute.
@@ -25,7 +29,7 @@ Si vous avez besoin de définir des paramètres personnalisés avant le premier 
 Une fois l'adresse IP identifiée ou configurée, suivez ces étapes pour accéder à l'interface de gestion :
 
 - **Branchement :** Il est indispensable de connecter votre poste d'administration sur une interface interne (**IN** ou **DMZ**). Si vous vous connectez sur l'interface externe (OUT), le pare-feu bloquera le trafic car il détectera une tentative d'usurpation d'adresse IP.
-- **Accès Web :** Depuis un navigateur, accédez à l'URL `https://10.0.0.254/admin`.
+- **Accès Web :** Depuis un navigateur, accédez à l'URL en **HTTPS** `https://x.x.x.x/admin`.
 - **Authentification :** L'identifiant par défaut est **admin** et le mot de passe est **admin**. Se connecter en choisissant l'interface en français dans **Options**.
 
 ## 3. Configuration Générale et Administration
@@ -37,10 +41,10 @@ Une fois connecté, il est conseillé de régler immédiatement les préférence
 Pour éviter d'être déconnecté trop rapidement lors de la phase de configuration initiale (le délai par défaut est de 30 minutes) :
 
 - Cliquez sur la flèche à droite de l'icône représentant l'utilisateur connecté (en haut à droite), puis sur **Préférences**.
-- Dans la zone **Paramètres de connexion**, sélectionnez dans la liste **« Déconnexion en cas d’inactivité : »** la valeur **Toujours rester connecté**.
+- Dans la zone **Paramètres de connexion**, sélectionnez dans la liste **« Déconnexion en cas d'inactivité : »** la valeur **Toujours rester connecté**.
 
 :::tip
-En production, un délai de 5 minutes est recommandé pour la sécurité__._
+En production, un délai de 5 minutes est recommandé pour la sécurité.
 :::
 
 ### Configuration Système
@@ -49,14 +53,14 @@ Rendez-vous dans le menu **Configuration > Système > Configuration**.
 
 - **Nom :** Donnez un nom à votre boîtier.
 
-- **Date et Heure :** Réglez le fuseau horaire sur **Europe/Paris**. La modification du fuseau horaire nécessite un redémarrage immédiat. Activez ensuite la synchronisation NTP (« Maintenir le firewall à l'heure (NTP) »).
+- **Date et Heure :** Réglez le fuseau horaire sur **Europe/Paris**. La modification du fuseau horaire nécessite un redémarrage immédiat. Activez ensuite la synchronisation NTP (« Maintenir le firewall à l'heure (NTP) »).
 
 - **Administration du firewall :** Dans l'onglet **Administration du firewall**, vous pouvez définir les options de sécurité d'accès :
 
-  - **Port d'écoute :** Par défaut sur le port HTTPS 443, il peut être modifié.   
-   
-  - **Accès restreint :** Par défaut, seuls les réseaux internes (`Network_internals`) sont autorisés à accéder à l'interface d'administration. Vous pouvez ajouter ou supprimer des réseaux/machines autorisés dans la liste « Poste d’administration autorisé ».    
-   
+  - **Port d'écoute :** Par défaut sur le port HTTPS 443, il peut être modifié.
+
+  - **Accès restreint :** Par défaut, seuls les réseaux internes (`Network_internals`) sont autorisés à accéder à l'interface d'administration. Vous pouvez ajouter ou supprimer des réseaux/machines autorisés dans la liste « Poste d'administration autorisé ».
+
   - **SSH :** Il est possible d'activer l'accès SSH et d'en modifier le port (22 par défaut).
 
 - **Mot de passe :**
@@ -71,14 +75,106 @@ Rendez-vous dans le menu **Configuration > Système > Configuration**.
 
 Cette étape permet d'intégrer le pare-feu dans votre architecture.
 
-- **Interfaces :** Dans **Configuration > Réseau > Interfaces**, configurez vos interfaces (IN, OUT, DMZ) en leur attribuant des adresses IP statiques (ex: 192.168.x.254 pour l'interface IN). Il est nécessaire de sortir les interfaces du « bridge » par défaut.
+- **Interfaces :** Dans **Configuration > Réseau > Interfaces**, configurez vos interfaces (IN, OUT, DMZ) en leur attribuant des adresses IP statiques (ex: 192.168.x.254 pour l'interface IN). Il est nécessaire de sortir les interfaces du « bridge » par défaut.
 
 - **Route par défaut :** Dans **Configuration > Réseau > Routage** (onglet Routes statiques IPv4), définissez la passerelle par défaut (*gateway*) pour permettre l'accès à Internet.
+
 - **DNS :** Dans **Système > Configuration > Paramètres réseaux**, ajoutez les serveurs DNS. Ces serveurs sont nécessaires pour que le pare-feu puisse effectuer ses mises à jour (*Active Update*).
 
-## 5. Configuration des Traces et Journaux
+## 5. Configuration du Proxy Cache DNS
+
+### Rôle du Proxy Cache DNS
+
+Le Proxy cache DNS est un service qui optimise la résolution de noms de domaine en stockant localement les réponses DNS dans la mémoire du pare-feu. Lorsqu'un client effectue une requête DNS (par exemple pour accéder à `www.exemple.com`), le serveur DNS transforme ce nom de domaine en adresse IP.
+
+**Avantages du Proxy cache DNS :**
+- **Rapidité :** Lorsqu'une requête similaire est effectuée, le pare-feu répond directement depuis son cache au lieu d'interroger à nouveau le serveur DNS externe, ce qui accélère considérablement la résolution.
+- **Réduction de la charge réseau :** Moins de requêtes sont envoyées vers les serveurs DNS externes.
+- **Continuité de service :** Si le serveur DNS externe est temporairement indisponible, le cache peut encore fournir des réponses pour les domaines récemment consultés.
+
+**Mode transparent :** Lorsque le mode transparent est activé, le pare-feu intercepte automatiquement toutes les requêtes DNS des clients autorisés, même si celles-ci sont destinées à d'autres serveurs DNS. Cette fonctionnalité est invisible pour les utilisateurs qui pensent accéder directement à leur serveur DNS habituel.
+
+### Configuration du Proxy Cache DNS
+
+<Steps>
+
+1. **Accéder au menu de configuration**
+
+   Rendez-vous dans **Configuration > Réseau > Proxy cache DNS**.
+
+2. **Activer le cache DNS**
+
+   Cochez l'option **« Activer le cache de requête DNS »**.
+
+3. **Définir les clients autorisés**
+
+   Dans la **« Liste des clients DNS autorisés à utiliser le cache »**, ajoutez les machines, réseaux ou groupes qui pourront bénéficier du service :
+   - Cliquez sur **Ajouter**.
+   - Sélectionnez l'objet réseau correspondant (par exemple : `Network_internals` pour tous les réseaux internes, ou un objet spécifique comme votre serveur DNS en DMZ).
+   - Validez avec **Appliquer** puis **Sauvegarder**.
+
+4. **Activer le mode transparent (optionnel mais recommandé)**
+
+   Dans la section **Configuration avancée**, cochez l'option **« Mode transparent (intercepte toutes les requêtes DNS émises par les clients autorisés) »**.
+
+   :::tip
+   Le mode transparent est particulièrement utile dans un environnement pédagogique ou d'entreprise, car il évite de devoir reconfigurer manuellement les clients pour qu'ils utilisent le pare-feu comme serveur DNS.
+   :::
+
+5. **Ajuster la taille du cache (optionnel)**
+
+   La taille maximale du cache DNS dépend du modèle de votre pare-feu. La valeur par défaut est généralement suffisante pour une utilisation standard.
+
+</Steps>
+
+:::note
+Dans le cadre des labs de formation CSNA, le serveur DNS présent sur la DMZ (par exemple `172.16.x.10`) doit être ajouté dans la liste des clients autorisés à utiliser le cache DNS.
+:::
+
+## 6. Configuration des Traces et Journaux
 
 Pour conserver l'historique de l'activité :
 
 - Allez dans **Configuration > Notifications > Traces – Syslog - IPFIX**.
 - Activez le **Stockage local**. Sur un boîtier physique, cela nécessite l'insertion et le formatage d'une carte SD. Sur une VM, le disque virtuel est utilisé par défaut.
+
+## 7. Préparation de la politique de filtrage
+
+Avant de configurer les règles de filtrage et le NAT (_Network Address Translation — Traduction d'adresses réseau_), il est recommandé de créer une copie de travail de la politique de sécurité par défaut.
+
+### Copie de la politique de sécurité
+
+<Steps>
+
+1. **Accéder aux politiques de filtrage**
+
+   Rendez-vous dans **Configuration > Politique de sécurité > Filtrage et NAT**.
+
+2. **Dupliquer une politique existante**
+
+   - Sélectionnez une politique de référence (par exemple la **politique 10** qui contient souvent des règles de base bien structurées).
+   - Cliquez-droit sur la politique et sélectionnez **Copier**.
+   - Collez-la dans un emplacement libre (par exemple **politique 5**).
+   - Renommez cette politique avec un nom explicite (ex: « Configuration Personnalisée » ou « Lab BTS SIO »).
+
+3. **Activer votre politique personnalisée**
+
+   - Sélectionnez votre nouvelle politique.
+   - Cliquez sur **Activer** pour en faire la politique active.
+
+</Steps>
+
+:::caution
+Ne modifiez jamais directement la politique 00 (Default policy) ni les politiques de référence fournies par Stormshield. Travaillez toujours sur une copie pour pouvoir revenir facilement à une configuration fonctionnelle en cas d'erreur.
+:::
+
+### Configuration du NAT sortant
+
+Une fois votre politique de sécurité personnalisée créée, vous devrez configurer une règle de NAT sortant pour permettre aux machines des réseaux internes (IN) et DMZ d'accéder à Internet via l'interface externe (OUT).
+
+:::note
+La configuration détaillée du NAT sortant est traitée dans la fiche dédiée à la configuration du NAT.
+:::
+
+**Principe du NAT sortant :**
+Le NAT sortant permet de masquer les adresses IP privées de votre réseau interne derrière l'adresse IP publique du pare-feu. C'est une fonctionnalité indispensable pour permettre aux machines internes d'accéder à Internet tout en préservant la sécurité et en économisant les adresses IP publiques.
