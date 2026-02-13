@@ -77,7 +77,7 @@ Cette étape permet d'intégrer le pare-feu dans votre architecture.
 
 - **Interfaces :** Dans **Configuration > Réseau > Interfaces**, configurez vos interfaces (IN, OUT, DMZ) en leur attribuant des adresses IP statiques (ex: 192.168.x.254 pour l'interface IN). Il est nécessaire de sortir les interfaces du « bridge » par défaut.
 
-- **Route par défaut :** Dans **Configuration > Réseau > Routage** (onglet Routes statiques IPv4), définissez la passerelle par défaut (*gateway*) pour permettre l'accès à Internet.
+- **Route par défaut :** Dans **Configuration > Réseau > Routage** (onglet Routes statiques IPv4), définissez la passerelle par défaut (*gateway*) pour permettre l'accès à Internet. Créer un objet `GW_Labo` avec l'adresse IP `172.25.254.254`.
 
 - **DNS :** Dans **Système > Configuration > Paramètres réseaux**, ajoutez les serveurs DNS. Ces serveurs sont nécessaires pour que le pare-feu puisse effectuer ses mises à jour (*Active Update*).
 
@@ -104,11 +104,11 @@ Le Proxy cache DNS est un service qui optimise la résolution de noms de domaine
 
 2. **Activer le cache DNS**
 
-   Cochez l'option **« Activer le cache de requête DNS »**.
+   Activer le bouton Proxy cache DNS.
 
 3. **Définir les clients autorisés**
 
-   Dans la **« Liste des clients DNS autorisés à utiliser le cache »**, ajoutez les machines, réseaux ou groupes qui pourront bénéficier du service :
+   Dans la **« Liste des clients autorisés à utiliser le cache DNS »**, ajoutez les machines, réseaux ou groupes qui pourront bénéficier du service :
    - Cliquez sur **Ajouter**.
    - Sélectionnez l'objet réseau correspondant (par exemple : `Network_internals` pour tous les réseaux internes, ou un objet spécifique comme votre serveur DNS en DMZ).
    - Validez avec **Appliquer** puis **Sauvegarder**.
@@ -127,9 +127,6 @@ Le Proxy cache DNS est un service qui optimise la résolution de noms de domaine
 
 </Steps>
 
-:::note
-Dans le cadre des labs de formation CSNA, le serveur DNS présent sur la DMZ (par exemple `172.16.x.10`) doit être ajouté dans la liste des clients autorisés à utiliser le cache DNS.
-:::
 
 ## 6. Configuration des Traces et Journaux
 
@@ -152,10 +149,18 @@ Avant de configurer les règles de filtrage et le NAT (_Network Address Translat
 
 2. **Dupliquer une politique existante**
 
-   - Sélectionnez une politique de référence (par exemple la **politique 10** qui contient souvent des règles de base bien structurées).
-   - Cliquez-droit sur la politique et sélectionnez **Copier**.
-   - Collez-la dans un emplacement libre (par exemple **politique 5**).
-   - Renommez cette politique avec un nom explicite (ex: « Configuration Personnalisée » ou « Lab BTS SIO »).
+   - Sélectionnez une politique de référence parmi :
+     - **Politiques 1 à 4** : politiques progressives où le niveau de sécurité diminue avec le numéro (la politique 1 est la plus restrictive, la 4 la plus permissive).
+     - **Politique 9** : politique très permissive avec IPS (_Intrusion Prevention System — Système de prévention d'intrusion_) activé.
+     - **Politique 10** : politique « pass all » sans filtrage ni IPS (déconseillée en production).
+
+   :::tip
+   Pour un environnement d'apprentissage, la **politique 10** est recommandée car elle facilite les tests et le débogage. En production, privilégiez les politiques 1 à 4 selon vos besoins de sécurité.
+   :::
+
+   - Dans le menu **Éditer**, choisir « Copier vers ».
+   - Choisir un emplacement libre (par exemple **politique 5**).
+   - Renommez cette politique avec un nom explicite (ex : « Configuration Personnalisée » ou « Lab BTS SIO »).
 
 3. **Activer votre politique personnalisée**
 
@@ -165,7 +170,7 @@ Avant de configurer les règles de filtrage et le NAT (_Network Address Translat
 </Steps>
 
 :::caution
-Ne modifiez jamais directement la politique 00 (Default policy) ni les politiques de référence fournies par Stormshield. Travaillez toujours sur une copie pour pouvoir revenir facilement à une configuration fonctionnelle en cas d'erreur.
+Ne modifiez jamais directement les politiques de référence fournies par Stormshield. Travaillez toujours sur une copie pour pouvoir revenir facilement à une configuration fonctionnelle en cas d'erreur.
 :::
 
 ### Configuration du NAT sortant
