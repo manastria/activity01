@@ -75,7 +75,7 @@ Rendez-vous dans le menu **Configuration > Système > Configuration**.
 
 Cette étape permet d'intégrer le pare-feu dans votre architecture.
 
-- **Interfaces :** Dans **Configuration > Réseau > Interfaces**, configurez vos interfaces (IN, OUT, DMZ) en leur attribuant des adresses IP statiques (ex: 192.168.x.254 pour l'interface IN). Il est nécessaire de sortir les interfaces du « bridge » par défaut.
+- **Interfaces :** Dans **Configuration > Réseau > Interfaces**, configurez vos interfaces (IN, OUT, DMZ) en leur attribuant des adresses IP statiques. Il est nécessaire de sortir les interfaces du « _bridge_ » par défaut.
 
 - **Route par défaut :** Dans **Configuration > Réseau > Routage** (onglet Routes statiques IPv4), définissez la passerelle par défaut (*gateway*) pour permettre l'accès à Internet. Créer un objet `GW_Labo` avec l'adresse IP `172.25.254.254`.
 
@@ -159,7 +159,7 @@ Avant de configurer les règles de filtrage et le NAT (_Network Address Translat
    :::
 
    - Dans le menu **Éditer**, choisir « Copier vers ».
-   - Choisir un emplacement libre (par exemple **politique 5**).
+   - Choisir un emplacement libre (typiquement les politiques 5 à 8).
    - Renommez cette politique avec un nom explicite (ex : « Configuration Personnalisée » ou « Lab BTS SIO »).
 
 3. **Activer votre politique personnalisée**
