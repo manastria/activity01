@@ -31,6 +31,10 @@ export default defineConfig({
             { label: 'Mémo', link: '/memo' },
           ],
         },
+        {
+          label: 'VPN',
+          autogenerate: { directory: 'activities/sns-vpn', collapsed: false },
+        },
       ],
       tableOfContents: {
         heading: 'Sommaire',

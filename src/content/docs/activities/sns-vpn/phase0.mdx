@@ -148,28 +148,15 @@ ping -c 4 8.8.8.8             # Ping Internet
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 #### 🔧 Tâche : Importer et configurer la VM SNS EVA1 (Étudiant X)
 
 **Contexte :** La VM SNS EVA1 de Stormshield Academy est livrée avec un client graphique et un serveur pré-configurés pour le contexte de la Stormshield Academy. Nous devons adapter cette configuration pour notre activité VPN.
 
 **1. Importer l'image OVA du pack EVA1**
 
-- Télécharger le pack EVA1 via Torrent (si ce n'est pas déjà fait)
-- Importer **uniquement** les VMs suivantes :
-  - Le **SNS (pare-feu)** : renommer en `SNS-Client-X`
-  - Le **client graphique** : renommer en `Client-Config-X` (utilisé temporairement pour la configuration)
-- **Ne pas importer** le serveur sur la DMZ (non utilisé dans cette activité) : il faut supprimer cette VM fournit dans le `.ova`
+- Télécharger EVA1 via Torrent (si ce n'est pas déjà fait)
+- Importer le **SNS (pare-feu)** : renommer en `SNS-Client-X`
+
 
 **2. Configuration de la VM SNS**
 
@@ -182,7 +169,6 @@ ping -c 4 8.8.8.8             # Ping Internet
   - **Adapter 1** (Interface OUT - vers LABO/Internet) :
     - ✅ Activé
     - Mode : `Accès par pont`
-    - Nom : Votre interface physique
     - **⚠️ Régénérer l'adresse MAC**
 
   - **Adapter 2** (Interface IN - vers réseau interne) :
@@ -193,39 +179,11 @@ ping -c 4 8.8.8.8             # Ping Internet
 
   - Adapters 3 et 4 : Désactivés
 
-**3. Configuration de la VM Client graphique**
-
-- Sélectionner `Client-Config-X` → `Configuration`
-- **Réseau** :
-  - **Adapter 1** :
-    - Mode : `Réseau interne`
-    - Nom : `reseau-interne-X` (⚠️ Même nom que l'interface IN du SNS)
-    - **⚠️ Régénérer l'adresse MAC**
-
-**4. Configuration initiale du SNS**
-
-**Démarrage des VMs :**
-1. Démarrer d'abord la VM `SNS-Client-X`
-2. Démarrer ensuite la VM `Client-Config-X`
-
-**Depuis le client graphique :**
-1. Lancer le script de configuration réseau (généralement disponible sur le bureau)
-2. Choisir l'option `sns` pour obtenir une adresse IP temporaire en 10.0.0.0/8
-3. Ouvrir un navigateur web
-4. Se connecter à : `https://10.0.0.254/admin`
-   - Login : `admin`
-   - Mot de passe : `admin`
-
-**5. Reconfiguration des interfaces réseau du SNS**
+**3. Reconfiguration des interfaces réseau du SNS**
 
 Une fois connecté à l'interface web du SNS :
 
-**Étape 1 : Sortir les interfaces du bridge**
-- Menu : `Configuration` → `Réseau` → `Interfaces`
-- Identifier les interfaces OUT et IN (généralement `eth0` et `eth1`)
-- Si elles sont en mode bridge, les dissocier du bridge
-
-**Étape 2 : Configurer l'interface OUT**
+**Étape 1 : Configurer l'interface OUT**
 - Sélectionner l'interface OUT (généralement `eth0`)
 - Type : `Statique`
 - Adresse IP : `172.25.X.254`
@@ -233,34 +191,14 @@ Une fois connecté à l'interface web du SNS :
 - Gateway : `172.25.254.254`
 - DNS : `172.25.254.15`
 
-**Étape 3 : Configurer l'interface IN**
+**Étape 2 : Configurer l'interface IN**
 - Sélectionner l'interface IN (généralement `eth1`)
 - Type : `Statique`
 - Adresse IP : `10.X.0.254`
 - Masque : `255.255.255.0` (ou `/24`)
 - Gateway : laisser vide
 
-**Étape 4 : Autoriser l'accès à l'interface web depuis l'interface OUT**
-
-:::danger[Configuration critique de l'accès]
-⚠️ Par défaut, l'interface web du SNS n'est accessible que depuis le réseau interne (IN).
-Pour pouvoir administrer le SNS depuis votre machine hôte ou votre VM Client (172.25.X.x), il faut autoriser explicitement l'accès depuis l'interface OUT.
-:::
-
-- Menu : `Configuration` → `Système` → `Administration`
-- Section `Interfaces réseau d'administration` :
-  - Cocher la case **OUT** (ou `eth0`) pour autoriser l'administration depuis cette interface
-  - ⚠️ Laisser **IN** cochée également
-- Vous pouvez également limiter l'accès par IP si nécessaire (optionnel) :
-  - Activer `Filtrage par adresse IP`
-  - Ajouter : `172.25.X.0/24` (votre sous-réseau personnel)
-
-**Étape 5 : Appliquer et redémarrer**
-- Appliquer la configuration
-- Le SNS va redémarrer les services réseau
-- ⚠️ Vous allez perdre la connexion depuis le client graphique (c'est normal)
-
-**6. Vérification de la nouvelle configuration**
+**4. Vérification de la nouvelle configuration**
 
 **Depuis votre machine hôte physique :**
 ```bash
@@ -269,14 +207,13 @@ ping 172.25.X.254     # Doit répondre
 
 **Accéder à la nouvelle interface web :**
 - URL : `https://172.25.X.254/admin`
-- Login : `admin` / mot de passe : `admin` (ou celui que vous avez défini)
 
-**Depuis l'interface web du SNS, ouvrir une console système :**
-- Menu : `Outils` → `Console système`
+**Depuis l'interface web du SNS, ouvrir une console CLI :**
+- Menu : `SYSTÈME` → `Console CLI`
 - Tester :
 ```bash
-ping 172.25.254.254   # Gateway LABO
-ping 8.8.8.8          # Internet
+SYSTEM PING host=172.25.254.254   # Gateway LABO
+SYSTEM PING host=8.8.8.88.8.8.8          # Internet
 ```
 
 **Depuis votre VM Client XUbuntu :**
@@ -306,8 +243,6 @@ ping 172.25.X.254     # Interface OUT du SNS
 
 - Importer les VMs suivantes :
   - Le **SNS (pare-feu)** : renommer en `SNS-Serveur-Y`
-  - Le **client graphique** : renommer en `Client-Config-Y`
-- **Ne pas importer** le serveur sur la DMZ (nous utiliserons un Debian personnalisé)
 
 **2. Configuration de la VM SNS**
 
@@ -332,32 +267,8 @@ ping 172.25.X.254     # Interface OUT du SNS
 
   - Adapters 3 et 4 : Désactivés
 
-**3. Configuration de la VM Client graphique**
 
-- Sélectionner `Client-Config-Y` → `Configuration`
-- **Réseau** :
-  - **Adapter 1** :
-    - Mode : `Réseau interne`
-    - Nom : `reseau-interne-Y` (⚠️ Même nom que l'interface IN du SNS)
-    - **⚠️ Régénérer l'adresse MAC**
-
-**4. Configuration initiale du SNS**
-
-**Démarrage des VMs :**
-1. Démarrer `SNS-Serveur-Y`
-2. Démarrer `Client-Config-Y`
-
-**Depuis le client graphique :**
-1. Lancer le script de configuration réseau
-2. Choisir `sns` pour obtenir une IP temporaire
-3. Se connecter à `https://10.0.0.254/admin`
-   - Login : `admin` / Mot de passe : `admin`
-
-**5. Reconfiguration des interfaces réseau**
-
-**Sortir les interfaces du bridge :**
-- Menu : `Configuration` → `Réseau` → `Interfaces`
-- Dissocier les interfaces du bridge si nécessaire
+**3. Reconfiguration des interfaces réseau**
 
 **Configurer l'interface OUT :**
 - Adresse IP : `172.25.Y.254`
@@ -372,7 +283,7 @@ ping 172.25.X.254     # Interface OUT du SNS
 
 **Appliquer et redémarrer les services réseau**
 
-**6. Vérification**
+**4. Vérification**
 
 Depuis votre machine hôte :
 ```bash

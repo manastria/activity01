@@ -123,23 +123,25 @@ Mise en place d'un **VPN SSL** (Virtual Private Network - Secure Sockets Layer) 
 - 2 machines virtuelles VirtualBox
 
 **VM 1 - Client VPN** :
-- OS : XUbuntu Desktop
+- OS : **XUbuntu**
+- Nom : `VPN-Client-X`
 - Réseau : Accès par pont (Bridge) → réseau LABO
-- IP : 172.25.X.10/16 (fixe)
-- Gateway : 172.25.254.254
-- DNS : 172.25.254.15
+- IP : `172.25.X.10/16` (fixe)
+- Gateway : `172.25.254.254`
+- DNS : `172.25.254.15`
 - Logiciel : OpenVPN Connect
 - Rôle : Simule un poste utilisateur distant (télétravail, agence)
 
 **VM 2 - SNS EVA1** :
-- OS : Stormshield EVA1
+- OS : **Stormshield EVA1**
+- Nom : `******`
 - Interface OUT :
   - Réseau : Accès par pont (Bridge)
-  - IP : 172.25.X.254/16
-  - Gateway : 172.25.254.254
+  - IP : `172.25.X.254/16`
+  - Gateway : `172.25.254.254`
 - Interface IN :
   - Réseau : Réseau interne VirtualBox (nom : `reseau-interne-X`)
-  - IP : 10.X.0.254/24
+  - IP : `10.X.0.254/24`
 - Rôle : Pare-feu de test (non utilisé pour le VPN ici)
 
 ---
@@ -152,6 +154,7 @@ Mise en place d'un **VPN SSL** (Virtual Private Network - Secure Sockets Layer) 
 
 **VM 1 - Serveur de ressources** :
 - OS : Debian 12 Server minimal
+- Nom : `******`
 - Réseau : Réseau interne VirtualBox (nom : `reseau-interne-Y`)
 - IP : 10.Y.1.20/24 (fixe)
 - Gateway : 10.Y.1.254 (SNS IN)
@@ -161,6 +164,7 @@ Mise en place d'un **VPN SSL** (Virtual Private Network - Secure Sockets Layer) 
 
 **VM 2 - SNS EVA1** :
 - OS : Stormshield EVA1
+- Nom : `******`
 - Interface OUT :
   - Réseau : Accès par pont (Bridge)
   - IP : 172.25.Y.254/16
