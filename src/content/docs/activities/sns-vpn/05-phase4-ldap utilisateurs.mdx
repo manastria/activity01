@@ -24,26 +24,22 @@ import { Steps, Aside } from '@astrojs/starlight/components';
 
 - ✅ Compris le rôle de l'authentification dans un VPN
 - ✅ Activé et configuré l'annuaire *LDAP* interne du SNS
-- ✅ Créé la structure organisationnelle (OU)
 - ✅ Créé les comptes utilisateurs pour l'accès VPN
 - ✅ Créé un groupe d'utilisateurs VPN
+- ✅ Attribué les droits d'accès VPN SSL au groupe
 - ✅ Validé l'authentification via l'outil de diagnostic
 
 ---
 
 ## Contexte : Pourquoi un annuaire *LDAP* ?
 
-### Le besoin métier
-
 Avant d'ouvrir un tunnel VPN, le pare-feu doit **vérifier l'identité** de l'utilisateur qui se connecte. Pour **TechServices SARL**, cela signifie :
 
-- Les collaborateurs de l'agence de Lyon s'authentifient avec leur login/mot de passe
+- Les collaborateurs s'authentifient avec leur login/mot de passe
 - Seuls les utilisateurs autorisés peuvent établir un tunnel VPN
 - L'administrateur peut révoquer un accès en désactivant un compte
 
-### *LDAP* en bref
-
-*LDAP* (*Lightweight Directory Access Protocol* — Protocole léger d'accès aux annuaires) est le protocole standard pour stocker et interroger des informations sur les utilisateurs. Le Stormshield SNS intègre un **annuaire LDAP interne** : pas besoin de serveur supplémentaire, tout est géré directement dans le pare-feu.
+*LDAP* (*Lightweight Directory Access Protocol* — Protocole léger d'accès aux annuaires) est le protocole standard pour stocker et interroger des informations sur les utilisateurs. Le SNS intègre un **annuaire LDAP interne** : pas besoin de serveur supplémentaire, tout est géré directement dans le pare-feu.
 
 :::tip[En production]
 Dans une vraie entreprise, le SNS se connecterait à l'*Active Directory* (*AD*) existant pour centraliser la gestion des utilisateurs. L'annuaire interne est idéal pour une PME ou un environnement de test comme celui-ci.
@@ -51,7 +47,7 @@ Dans une vraie entreprise, le SNS se connecterait à l'*Active Directory* (*AD*)
 
 :::caution[Rôle spécifique]
 **Cette phase est réalisée par l'Étudiant Y uniquement** (Serveur VPN).
-L'Étudiant X peut observer et prendre des notes sur la structure LDAP.
+L'Étudiant X peut observer et prendre des notes.
 :::
 
 ---
@@ -60,187 +56,146 @@ L'Étudiant X peut observer et prendre des notes sur la structure LDAP.
 
 <Steps>
 
-1. **Accéder à la configuration de l'annuaire**
+1. **Accéder à la configuration des annuaires**
 
    `Configuration` → `Utilisateurs` → `Configuration des annuaires`
 
-2. **Activer l'annuaire LDAP interne**
+   Cliquer sur **Création d'un annuaire LDAP interne** puis `Suivant`.
 
-   Onglet **Annuaire interne** :
+2. **Renseigner les paramètres de l'annuaire**
 
-   | Paramètre                       | Signification                                                                     | Valeur       |
-   | ------------------------------- | --------------------------------------------------------------------------------- | ------------ |
-   | Activer l'annuaire LDAP interne |                                                                                   | ✅ Cocher    |
-   | Organisation                    | Le nom de l’organisation (nom domaine)                                            | techservices |
-   | Domaine                         | Le TLD (_Top Level Domain_) du domaine.                                           | `local`      |
-   | Mot de passe                    | Un mot de passe permettant de se connecter à l’annuaire LDAP                      |              |
-   | Haché du mot de passe           | algorithme de hachage utilisé pour enregistrer les mots de passe des utilisateurs |              |
+   | Paramètre | Signification | Valeur |
+   |-----------|---------------|--------|
+   | **Organisation** | Nom de domaine de l'organisation | `techservices` |
+   | **Domaine** | *TLD* (*Top Level Domain*) | `local` |
+   | **Mot de passe** | Mot de passe d'accès à l'annuaire LDAP | `netlab123` |
+   | **Haché du mot de passe** | Algorithme de hachage des mots de passe utilisateurs | (laisser par défaut) |
 
-   - **Activer le profil d'authentification 0 (interne) sur l'interface sélectionnée** : **out**
+   Cliquer sur `Suivant`.
 
-   L’étape suivante permet de configurer des paramètres complémentaires :
-   - **Activer le profil d’authentification 0 (_internal_) sur une interface** : Dans le cas où le profil n’a pas déjà été activé. Si c’est le cas, cette option sera désactivée (grisée) et un message indique que l’association entre profil d’authentification et interface est déjà réalisée.
-   - **Activer l'enrôlement des utilisateurs via le profil 0 (interne) du portail Web** : Active le service d’enrôlement sur le profil 0 (interne) permettant aux utilisateurs de remplir un formulaire de création de compte qui sera soumis à l’approbation de l’administrateur.
-   - **Autoriser l’accès à la base LDAP** : Donne la possibilité d’exposer le service LDAP sur le réseau et d’y accéder depuis un client LDAP. Si cet accès n’est pas nécessaire, il est vivement conseillé de ne pas activer cette option.
+3. **Associer le profil d'authentification à l'interface**
 
-3. **Appliquer la configuration**
+   - Sélectionner l'interface **`out`** pour le profil 0
+   - Cliquer sur `Terminer`
 
-   Cliquer sur `Appliquer`.
+   Un résumé de la configuration s'affiche confirmant la création de l'annuaire.
 
 </Steps>
 
 :::tip[Compte-rendu]
 📝 **À ajouter dans votre compte-rendu (Section 5.1) :**
-- Capture d'écran de la page de configuration LDAP avec l'annuaire activé
+- Capture d'écran du résumé de configuration affiché après la création de l'annuaire
 :::
 
 ---
 
-## Étape 4.2 : Création de la structure organisationnelle
-
-Une *OU* (*Organizational Unit* — Unité organisationnelle) est un conteneur qui permet d'organiser les objets de l'annuaire (utilisateurs, groupes) en sous-dossiers logiques.
-
-Vous allez créer deux *OU* sous la racine `dc=techservices,dc=local` :
-
-```
-dc=techservices,dc=local
-  ├── ou=utilisateurs_vpn   ← contiendra les comptes utilisateurs
-  └── ou=groupes            ← contiendra les groupes d'accès
-```
-
-<Steps>
-
-1. **Accéder à la gestion de l'annuaire**
-
-   `Configuration` → `Utilisateurs` → `Annuaire` → onglet **Gestion de l'annuaire**
-
-2. **Créer l'OU « utilisateurs_vpn »**
-
-   - Clic droit sur `dc=techservices,dc=local`
-   - `Ajouter une unité organisationnelle`
-   - **Nom** : `utilisateurs_vpn`
-   - **Description** : `Utilisateurs autorisés à se connecter au VPN SSL`
-   - Cliquer sur `Créer`
-
-3. **Créer l'OU « groupes »**
-
-   - Clic droit sur `dc=techservices,dc=local`
-   - `Ajouter une unité organisationnelle`
-   - **Nom** : `groupes`
-   - **Description** : `Groupes d'utilisateurs`
-   - Cliquer sur `Créer`
-
-</Steps>
-
-:::tip[Compte-rendu]
-📝 **À ajouter dans votre compte-rendu (Section 5.2) :**
-- Capture d'écran de l'arborescence LDAP avec les deux OU créées
-:::
-
----
-
-## Étape 4.3 : Création des utilisateurs
+## Étape 4.2 : Création des utilisateurs
 
 ### Utilisateurs à créer
 
 Voici les comptes à créer pour l'entreprise **TechServices SARL** :
 
-| Nom complet   | Login     | Service               | Mot de passe |
-| ------------- | --------- | --------------------- | ------------ |
-| Jean Dupont   | `jdupont` | Commercial Lyon       | `Vpn2025!`   |
-| Marie Martin  | `mmartin` | Commercial Lyon       | `Vpn2025!`   |
-| Pierre Durand | `pdurand` | Support — télétravail | `Vpn2025!`   |
+| Nom complet | Identifiant | Service | Mot de passe |
+|-------------|-------------|---------|--------------|
+| Jean Dupont | `jdupont` | Commercial Lyon | `Vpn2025!` |
+| Marie Martin | `mmartin` | Commercial Lyon | `Vpn2025!` |
+| Pierre Durand | `pdurand` | Support — télétravail | `Vpn2025!` |
 
 ### 🔧 Tâche : Créer les trois utilisateurs
 
-Pour chaque utilisateur, dans l'arborescence LDAP :
-- Clic droit sur `ou=utilisateurs_vpn` → `Ajouter un utilisateur`
+<Steps>
 
-**Paramètres communs à tous les utilisateurs :**
+1. **Accéder à la gestion des utilisateurs**
 
-| Paramètre                              | Valeur     |
-| -------------------------------------- | ---------- |
-| Mot de passe                           | `Vpn2025!` |
-| Forcer le changement au prochain login | ❌ Non     |
-| Le mot de passe n'expire jamais        | ✅ Oui     |
-| Compte activé                          | ✅ Oui     |
+   `Configuration` → `Utilisateurs` → `Utilisateurs`
 
-**Paramètres spécifiques à chaque utilisateur :**
+2. **Créer les utilisateurs**
 
-| Champ           | Jean Dupont                  | Marie Martin                 | Pierre Durand                |
-| --------------- | ---------------------------- | ---------------------------- | ---------------------------- |
-| **Login**       | `jdupont`                    | `mmartin`                    | `pdurand`                    |
-| **Nom**         | `Dupont`                     | `Martin`                     | `Durand`                     |
-| **Prénom**      | `Jean`                       | `Marie`                      | `Pierre`                     |
-| **Description** | `Commercial - Lyon`          | `Commercial - Lyon`          | `Support - Télétravail`      |
-| **E-mail**      | `jdupont@techservices.local` | `mmartin@techservices.local` | `pdurand@techservices.local` |
-
-Une fois les trois créés, votre arborescence doit ressembler à :
-
-```
-dc=techservices,dc=local
-  ├── ou=utilisateurs_vpn
-  │     ├── cn=Jean Dupont (jdupont)
-  │     ├── cn=Marie Martin (mmartin)
-  │     └── cn=Pierre Durand (pdurand)
-  └── ou=groupes
-```
+</Steps>
 
 :::tip[Compte-rendu]
-📝 **À ajouter dans votre compte-rendu (Section 5.3) :**
-- Capture d'écran de l'arborescence avec les 3 utilisateurs créés
-- Capture d'écran de la fiche détaillée d'un utilisateur (onglet Identité)
+📝 **À ajouter dans votre compte-rendu (Section 5.2) :**
+- Capture d'écran de la liste des utilisateurs montrant les 3 comptes créés
 :::
 
 ---
 
-## Étape 4.4 : Création du groupe d'utilisateurs VPN
+## Étape 4.3 : Création du groupe d'utilisateurs VPN
 
 ### 🎯 Pourquoi un groupe ?
 
-En Phase 5, vous associerez les utilisateurs autorisés au VPN SSL. Plutôt que d'ajouter les utilisateurs **un par un**, on autorise un **groupe entier** : plus simple à gérer et à faire évoluer.
+Plutôt que d'attribuer des droits d'accès VPN utilisateur par utilisateur, on autorise un **groupe entier** : plus simple à gérer et à faire évoluer (ajouter un utilisateur = l'ajouter au groupe).
 
-### 🔧 Tâche : Créer le groupe « Utilisateurs_VPN »
+### 🔧 Tâche : Créer le groupe « VPN »
 
 <Steps>
 
 1. **Créer le groupe**
 
-   - Clic droit sur `ou=groupes` → `Ajouter un groupe`
+   Toujours dans `Configuration` → `Utilisateurs` → `Utilisateurs` :
 
-   | Paramètre              | Valeur                                                        |
-   | ---------------------- | ------------------------------------------------------------- |
-   | **Nom du groupe (CN)** | `Utilisateurs_VPN`                                            |
-   | **Description**        | `Groupe des utilisateurs autorisés à se connecter au VPN SSL` |
+   Cliquer sur `Ajouter un groupe` :
+   - **Nom du groupe** : `VPN`
 
-2. **Ajouter les membres**
+2. **Ajouter les membres au groupe**
 
-   Onglet **Membres** → `Ajouter` :
-   - ✅ `Jean Dupont (jdupont)`
-   - ✅ `Marie Martin (mmartin)`
-   - ✅ `Pierre Durand (pdurand)`
+   Dans la fiche du groupe, cliquer sur `+Ajouter` et rechercher chaque utilisateur par son *CN* (*Common Name*), le _drag and drop_ est aussi possible :
+   - ✅ `jdupont`
+   - ✅ `mmartin`
+   - ✅ `pdurand`
 
-3. **Créer le groupe**
+   :::caution[Recherche par CN obligatoire]
+   Recherchez les utilisateurs dans le champ **Cn** — sinon le SNS affichera un message d'erreur lors de la création du groupe.
+   :::
 
-   Cliquer sur `Créer`.
+3. **Sauvegarder le groupe**
+
+   Cliquer sur `Appliquer` puis `Sauvegarder`.
 
 </Steps>
 
-Arborescence finale :
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 5.3) :**
+- Capture d'écran de la fiche du groupe `VPN` montrant ses 3 membres
+:::
 
-```
-dc=techservices,dc=local
-  ├── ou=utilisateurs_vpn
-  │     ├── cn=Jean Dupont (jdupont)
-  │     ├── cn=Marie Martin (mmartin)
-  │     └── cn=Pierre Durand (pdurand)
-  └── ou=groupes
-        └── cn=Utilisateurs_VPN (3 membres)
-```
+---
+
+## Étape 4.4 : Attribution des droits d'accès VPN SSL
+
+Il ne suffit pas de créer un groupe : il faut **explicitement autoriser** ce groupe à utiliser le service VPN SSL via la politique des droits d'accès.
+
+<Steps>
+
+1. **Accéder aux droits d'accès**
+
+   `Configuration` → `Utilisateurs` → `Droits d'accès`
+
+2. **Sélectionner l'onglet « Accès détaillé »**
+
+3. **Ajouter le groupe VPN**
+
+   Cliquer sur `+Ajouter` et sélectionner le groupe `VPN`.
+
+4. **Autoriser l'accès VPN SSL**
+
+   Sur la ligne du groupe `VPN` :
+   - Colonne **VPN SSL** : sélectionner `Autoriser`
+   - Double-cliquer sur la colonne **État** pour passer la règle à `Activé`
+
+5. **Appliquer et sauvegarder**
+
+   Cliquer sur `Appliquer` puis `Sauvegarder`.
+
+</Steps>
+
+:::note[Rôle de cette étape]
+Cette configuration est **indépendante** des règles de filtrage que vous créerez en Phase 6. Elle définit les **droits applicatifs** : qui a le droit d'utiliser le service VPN SSL. Le filtrage réseau contrôle, lui, les flux autorisés à traverser le pare-feu.
+:::
 
 :::tip[Compte-rendu]
 📝 **À ajouter dans votre compte-rendu (Section 5.4) :**
-- Capture d'écran de la fiche du groupe `Utilisateurs_VPN` montrant ses 3 membres
+- Capture d'écran de la page des droits d'accès montrant le groupe `VPN` avec l'accès VPN SSL autorisé et activé
 :::
 
 ---
@@ -249,26 +204,23 @@ dc=techservices,dc=local
 
 ### 🔧 Tâche : Tester l'authentification
 
+TODO : l'outil ne se trouve pas à cet endroit
+
 Le SNS dispose d'un outil de diagnostic intégré pour vérifier qu'un utilisateur peut bien s'authentifier.
 
-`Configuration` → `Utilisateurs` → `Annuaire` → onglet **Test d'authentification**
+`Configuration` → `Utilisateurs` → `Configuration des annuaires` → onglet **Test d'authentification** (ou depuis le menu Authentification)
 
 **Tests à effectuer :**
 
-| Utilisateur | Mot de passe        | Résultat attendu            |
-| ----------- | ------------------- | --------------------------- |
-| `jdupont`   | `Vpn2025!`          | ✅ Authentification réussie |
-| `mmartin`   | `Vpn2025!`          | ✅ Authentification réussie |
-| `pdurand`   | `Vpn2025!`          | ✅ Authentification réussie |
-| `jdupont`   | `MauvaisMotDePasse` | ❌ Échec (attendu)          |
-
-Pour chaque test réussi, vérifiez que la réponse indique bien :
-- Le *DN* complet de l'utilisateur : `cn=Jean Dupont,ou=utilisateurs_vpn,dc=techservices,dc=local`
-- Son appartenance au groupe : `cn=Utilisateurs_VPN,ou=groupes,dc=techservices,dc=local`
+| Utilisateur | Mot de passe | Résultat attendu |
+|-------------|--------------|------------------|
+| `jdupont` | `Vpn2025!` | ✅ Authentification réussie |
+| `mmartin` | `Vpn2025!` | ✅ Authentification réussie |
+| `jdupont` | `MauvaisMotDePasse` | ❌ Échec (attendu) |
 
 :::tip[Compte-rendu]
 📝 **À ajouter dans votre compte-rendu (Section 5.5) :**
-- Capture d'écran du résultat de test réussi pour `jdupont` (avec DN et groupe visibles)
+- Capture d'écran d'un test réussi pour `jdupont`
 - Capture d'écran d'un test échoué (mauvais mot de passe)
 :::
 
@@ -278,17 +230,17 @@ Pour chaque test réussi, vérifiez que la réponse indique bien :
 
 Complétez ce tableau dans votre compte-rendu :
 
-| Élément                        | Vérification                 | ✅/❌ |
-| ------------------------------ | ---------------------------- | ----- |
-| Annuaire LDAP activé           | Page de config → LDAP activé |       |
-| Base DN correcte               | `dc=techservices,dc=local`   |       |
-| OU `utilisateurs_vpn` créée    | Arborescence visible         |       |
-| OU `groupes` créée             | Arborescence visible         |       |
-| 3 utilisateurs créés           | Sous `ou=utilisateurs_vpn`   |       |
-| Groupe `Utilisateurs_VPN` créé | Sous `ou=groupes`            |       |
-| Groupe contient 3 membres      | Fiche du groupe              |       |
-| Auth. `jdupont` réussie        | Outil de test                |       |
-| Auth. mauvais mdp refusée      | Outil de test                |       |
+| Élément | Vérification | ✅/❌ |
+|---------|--------------|-------|
+| Annuaire LDAP activé | Résumé de configuration affiché | |
+| Interface `out` associée au profil 0 | Résumé de configuration | |
+| 3 utilisateurs créés | Liste des utilisateurs | |
+| Groupe `VPN` créé | Liste des utilisateurs | |
+| Groupe `VPN` contient 3 membres | Fiche du groupe | |
+| Droits VPN SSL attribués au groupe | Droits d'accès → Accès détaillé | |
+| Règle d'accès activée | Colonne État → Activé | |
+| Auth. `jdupont` réussie | Outil de test | |
+| Auth. mauvais mdp refusée | Outil de test | |
 
 ---
 
@@ -296,18 +248,19 @@ Complétez ce tableau dans votre compte-rendu :
 
 Avant de passer à la Phase 5, assurez-vous que :
 
-- [ ] L'annuaire LDAP interne est activé avec la Base DN `dc=techservices,dc=local`
-- [ ] Les deux OU (`utilisateurs_vpn` et `groupes`) sont créées
-- [ ] Les 3 utilisateurs sont créés dans `ou=utilisateurs_vpn`
-- [ ] Le groupe `Utilisateurs_VPN` est créé avec ses 3 membres
-- [ ] L'authentification des 3 utilisateurs est validée par l'outil de test
+- [ ] L'annuaire LDAP interne est activé et associé à l'interface `out`
+- [ ] Les 3 utilisateurs (`jdupont`, `mmartin`, `pdurand`) sont créés
+- [ ] Le groupe `VPN` est créé avec ses 3 membres
+- [ ] Le groupe `VPN` dispose du droit d'accès **VPN SSL → Autoriser** et est **activé**
+- [ ] L'authentification des utilisateurs est validée par l'outil de test
 - [ ] Un mauvais mot de passe est bien refusé
 - [ ] Votre compte-rendu (Section 5) est complété avec les captures d'écran
 
 :::tip[Checkpoint enseignant]
 👨‍🏫 **Avant de continuer**, faites valider votre configuration par l'enseignant en lui montrant :
-1. L'arborescence LDAP complète
-2. Un test d'authentification réussi pour `jdupont` avec son DN et son groupe visibles
+1. La liste des utilisateurs et la fiche du groupe `VPN`
+2. La page des droits d'accès avec le groupe `VPN` autorisé en VPN SSL
+3. Un test d'authentification réussi
 :::
 
 ---
@@ -317,8 +270,7 @@ Avant de passer à la Phase 5, assurez-vous que :
 Vous avez maintenant :
 
 - ✅ Un annuaire LDAP interne opérationnel sur le SNS
-- ✅ Une structure organisationnelle claire (OU utilisateurs / groupes)
 - ✅ 3 comptes utilisateurs prêts pour l'authentification VPN
-- ✅ Un groupe `Utilisateurs_VPN` qui sera utilisé pour contrôler l'accès au VPN
+- ✅ Un groupe `VPN` avec les droits d'accès VPN SSL
 
 **Prochaine étape** : Phase 5 — Configuration du serveur VPN SSL

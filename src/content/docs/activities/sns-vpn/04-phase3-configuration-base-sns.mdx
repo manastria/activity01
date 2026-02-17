@@ -238,7 +238,7 @@ Dans la politique `(6) VPN-SSL`, onglet **NAT**, créez une règle de **partage 
 |---------|-----------|--------|
 | **Général** | Commentaire | `SNAT — Réseau interne vers Internet` |
 | | État | On |
-| **Trafic original** | Source | `Reseau_Interne_Y` (10.Y.1.0/24) |
+| **Trafic original** | Source | `Network_internals` (10.Y.1.0/24) |
 | | Destination | `Internet` ⚠️ jamais `Any` |
 | **Trafic après translation** | Source translatée | `Firewall_out` (172.25.Y.254) |
 | | Port source translaté | `ephemeral_fw` (port aléatoire) |
