@@ -1,20 +1,15 @@
 ---
-title: "Activité - Mise en place d'un VPN SSL avec Stormshield EVA1"
-description: "Guide complet pour configurer un VPN SSL permettant l'accès sécurisé aux ressources d'entreprise"
+title: "Mise en place d'un VPN SSL avec Stormshield"
+description: "Introduction à l'activité de configuration d'un VPN SSL pour l'accès sécurisé aux ressources d'entreprise"
 sidebar:
   order: 1
-status: "draft"
-level: "BTS SIO 1"
-duration: "45 min"
-tags: ["exemple"]
-draft: true
 ---
 
-# Activité - Mise en place d'un VPN SSL avec Stormshield EVA1
+import { Aside } from '@astrojs/starlight/components';
 
 ## Informations générales
 
-- **Durée estimée** : 8 à 12 heures
+- **Durée estimée** : 8 à 10 heures
 - **Niveau** : BTS SIO SISR
 - **Prérequis** : Configuration réseau de base, règles de filtrage, NAT
 - **Modalité** : Travail en binôme
@@ -28,7 +23,7 @@ draft: true
 
 **TechServices SARL** est une entreprise de services informatiques qui compte aujourd'hui 45 collaborateurs répartis sur deux sites :
 
-- **Siège social à Paris** (40 personnes) : héberge le serveur de fichiers principal, l'ERP de gestion et l'infrastructure réseau centrale
+- **Siège social à Paris** (40 personnes) : héberge le serveur de fichiers principal, l'*ERP* (*Enterprise Resource Planning* - Progiciel de Gestion Intégré) de gestion et l'infrastructure réseau centrale
 - **Agence de Lyon** (5 personnes) : petite équipe commerciale qui doit accéder quotidiennement aux ressources du siège
 
 ### Problématique
@@ -45,7 +40,7 @@ L'entreprise fait face à plusieurs défis :
 
 ### Solution proposée
 
-Mise en place d'un **VPN SSL** (Virtual Private Network - Secure Sockets Layer) permettant :
+Mise en place d'un **VPN SSL** (*Virtual Private Network - Secure Sockets Layer*) permettant :
 
 - ✅ Authentification forte des utilisateurs (login/mot de passe + certificats)
 - ✅ Chiffrement de bout en bout des communications
@@ -125,24 +120,24 @@ Mise en place d'un **VPN SSL** (Virtual Private Network - Secure Sockets Layer) 
 **VM 1 - Client VPN** :
 - OS : **XUbuntu**
 - Nom : `VPN-Client-X`
-- Réseau : Accès par pont (Bridge) → réseau LABO
+- Réseau : Accès par pont (*Bridge*) → réseau LABO
 - IP : `172.25.X.10/16` (fixe)
-- Gateway : `172.25.254.254`
+- *Gateway* : `172.25.254.254`
 - DNS : `172.25.254.15`
 - Logiciel : OpenVPN Connect
 - Rôle : Simule un poste utilisateur distant (télétravail, agence)
 
 **VM 2 - SNS EVA1** :
 - OS : **Stormshield EVA1**
-- Nom : `******`
+- Nom : `SNS-Client-X`
 - Interface OUT :
-  - Réseau : Accès par pont (Bridge)
+  - Réseau : Accès par pont (*Bridge*)
   - IP : `172.25.X.254/16`
-  - Gateway : `172.25.254.254`
+  - *Gateway* : `172.25.254.254`
 - Interface IN :
   - Réseau : Réseau interne VirtualBox (nom : `reseau-interne-X`)
   - IP : `10.X.0.254/24`
-- Rôle : Pare-feu de test (non utilisé pour le VPN ici)
+- Rôle : Pare-feu de test (non utilisé pour le VPN dans cette activité)
 
 ---
 
@@ -154,21 +149,21 @@ Mise en place d'un **VPN SSL** (Virtual Private Network - Secure Sockets Layer) 
 
 **VM 1 - Serveur de ressources** :
 - OS : Debian 12 Server minimal
-- Nom : `******`
+- Nom : `Serveur-Debian-Y`
 - Réseau : Réseau interne VirtualBox (nom : `reseau-interne-Y`)
 - IP : 10.Y.1.20/24 (fixe)
-- Gateway : 10.Y.1.254 (SNS IN)
+- *Gateway* : 10.Y.1.254 (SNS IN)
 - DNS : 172.25.254.15
 - Services : Apache2, SSH
 - Rôle : Serveur web/fichiers de l'entreprise (ressource à protéger)
 
 **VM 2 - SNS EVA1** :
 - OS : Stormshield EVA1
-- Nom : `******`
+- Nom : `SNS-Serveur-Y`
 - Interface OUT :
-  - Réseau : Accès par pont (Bridge)
+  - Réseau : Accès par pont (*Bridge*)
   - IP : 172.25.Y.254/16
-  - Gateway : 172.25.254.254
+  - *Gateway* : 172.25.254.254
   - **Serveur VPN SSL écoute ici** (443/TCP)
 - Interface IN :
   - Réseau : Réseau interne VirtualBox (nom : `reseau-interne-Y`)
@@ -177,84 +172,30 @@ Mise en place d'un **VPN SSL** (Virtual Private Network - Secure Sockets Layer) 
 
 ---
 
-## Plan d'adressage
+## Vue d'ensemble de l'activité
 
-### Comprendre votre adresse réseau personnelle
+Cette activité se décompose en plusieurs phases progressives :
 
-**Rappel important :** En début d'année, chaque étudiant s'est vu attribuer une plage d'adresses réseau personnelle au format `172.25.X.0/24` où **X est votre numéro personnel**.
+| Phase | Titre | Durée | Acteur principal |
+|-------|-------|-------|------------------|
+| **Phase 1** | Constitution des binômes et plan d'adressage | 30 min | Binôme |
+| **Phase 2** | Configuration des machines virtuelles | 2h00 | Binôme |
+| **Phase 3** | Configuration de base du SNS | 1h00 | Étudiant Y |
+| **Phase 4** | Annuaire LDAP et utilisateurs | 1h00 | Étudiant Y |
+| **Phase 5** | Serveur VPN SSL | 1h30 | Étudiant Y |
+| **Phase 6** | Règles de filtrage VPN | 1h00 | Étudiant Y |
+| **Phase 7** | Installation du client et connexion | 1h30 | Étudiant X |
 
-Cette plage `/24` indique votre "zone" dans le réseau LABO, mais **toutes vos configurations réseau doivent utiliser le masque `/16`** pour communiquer avec l'ensemble du LABO (gateway, DNS, autres étudiants).
-
-:::tip[Retrouver votre numéro X]
-Si vous ne vous souvenez plus de votre numéro personnel X :
-- Vérifiez dans vos notes du début d'année
-- Consultez le fichier partagé par l'enseignant
-- Regardez la configuration IP actuelle de votre machine hôte : `ip a`
-  - Si vous voyez `172.25.42.1/16`, alors votre X = 42
+:::tip[Progression pédagogique]
+Chaque phase s'appuie sur les précédentes. Il est impératif de valider chaque étape avant de passer à la suivante.
 :::
 
-**Pourquoi utiliser /16 et pas /24 ?**
-
-Le réseau LABO est un grand réseau `172.25.0.0/16` qui contient tous les étudiants :
-- Le masque `/16` signifie que les deux premiers octets sont fixes : `172.25`
-- Les deux derniers octets sont variables : de `0.0` à `255.255`
-- Cela permet 65 536 adresses au total
-
-**Si vous configurez en /24 au lieu de /16, vous ne pourrez pas :**
-- ❌ Pinguer la gateway `172.25.254.254` (elle sera considérée hors réseau)
-- ❌ Communiquer avec votre binôme (172.25.Y.x sera hors réseau)
-- ❌ Accéder à Internet
-
-**Configuration correcte :**
-- ✅ Adresse IP : `172.25.X.10`
-- ✅ Masque réseau : `255.255.0.0` (soit `/16`)
-- ✅ Gateway : `172.25.254.254`
-- ✅ DNS : `172.25.254.15`
-
-:::caution[Conservation de l'information]
-**Votre numéro X est réutilisé dans toutes les activités réseau de l'année.**
-Le `/24` indique juste votre "zone" attribuée, mais vous configurez toujours en `/16` !
+:::note[Utilisation des fiches techniques]
+Pour les manipulations techniques détaillées (création de règles, configuration LDAP, etc.), vous utiliserez les **fiches techniques Stormshield** disponibles dans votre espace de cours. L'activité se concentre sur les paramètres spécifiques à mettre en œuvre.
 :::
 
 ---
 
-### Tableau d'adressage pour l'activité VPN
+## Prochaine étape
 
-| Élément                   | Étudiant X (Client)          | Étudiant Y (Serveur)            |
-|---------------------------|------------------------------|---------------------------------|
-| **Machine hôte physique** | 172.25.X.1/16                | 172.25.Y.1/16                   |
-| **VM Client VPN**         | 172.25.X.10/16 (Bridge)      | -                               |
-| **VM Serveur Debian**     | -                            | 10.Y.1.20/24 (Interne)          |
-| **SNS Interface OUT**     | 172.25.X.254/16 (Bridge)     | 172.25.Y.254/16 (Bridge)        |
-| **SNS Interface IN**      | 10.X.0.254/24 (Interne)      | 10.Y.1.254/24 (Interne)         |
-| **Pool VPN SSL**          | -                            | 10.Y.100.0/26 (64 adresses max) |
-
-**Légende des masques :**
-- `/16` : Utilisé pour le réseau LABO (172.25.0.0/16) - permet communication avec gateway et autres étudiants
-- `/24` : Utilisé pour les réseaux internes privés (10.X.0.0/24, 10.Y.1.0/24) - isolés du LABO
-- `/26` : Utilisé pour le pool VPN (64 adresses) - sous-réseau du réseau interne Y
-
-:::tip[Exemple concret pour un binôme]
-**Exemple :** Vous êtes Sarah (X=15) et travaillez avec Lucas (Y=27)
-
-**Configuration Sarah (Client VPN) :**
-- VM Client : `172.25.15.10/16` ← **masque /16 obligatoire**
-  - Gateway : `172.25.254.254`
-  - DNS : `172.25.254.15`
-- SNS OUT : `172.25.15.254/16`
-- SNS IN : `10.15.0.254/24` (réseau privé, non utilisé ici)
-
-**Configuration Lucas (Serveur VPN) :**
-- VM Serveur Debian : `10.27.1.20/24` ← **masque /24 (réseau privé)**
-  - Gateway : `10.27.1.254` (son SNS IN)
-  - DNS : `172.25.254.15` (via le SNS)
-- SNS OUT : `172.25.27.254/16` ← **masque /16** + Serveur VPN écoute ici
-  - Gateway : `172.25.254.254`
-- SNS IN : `10.27.1.254/24` ← **réseau privé entreprise**
-- Pool clients VPN : `10.27.100.0/26` (IPs de .1 à .62)
-
-**Flux de connexion VPN :**
-1. Sarah (172.25.15.10) se connecte vers 172.25.27.254:443 (serveur VPN de Lucas)
-2. Une fois le tunnel établi, Sarah obtient une IP du pool : 10.27.100.5
-3. Sarah peut maintenant accéder au serveur Debian : 10.27.1.20
-:::
+Une fois cette introduction lue et comprise, passez à la **Phase 1 : Constitution des binômes et plan d'adressage**.

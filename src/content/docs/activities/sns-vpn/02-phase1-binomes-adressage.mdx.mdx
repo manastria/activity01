@@ -1,0 +1,380 @@
+---
+title: "Phase 1 : Binômes et plan d'adressage"
+description: "Constitution des binômes, compréhension du plan d'adressage et préparation du compte-rendu d'activité"
+sidebar:
+  order: 2
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+## Informations
+
+- **Durée estimée** : 30 minutes
+- **Prérequis** : Avoir lu l'introduction de l'activité
+- **Modalité** : Travail en binôme
+- **Livrable** : Tableau d'identification complété et validé
+
+---
+
+## Objectifs de cette phase
+
+À l'issue de cette phase, vous aurez :
+
+- ✅ Constitué votre binôme et défini les rôles (Client / Serveur)
+- ✅ Retrouvé vos numéros personnels X et Y
+- ✅ Compris le plan d'adressage de l'activité
+- ✅ Complété le tableau d'identification
+- ✅ Fait valider votre configuration par l'enseignant
+- ✅ Commencé votre compte-rendu d'activité
+
+---
+
+## Étape 1.1 : Qui fait quoi dans cette activité ?
+
+### 🤝 Formation du binôme
+
+**Trouvez un binôme** et asseyez-vous côte à côte pour faciliter les échanges.
+
+:::tip[Choix du binôme]
+Privilégiez un binôme avec qui vous pouvez communiquer facilement. Vous allez devoir coordonner vos actions pendant toute l'activité (environ 8-10 heures de travail).
+:::
+
+### 🎭 Répartition des rôles
+
+Décidez ensemble qui jouera quel rôle :
+
+| Rôle | Machine virtuelle | Responsabilité principale | Phases concernées |
+|------|-------------------|---------------------------|-------------------|
+| **Étudiant X** (Client VPN) | VM Client XUbuntu + SNS Client | Installer et configurer le client VPN, tester la connexion | Phases 2, 7 |
+| **Étudiant Y** (Serveur VPN) | VM Serveur Debian + SNS Serveur | Configurer le serveur VPN, LDAP, règles de filtrage | Phases 2, 3, 4, 5, 6 |
+
+:::note[Charge de travail]
+L'**Étudiant Y** a plus de manipulations techniques à réaliser (configuration du serveur VPN, LDAP, règles). L'**Étudiant X** observe ces configurations et intervient pour les tests de connexion VPN en Phase 7.
+
+**Les deux étudiants** participent activement à la Phase 2 (configuration des VMs) et doivent rédiger leur propre compte-rendu individuel.
+:::
+
+<Steps>
+
+1. **Désignez les rôles**
+
+   Notez dans un coin de votre feuille ou cahier :
+   ```
+   Mon rôle : Étudiant X (Client VPN)
+   OU
+   Mon rôle : Étudiant Y (Serveur VPN)
+   ```
+
+2. **Échangez vos coordonnées**
+
+   Notez le nom/prénom de votre binôme. Vous en aurez besoin pour le compte-rendu et pour communiquer pendant l'activité.
+
+</Steps>
+
+---
+
+## Étape 1.2 : Retrouver vos numéros personnels
+
+### 🔢 Qu'est-ce que votre « numéro personnel » ?
+
+En début d'année, chaque étudiant s'est vu attribuer une **plage d'adresses réseau personnelle** au format `172.25.X.0/24` où **X est votre numéro unique**.
+
+Ce numéro X :
+- Vous a été attribué **une seule fois** en début d'année
+- Est **réutilisé dans toutes les activités réseau** de l'année
+- Définit votre « zone » dans le réseau LABO
+
+:::caution[Important]
+Votre numéro X ne change jamais pendant l'année scolaire. Si vous l'avez oublié, il faut absolument le retrouver maintenant !
+:::
+
+### 🔍 Comment retrouver votre numéro X ?
+
+Vérifiez dans :
+- Votre cahier de TP réseau (début d'année)
+- Vos comptes-rendus d'activités précédentes
+- Le fichier de référence partagé par l'enseignant
+
+
+:::tip[Notez-le immédiatement]
+Dès que vous avez retrouvé votre numéro X, **notez-le en gros** sur votre feuille :
+```
+MON NUMÉRO PERSONNEL : X = ____
+```
+:::
+
+---
+
+## Étape 1.3 : Comprendre le plan d'adressage
+
+### 📊 Les différents réseaux de l'activité
+
+Cette activité utilise **trois types de réseaux** différents. Il est crucial de bien les comprendre pour éviter les erreurs de configuration.
+
+#### 🌐 Réseau 1 : Le réseau LABO (Internet simulé)
+
+**Réseau** : `172.25.0.0/16`
+
+Ce réseau représente « Internet » dans notre activité :
+- C'est le réseau **physique** du laboratoire
+- Il connecte toutes les machines hôtes et certaines VMs
+- Il permet d'accéder à la vraie passerelle Internet : `172.25.254.254`
+
+**Machines connectées à ce réseau :**
+- Machines hôtes : `172.25.X.1/16` et `172.25.Y.1/16`
+- VM Client VPN : `172.25.X.10/16`
+- SNS interface OUT : `172.25.X.254/16` et `172.25.Y.254/16`
+
+:::caution[Masque /16 obligatoire]
+⚠️ **TOUTES les adresses en 172.25.x.x doivent utiliser le masque /16**
+
+Si vous configurez en `/24`, vous ne pourrez pas communiquer avec :
+- La passerelle LABO (172.25.254.254)
+- Votre binôme
+- Internet
+
+Le `/24` correspond à votre plage d'adresses personnelle afin de définir le début et la fin de votre zone réseau dans le LABO. Mais pour la communication, vous devez utiliser le masque `/16` qui englobe toutes les zones X et Y.
+:::
+
+#### 🏢 Réseau 2 : Les réseaux internes (entreprises simulées)
+
+Chaque étudiant a son propre réseau interne privé, isolé du LABO :
+
+- **Étudiant X** : `10.X.0.0/24` (réseau privé, non utilisé dans cette activité VPN)
+- **Étudiant Y** : `10.Y.1.0/24` (réseau d'entreprise où se trouve le serveur Debian)
+
+**Machines connectées au réseau interne de Y :**
+- SNS interface IN : `10.Y.1.254/24`
+- Serveur Debian : `10.Y.1.20/24`
+
+:::note[Isolation]
+Ces réseaux sont complètement **isolés** du réseau LABO. C'est normal : ils représentent le réseau privé de l'entreprise, inaccessible depuis Internet.
+:::
+
+#### 🔐 Réseau 3 : Le pool VPN SSL
+
+**Réseau** : `10.Y.100.0/26`
+
+Ce sous-réseau sera utilisé pour attribuer des adresses IP aux clients VPN connectés :
+- Plage utilisable : `10.Y.100.1` à `10.Y.100.62` (62 adresses)
+- Passerelle virtuelle : `10.Y.100.254`
+
+:::tip[Comprendre le /26]
+Un masque `/26` permet 64 adresses IP (2^6), dont :
+- 1 adresse réseau (`.0`)
+- 1 adresse broadcast (`.63`)
+- **62 adresses utilisables** pour les clients VPN
+:::
+
+### 🧮 Pourquoi /16 pour le LABO et /24 pour les réseaux internes ?
+
+**Le réseau LABO utilise /16** car :
+- Il doit contenir tous les étudiants (jusqu'à 254 zones X possibles)
+- Les deux premiers octets sont fixes : `172.25`
+- Les deux derniers varient : de `.0.0` à `.255.255`
+- Capacité totale : 65 536 adresses
+
+**Les réseaux internes utilisent /24** car :
+- Ce sont des petits réseaux privés (max 254 machines)
+- Ils sont isolés du LABO
+- Configuration classique pour un réseau d'entreprise
+
+---
+
+## Étape 1.4 : Compléter votre tableau d'identification
+
+### 📝 Tableau à compléter
+
+Recopiez ce tableau **dans votre compte-rendu** (voir section suivante) et complétez-le avec vos numéros X et Y :
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║         IDENTIFICATION DU BINÔME - ACTIVITÉ VPN SSL           ║
+╠═══════════════════════════════════════════════════════════════╣
+║                                                               ║
+║ Étudiant X (Rôle : Client VPN)                                ║
+║   - Nom/Prénom : _______________________________________      ║
+║   - Mon numéro personnel X : _____                            ║
+║                                                               ║
+║   Adresses IP de mes machines :                               ║
+║   - Machine hôte physique : 172.25._____.1/16                 ║
+║   - VM Client VPN         : 172.25._____.10/16                ║
+║   - SNS OUT               : 172.25._____.254/16               ║
+║   - SNS IN                : 10._____.0.254/24                 ║
+║                                                               ║
+╟───────────────────────────────────────────────────────────────╢
+║                                                               ║
+║ Étudiant Y (Rôle : Serveur VPN)                               ║
+║   - Nom/Prénom : _______________________________________      ║
+║   - Mon numéro personnel Y : _____                            ║
+║                                                               ║
+║   Adresses IP de mes machines :                               ║
+║   - Machine hôte physique : 172.25._____.1/16                 ║
+║   - VM Serveur Debian     : 10._____.1.20/24                  ║
+║   - SNS OUT               : 172.25._____.254/16 ← Serveur VPN ║
+║   - SNS IN                : 10._____.1.254/24                 ║
+║   - Pool VPN SSL          : 10._____.100.0/26                 ║
+║                                                               ║
+╟───────────────────────────────────────────────────────────────╢
+║ Informations communes au binôme :                            ║
+║   - Gateway LABO : 172.25.254.254                             ║
+║   - DNS LABO     : 172.25.254.15                              ║
+║   - URL serveur VPN : https://172.25._____.254:443            ║
+║                                                               ║
+╚═══════════════════════════════════════════════════════════════╝
+```
+
+### ✅ Points de vérification
+
+Avant de faire valider par l'enseignant, vérifiez que :
+
+- [ ] Les deux numéros X et Y sont **différents**
+- [ ] Toutes les adresses en `172.25.x.x` ont le masque **`/16`**
+- [ ] Toutes les adresses en `10.x.x.x` ont le masque **`/24`** (sauf le pool VPN en `/26`)
+- [ ] Les noms/prénoms sont remplis
+- [ ] L'URL du serveur VPN utilise bien le numéro Y
+
+:::danger[Erreur fréquente]
+❌ **Ne mettez PAS de /24 sur les adresses 172.25.x.x !**
+
+Si vous écrivez `172.25.42.10/24`, vous ne pourrez pas communiquer avec la passerelle `172.25.254.254` car elle sera considérée comme « hors réseau ».
+
+✅ **Toujours utiliser /16** : `172.25.42.10/16`
+:::
+
+---
+
+## Étape 1.5 : Préparer votre compte-rendu d'activité
+
+### 📄 Pourquoi un compte-rendu ?
+
+Le compte-rendu d'activité est un **document professionnel** qui :
+- Documente votre travail pour votre portfolio de compétences
+- Prouve votre maîtrise des technologies VPN SSL
+- Sera évalué par votre enseignant
+- Pourra être présenté lors de votre examen ou en entretien d'embauche
+
+### 📋 Structure du compte-rendu
+
+Créez dès maintenant un document (LibreOffice Writer, Google Docs, ou Markdown) avec la structure suivante :
+
+```markdown
+# Compte-rendu d'activité : Mise en place d'un VPN SSL avec Stormshield
+
+**Nom/Prénom :** Votre nom
+**Classe :** BTS SIO SISR 1/2
+**Date de réalisation :** [Date de début] au [Date de fin]
+**Binôme :** Nom/Prénom de votre binôme
+
+---
+
+## 1. Contexte de l'activité
+
+[Résumez en 3-4 lignes le contexte professionnel : entreprise TechServices,
+problématique de sécurité, solution VPN SSL proposée]
+
+---
+
+## 2. Identification du binôme et plan d'adressage
+
+### 2.1 Répartition des rôles
+
+- **Mon rôle :** Étudiant X (Client VPN) OU Étudiant Y (Serveur VPN)
+- **Binôme :** [Nom/Prénom]
+- **Son rôle :** Étudiant Y (Serveur VPN) OU Étudiant X (Client VPN)
+
+### 2.2 Tableau d'identification
+
+[Coller ici le tableau complété de l'Étape 1.4]
+
+### 2.3 Schéma réseau du binôme (optionnel mais recommandé)
+
+[Vous pouvez dessiner ou faire un schéma simple montrant vos 4 VMs
+et leurs connexions réseau]
+
+---
+
+## 3. Phase 2 : Configuration des machines virtuelles
+
+[Cette section sera remplie dans la phase suivante]
+
+---
+
+## 4. Phase 3 : Configuration de base du SNS
+
+[À compléter plus tard]
+
+---
+
+[... etc pour les autres phases ...]
+```
+
+:::tip[Conseils de rédaction]
+- **Rédigez au fur et à mesure** : Ne laissez pas tout pour la fin
+- **Captures d'écran** : Prenez des captures pour chaque validation importante
+- **Vocabulaire professionnel** : Utilisez les termes techniques appropriés
+- **Soyez précis** : Indiquez les commandes utilisées, les paramètres configurés
+- **Expliquez vos choix** : Pas seulement "ce que vous avez fait" mais aussi "pourquoi"
+:::
+
+### 📸 Première capture d'écran à inclure
+
+Pour cette Phase 1, incluez dans votre compte-rendu :
+
+1. **Capture du tableau d'identification complété** (celui de l'Étape 1.4)
+2. **Capture du résultat de `ip a`** sur votre machine hôte montrant votre numéro X
+
+---
+
+## Étape 1.6 : Validation par l'enseignant
+
+:::caution[Checkpoint obligatoire]
+👨‍🏫 **Avant de passer à la Phase 2**, faites valider votre tableau d'identification par l'enseignant.
+:::
+
+**L'enseignant vérifiera :**
+
+- [ ] Le tableau est correctement rempli
+- [ ] Les numéros X et Y sont valides et disponibles
+- [ ] Les masques réseau sont corrects (/16 pour LABO, /24 pour réseaux internes)
+- [ ] Il n'y a pas de conflit d'adressage avec un autre binôme
+- [ ] Votre compte-rendu est démarré avec la bonne structure
+
+**Une fois validé**, l'enseignant signera ou tamponnera votre tableau.
+
+---
+
+## ✅ Critères de validation de la Phase 1
+
+Avant de passer à la Phase 2, assurez-vous que :
+
+- [ ] Votre binôme est constitué et les rôles sont définis
+- [ ] Vous avez retrouvé votre numéro personnel X ou Y
+- [ ] Le tableau d'identification est complété avec les bonnes adresses
+- [ ] Les masques réseau sont corrects (/16 vs /24)
+- [ ] L'enseignant a validé votre plan d'adressage
+- [ ] Votre compte-rendu est créé avec la structure demandée
+- [ ] La section 2 de votre compte-rendu (Identification) est remplie
+
+---
+
+## 🎯 Résumé de la Phase 1
+
+Vous avez maintenant :
+
+- ✅ Un binôme constitué avec des rôles clairement définis
+- ✅ Vos numéros personnels X et Y identifiés
+- ✅ Un tableau d'adressage complet et validé
+- ✅ Une compréhension claire des trois types de réseaux utilisés
+- ✅ Un compte-rendu d'activité démarré et structuré
+
+**Prochaine étape** : Phase 2 - Configuration des machines virtuelles
+
+:::tip[Avant de continuer]
+🎓 Prenez quelques minutes pour relire votre tableau et vérifier que vous avez bien compris les différences entre :
+- Le réseau LABO (172.25.0.0/16)
+- Les réseaux internes (10.X.0.0/24 et 10.Y.1.0/24)
+- Le pool VPN (10.Y.100.0/26)
+
+Ces notions sont essentielles pour la suite !
+:::

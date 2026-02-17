@@ -1,0 +1,382 @@
+---
+title: "Phase 3 : Configuration de base du SNS"
+description: "Configuration du pare-feu Stormshield : politique de sécurité, règles de filtrage et NAT sortant"
+sidebar:
+  order: 4
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+## Informations
+
+- **Durée estimée** : 1h00
+- **Prérequis** : Phase 2 terminée et validée
+- **Acteur principal** : Étudiant Y (Serveur VPN)
+- **Livrable** : SNS configuré avec politique de filtrage et NAT fonctionnels
+
+---
+
+## Objectifs de cette phase
+
+À l'issue de cette phase, vous aurez :
+
+- ✅ Configuré les paramètres système de base du SNS
+- ✅ Créé une politique de sécurité de travail basée sur « Block All »
+- ✅ Créé les règles de filtrage pour autoriser le trafic Internet
+- ✅ Configuré le NAT sortant (*SNAT*) pour le réseau interne
+- ✅ Validé que le serveur Debian peut accéder à Internet
+
+---
+
+## Contexte
+
+Avant de mettre en place le VPN SSL, l'infrastructure de base doit être opérationnelle : le pare-feu doit autoriser le trafic légitime du réseau interne vers Internet, via une politique de sécurité proprement configurée.
+
+**Ces règles seront complétées en Phase 6** avec les règles spécifiques au VPN SSL.
+
+:::caution[Rôle spécifique]
+**Cette phase est réalisée par l'Étudiant Y uniquement** (Serveur VPN).
+L'Étudiant X peut observer pour se familiariser avec l'interface Stormshield.
+:::
+
+---
+
+## Étape 3.1 : Configuration système de base
+
+:::tip[Fiche technique]
+📖 Consultez la **Fiche « Initialisation d'un pare-feu Stormshield »** (points 2 à 4) pour la connexion initiale, la configuration système et la vérification des interfaces réseau.
+:::
+
+<Steps>
+
+1. **Connexion à l'interface web**
+
+   Depuis votre machine hôte :
+   ```
+   https://172.25.Y.254/admin
+   Login : admin / Mot de passe : admin (ou netlab123 selon l'origine du fichier .ova)
+   ```
+   :::tip[Anti-déconnexion]
+   Configurez immédiatement votre session en mode « Toujours rester connecté »
+   pour éviter d'être déconnecté pendant la configuration.
+   :::
+
+2. **Paramètres généraux**
+
+   `Configuration` → `Système` → `Configuration`, onglet **Général** :
+   - **Nom du firewall** : `SNS-Serveur-Y` (remplacer Y)
+   - **Fuseau horaire** : `Europe/Paris`
+   - **Serveur NTP** : utiliser le serveur NTP du Labo : `172.25.254.15`
+
+3. **Vérifier les interfaces réseau**
+
+   `Configuration` → `Réseau` → `Interfaces`
+
+   Vous devez voir les deux interfaces UP :
+
+   | Interface | Adresse IP       | État |
+   |-----------|------------------|------|
+   | **out**   | 172.25.Y.254/16  | UP   |
+   | **in**    | 10.Y.1.254/24    | UP   |
+
+4. **Vérifier la route par défaut**
+
+   `Configuration` → `Réseau` → `Routage`
+
+   La passerelle par défaut doit pointer vers `172.25.254.254`.
+
+</Steps>
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 4.1) :**
+- Capture d'écran des interfaces réseau montrant les deux interfaces UP
+:::
+
+---
+
+## Étape 3.2 : Préparation de la politique de sécurité
+
+### 🎯 Pourquoi partir de « Block All » ?
+
+La politique **Block All** est la politique de référence Stormshield : elle bloque tout le trafic sauf l'administration du pare-feu (HTTPS sur le port 443). C'est le point de départ idéal pour construire une politique de sécurité maîtrisée — on n'autorise que ce qui est strictement nécessaire.
+
+:::danger[Règle importante]
+Ne modifiez **jamais** directement les politiques de référence (1 à 4 et 10).
+Travaillez toujours sur une **copie** pour pouvoir revenir en arrière en cas d'erreur.
+:::
+
+:::tip[Fiche technique]
+📖 Consultez la **Fiche « Initialisation d'un pare-feu Stormshield »** (point 7 — Préparation de la politique de filtrage) pour la procédure complète de copie et de renommage.
+:::
+
+<Steps>
+
+1. **Copier la politique « Block All »**
+
+   - `Configuration` → `Politique de sécurité` → `Filtrage et NAT`
+   - Sélectionner la politique `(1) Block all`
+   - Cliquer sur `Éditer` → `Copier vers`
+   - Choisir l'emplacement `(6) Filter 06`
+
+2. **Renommer la politique copiée**
+
+   - Sélectionner la politique `(6) Filter 06`
+   - Cliquer sur `Éditer` → `Renommer`
+   - Nouveau nom : **`VPN-SSL`**
+   - Cliquer sur `Mettre à jour`
+
+3. **Activer la politique**
+
+   - Cliquer sur `Appliquer`
+   - Confirmer : `Oui, activer la politique`
+   - Vérifier que l'icône ✅ apparaît bien sur la politique `(6) VPN-SSL`
+
+</Steps>
+
+:::note[Pourquoi le nom « VPN-SSL » ?]
+Cette politique accueillera toutes les règles de l'activité : accès Internet du réseau interne (cette phase), puis règles VPN en Phase 6. Le nom reflète l'objectif global de l'activité.
+:::
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 4.2) :**
+- Capture d'écran de la politique `(6) VPN-SSL` active
+:::
+
+---
+
+## Étape 3.3 : Création des règles de filtrage
+
+### 🎯 Objectif
+
+Autoriser deux flux sortants dans la politique `VPN-SSL` :
+1. Le pare-feu lui-même vers Internet (NTP, mises à jour, DNS)
+2. Le réseau interne (10.Y.1.0/24) vers Internet via le SNS
+
+:::tip[Fiche technique]
+📖 Consultez la **Fiche « Créer une règle de filtrage Stormshield »** pour la procédure de création de règles.
+:::
+
+### 🔧 Tâche : Créer l'objet réseau (si nécessaire)
+
+Si l'objet représentant votre réseau interne n'existe pas encore, créez-le :
+- **Nom** : `Reseau_Interne_Y`
+- **Type** : Réseau
+- **Adresse** : `10.Y.1.0/24`
+
+### 🔧 Tâche : Créer les deux règles de filtrage
+
+Dans la politique `(6) VPN-SSL`, onglet **Filtrage**, créez les règles suivantes dans cet ordre :
+
+#### Règle 1 — Firewall vers Internet
+
+| Paramètre | Valeur |
+|-----------|--------|
+| **Commentaire** | `Firewall vers Internet` |
+| **État** | On |
+| **Action** | Passer |
+| **Source** | `Firewall_out` |
+| **Destination** | `Internet` |
+| **Port/Protocole** | `any` |
+| **Inspection** | Firewall (ne pas inspecter — bleu) |
+
+:::note[Pourquoi cette règle ?]
+Cette règle permet au pare-feu lui-même d'accéder à Internet pour la synchronisation NTP, les mises à jour de signatures et la résolution DNS.
+:::
+
+#### Règle 2 — Réseau interne vers Internet
+
+| Paramètre | Valeur |
+|-----------|--------|
+| **Commentaire** | `Réseau interne vers Internet` |
+| **État** | On |
+| **Action** | Passer |
+| **Source** | `Reseau_Interne_Y` (10.Y.1.0/24) |
+| **Destination** | `Internet` |
+| **Port/Protocole** | `any` |
+| **Inspection** | Firewall (ne pas inspecter — bleu) |
+
+### 🔧 Tâche : Vérifier l'ordre des règles
+
+Les règles sont évaluées **de haut en bas** ; la première correspondance s'applique.
+
+Ordre attendu dans la politique `VPN-SSL` :
+```
+[Règles héritées de Block All]
+1. Accès administration HTTPS/1300 → Firewall      [PASSER]
+2. ICMP Echo → Firewall                            [PASSER]
+─────────────────────────────────────────────────
+[Vos nouvelles règles]
+3. Firewall vers Internet                          [PASSER]
+4. Réseau interne vers Internet                    [PASSER]
+─────────────────────────────────────────────────
+[Règle implicite]
+   Block All                                       [BLOQUER]
+```
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 4.3) :**
+- Capture d'écran de la liste des règles de filtrage dans la politique VPN-SSL
+:::
+
+---
+
+## Étape 3.4 : Configuration du NAT sortant (*SNAT*)
+
+### 🎯 Objectif
+
+Le serveur Debian (`10.Y.1.20`) possède une adresse IP privée non routable sur Internet. Le *SNAT* (*Source Network Address Translation*) permet de masquer cette adresse derrière l'IP publique du SNS (`172.25.Y.254`).
+
+:::tip[Fiche technique]
+📖 Consultez la **Fiche « NAT sortant (SNAT) sur Stormshield »** pour la procédure détaillée de création de la règle de *masquerading*.
+:::
+
+### 🔧 Tâche : Créer la règle SNAT dans la politique VPN-SSL
+
+Dans la politique `(6) VPN-SSL`, onglet **NAT**, créez une règle de **partage d'adresse source (*masquerading*)** avec les paramètres suivants :
+
+| Section | Paramètre | Valeur |
+|---------|-----------|--------|
+| **Général** | Commentaire | `SNAT — Réseau interne vers Internet` |
+| | État | On |
+| **Trafic original** | Source | `Reseau_Interne_Y` (10.Y.1.0/24) |
+| | Destination | `Internet` ⚠️ jamais `Any` |
+| **Trafic après translation** | Source translatée | `Firewall_out` (172.25.Y.254) |
+| | Port source translaté | `ephemeral_fw` (port aléatoire) |
+| **Options** | Traces | ✅ Activées |
+
+:::danger[Ne jamais mettre « Any » en destination]
+Si vous laissez `Any` en destination, les flux d'administration (HTTPS) seront également translatés et le pare-feu **bloquera votre accès à l'interface web**. Utilisez toujours l'objet `Internet`.
+:::
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 4.4) :**
+- Capture d'écran de la règle SNAT créée dans l'onglet NAT
+:::
+
+---
+
+## Étape 3.5 : Validation de la configuration
+
+### ✅ Tests depuis le serveur Debian (Étudiant Y)
+
+Se connecter directement à la console de la VM `Serveur-Debian-Y` dans VirtualBox.
+
+<Steps>
+
+1. **Tester la connectivité vers le SNS**
+
+   ```bash
+   ping -c 4 10.Y.1.254        # Gateway SNS IN → ✅ OK
+   ```
+
+2. **Tester la connectivité Internet (via SNAT)**
+
+   ```bash
+   ping -c 4 8.8.8.8           # Connectivité IP
+   ping -c 4 www.google.com    # Résolution DNS + connectivité
+   curl -I https://www.google.com   # Accès HTTPS
+   sudo apt update             # Accès aux dépôts Debian
+   ```
+
+   **Résultats attendus :** ✅ Toutes les commandes réussissent
+
+   En cas d'échec
+   Si le ping vers `8.8.8.8` échoue mais que le ping vers `10.Y.1.254` réussit, vérifiez que :
+   - La règle SNAT est bien activée (état **On**)
+   - La politique `(6) VPN-SSL` est bien la politique **active**
+   - La règle de filtrage « Réseau interne vers Internet » est présente et activée
+
+</Steps>
+
+### ✅ Tests depuis la VM Client VPN (Étudiant X)
+
+```bash
+ping -c 4 172.25.Y.254   # Interface OUT du SNS → ✅ OK
+ping -c 4 10.Y.1.20      # Serveur Debian       → ❌ ÉCHEC (normal !)
+curl http://10.Y.1.20    # Serveur web Debian   → ❌ ÉCHEC (normal !)
+```
+
+:::caution[L'échec est attendu !]
+Le Client VPN ne peut toujours pas accéder au serveur Debian. Le réseau interne `10.Y.1.0/24` est isolé d'Internet par conception. C'est exactement ce que le VPN SSL va résoudre dans les phases suivantes.
+:::
+
+---
+
+## Étape 3.6 : Vérification dans les logs
+
+TODO : Les logs ne sont pas à cet endroit.
+
+<Steps>
+
+1. **Accéder aux logs de connexions**
+
+   `Monitoring` → `Logs` → `Filtrage et NAT` → `Connexions`
+
+2. **Filtrer les connexions du serveur Debian**
+
+   - **Source** : `10.Y.1.20`
+   - **Action** : `PASS`
+
+   Vous devez voir les connexions sortantes du serveur vers Internet, avec la règle appliquée visible dans la colonne « Règle ».
+
+</Steps>
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 4.5) :**
+- Capture d'écran des logs montrant une connexion autorisée depuis `10.Y.1.20` vers Internet
+:::
+
+---
+
+## Tableau de validation de la Phase 3
+
+Complétez ce tableau dans votre compte-rendu :
+
+| Test | Source | Commande | Résultat attendu | ✅/❌ |
+|------|--------|----------|------------------|-------|
+| Interface web SNS accessible | Machine hôte | `https://172.25.Y.254/admin` | Page accessible | |
+| Politique VPN-SSL active | Interface web | Liste des politiques | ✅ VPN-SSL active | |
+| SNS vers Internet | Console CLI SNS | `SYSTEM PING host=8.8.8.8` | OK | |
+| Serveur Debian → gateway | VM Debian | `ping 10.Y.1.254` | OK | |
+| Serveur Debian → Internet | VM Debian | `ping 8.8.8.8` | OK | |
+| Serveur Debian → DNS | VM Debian | `ping www.google.com` | OK | |
+| Client VPN → SNS OUT | VM Client | `ping 172.25.Y.254` | OK | |
+| Client VPN → Serveur Debian | VM Client | `ping 10.Y.1.20` | ❌ ÉCHEC (normal) | |
+| Logs connexions visibles | Interface web | Monitoring → Logs | Logs affichés | |
+
+---
+
+## ✅ Critères de validation de la Phase 3
+
+Avant de passer à la Phase 4, assurez-vous que :
+
+- [ ] L'interface web du SNS est accessible depuis votre machine hôte
+- [ ] Les deux interfaces réseau (out et in) sont UP
+- [ ] La politique `(6) VPN-SSL` est créée, nommée et **active**
+- [ ] Les deux règles de filtrage sont créées et fonctionnelles
+- [ ] La règle SNAT (*masquerading*) est créée et activée
+- [ ] Le serveur Debian peut pinguer Internet et résoudre des noms de domaine
+- [ ] Le Client VPN **ne peut toujours PAS** accéder au serveur Debian (c'est normal !)
+- [ ] Les logs de connexion sont visibles dans l'interface
+- [ ] Votre compte-rendu (Section 4) est complété avec les captures d'écran
+
+:::tip[Checkpoint enseignant]
+👨‍🏫 **Avant de continuer**, faites valider votre configuration par l'enseignant en lui montrant :
+1. La politique `(6) VPN-SSL` active avec ses règles
+2. Un ping réussi depuis le serveur Debian vers Internet
+3. Les logs confirmant le passage par la règle SNAT
+:::
+
+---
+
+## 🎯 Résumé de la Phase 3
+
+Vous avez maintenant :
+
+- ✅ Un pare-feu Stormshield correctement initialisé
+- ✅ Une politique de sécurité `VPN-SSL` basée sur « Block All »
+- ✅ Des règles de filtrage autorisant le trafic Internet
+- ✅ Un NAT sortant (*SNAT*) fonctionnel pour le réseau interne
+- ✅ Un serveur Debian connecté à Internet
+
+**Prochaine étape** : Phase 4 — Configuration de l'annuaire LDAP interne et création des utilisateurs VPN

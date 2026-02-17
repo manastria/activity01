@@ -17,7 +17,6 @@ Les adresses privées (définies par la *RFC 1918*) ne sont pas routables sur In
 
 ### Schéma logique
 
-
 ```
 [Réseaux internes]  ── SNAT via Firewall_out ──▶  [Réseau externe / Internet]
    (adresses privées)                                 (IP de l'interface OUT)
@@ -36,9 +35,6 @@ Par défaut, les ports sont choisis **séquentiellement** dans cette plage. Une 
 :::
 
 ## Procédure de configuration (interface web)
-
-Avant de commencer, assurez-vous que vous travaillez sur une politique de sécurité « utilisateur » (et non la politique par défaut).
-Si ce n'est pas le cas, [dupliquez la politique par défaut](../init/#copie-de-la-politique-de-sécurité) et activez la copie pour éviter de modifier la configuration d'origine.
 
 <Steps>
 
@@ -105,12 +101,88 @@ Si ce n'est pas le cas, [dupliquez la politique par défaut](../init/#copie-de-l
 
 ## Règle de filtrage associée
 
-La règle de *SNAT* seule ne suffit pas toujours. Vous devez également vous assurer qu'une **règle de filtrage** autorise le trafic sortant correspondant. Sans cette règle, le pare-feu peut bloquer les flux même si la traduction d'adresse est correctement configurée.
+La règle de *SNAT* seule **ne suffit pas**. Vous devez **obligatoirement** créer une règle de **filtrage** qui autorise le trafic sortant correspondant. Sans cette règle, le pare-feu traduira les adresses mais **bloquera** les paquets au niveau du filtrage.
 
-Dans l'onglet **Filtrage** de la même politique, vérifiez ou créez une règle autorisant le trafic depuis `Network_internals` vers `Internet` pour les services nécessaires (*HTTP*, *HTTPS*, *DNS*, *ICMP*, etc.).
+### Principe fondamental : le filtrage s'applique **avant** le *NAT*
 
-:::tip
-Pour un environnement de laboratoire, vous pouvez temporairement autoriser « tous les services » pour valider le fonctionnement du *SNAT*, puis **restreindre progressivement** les services autorisés conformément au principe du **moindre privilège**.
+Sur les pare-feux Stormshield SNS, la politique de filtrage est évaluée sur les **adresses IP originales**, c'est-à-dire **avant** que le moteur de *NAT* ne modifie l'adresse source du paquet. Par conséquent, la règle de filtrage doit utiliser :
+
+- en **source** : l'adresse IP **privée** de la machine ou du réseau interne qui émet la requête (adresse **avant** traduction) ;
+- en **destination** : l'adresse de destination **réelle** du flux (par exemple `Internet`).
+
+La règle de filtrage ne doit **pas** faire référence à l'adresse IP publique (translatée) du pare-feu, puisque la traduction n'a pas encore eu lieu au moment où le filtrage est évalué.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Paquet émis par le client interne (10.0.0.2 → 93.184.216.34)  │
+│                           │                                     │
+│                    ① FILTRAGE                                   │
+│           (évalué sur les adresses originales)                  │
+│           Source = 10.0.0.2  Destination = 93.184.216.34        │
+│                           │                                     │
+│                     ② NAT (SNAT)                                │
+│           Source translatée = 172.25.x.1 (Firewall_out)         │
+│                           │                                     │
+│              Paquet envoyé sur Internet                          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+:::caution[Erreur fréquente]
+Une erreur courante consiste à créer une règle de filtrage avec `Firewall_out` en source, en pensant que le paquet aura déjà été translaté. Ce n'est pas le cas : le filtrage voit toujours l'adresse **privée** d'origine. Une telle règle ne correspondra jamais au trafic attendu.
+:::
+
+### Procédure de création de la règle de filtrage
+
+<Steps>
+
+1. ### Accéder à l'onglet Filtrage
+
+   Dans la même politique de sécurité que celle où vous avez créé la règle *SNAT*, cliquer sur l'onglet **Filtrage**.
+
+2. ### Créer une nouvelle règle
+
+   Cliquer sur **Nouvelle règle** → **Règle simple**. Configurer les champs suivants :
+
+   - **Action** : **Passer** (*Allow*).
+   - **Source** : `Network_internals` (ou l'objet réseau correspondant à vos réseaux internes — identique à la source de votre règle *SNAT*).
+   - **Destination** : `Internet`.
+   - **Port / Protocole** : sélectionner les services nécessaires (par exemple `http`, `https`, `dns_udp`, etc.).
+
+   :::tip[Conseil pour le laboratoire]
+   En phase de test initial, vous pouvez temporairement laisser le service à `Any` pour valider le fonctionnement global du *SNAT*. Une fois la traduction confirmée, **restreignez immédiatement** les services autorisés conformément au principe du **moindre privilège** (par exemple : uniquement *HTTP*, *HTTPS* et *DNS*).
+   :::
+
+3. ### Activer le traçage
+
+   Dans l'onglet **Options** de la règle, cocher **Tracer** pour journaliser les flux autorisés. Cela permet de vérifier que la règle de filtrage est bien « matchée » par le trafic.
+
+4. ### Ajouter un commentaire
+
+   Dans l'onglet **Général**, saisir un commentaire explicite, par exemple « Filtrage sortant – Autorisation accès Internet pour les réseaux internes ».
+
+5. ### Positionner correctement la règle
+
+   Vérifier que cette règle d'autorisation est placée **au-dessus** de toute règle de blocage générique (type « *Block all* »). Le pare-feu évalue les règles de haut en bas et s'arrête à la première correspondance.
+
+6. ### Activer et appliquer
+
+   Passer l'état de la règle sur **On**, puis cliquer sur **Appliquer** et confirmer.
+
+</Steps>
+
+### Correspondance entre règle *NAT* et règle de filtrage
+
+Le tableau ci-dessous résume la correspondance entre les champs de la règle *SNAT* et ceux de la règle de filtrage :
+
+| Champ | Règle *SNAT* (onglet NAT) | Règle de filtrage (onglet Filtrage) |
+|---|---|---|
+| **Source** | `Network_internals` | `Network_internals` |
+| **Destination** | `Internet` | `Internet` |
+| **Service / Port** | *(non spécifié — tout le trafic est translaté)* | Services autorisés (`http`, `https`, `dns_udp`…) |
+| **Action** | Traduction d'adresse source | **Passer** (*Allow*) |
+
+:::note
+La règle *SNAT* s'applique à **tout le trafic** correspondant (sans distinction de service), tandis que la règle de filtrage permet de **restreindre finement** les services autorisés. C'est cette complémentarité qui assure à la fois la connectivité et la sécurité.
 :::
 
 ## Vérifications et diagnostic
@@ -161,6 +233,8 @@ Dans la liste des règles *NAT*, vérifier que le compteur de la règle *SNAT* s
 - **Règle désactivée** : après création, la règle est désactivée par défaut. Ne pas oublier de passer son état sur **On** avant d'appliquer la politique.
 - **Politique non appliquée** : les modifications ne prennent effet qu'après avoir cliqué sur **Appliquer** et confirmé l'activation de la politique.
 - **Ordre incorrect des règles** : une règle de *NAT* ou de filtrage plus générique placée au-dessus peut court-circuiter votre règle. Le moteur de cohérence du SNS signale les recouvrements par un message d'alerte ; consultez-le systématiquement.
+- **Absence de règle de filtrage** : la règle *SNAT* traduit les adresses, mais sans règle de filtrage autorisant le flux, les paquets seront bloqués. Les deux règles sont indissociables.
+- **Source erronée dans la règle de filtrage** : le filtrage s'évalue **avant** le *NAT*. La source de la règle de filtrage doit être l'adresse **privée** (`Network_internals`), jamais l'adresse translatée (`Firewall_out`).
 - **Absence de route par défaut côté client** : si la machine interne n'a pas de route vers le pare-feu, le trafic n'atteindra jamais la règle de *SNAT*.
 :::
 
@@ -175,7 +249,9 @@ Dans la liste des règles *NAT*, vérifier que le compteur de la règle *SNAT* s
 - [ ] **Traçage** activé sur la règle.
 - [ ] **Commentaire** renseigné.
 - [ ] Règle **activée** (état **On**) et **politique appliquée**.
-- [ ] Règle de **filtrage sortant** présente et active.
+- [ ] Règle de **filtrage sortant** créée : Source = `Network_internals`, Destination = `Internet`, Services = restreints au nécessaire, Action = **Passer**.
+- [ ] Règle de filtrage **positionnée au-dessus** des règles de blocage génériques.
+- [ ] **Traçage** activé sur la règle de filtrage.
 - [ ] **Tests** réalisés depuis le réseau interne (DNS, ping, HTTP/HTTPS).
 - [ ] **Journaux** vérifiés (présence des marqueurs de traduction).
 - [ ] **Compteurs** de règle contrôlés.
