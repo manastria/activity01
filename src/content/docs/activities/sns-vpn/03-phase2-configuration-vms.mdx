@@ -348,6 +348,7 @@ L'Étudiant X peut observer ou aider en cas de besoin.
    **Instructions :**
    - Installer Docker si ce n'est pas déjà fait
    - Cloner le dépôt : `https://github.com/manastria/docker-http-test`
+   - Lancer le script d'initialisation : `./init.sh`
    - Lancer le serveur : `docker compose up -d`
 
 5. **Vérifier la configuration**
@@ -355,7 +356,7 @@ L'Étudiant X peut observer ou aider en cas de besoin.
    ```bash
    ping 10.Y.1.254          # Ping vers le SNS IN
    ping 172.25.254.254      # Ping vers la gateway LABO (doit passer via le SNS)
-   curl http://localhost    # Affiche la page web
+   curl http://localhost:8080    # Affiche la page web
    ```
 
    **Résultats attendus :**
