@@ -1,0 +1,285 @@
+---
+title: "Phase 5 : Configuration du serveur VPN SSL"
+description: "Activation et configuration du serveur VPN SSL sur le Stormshield : réseaux clients, portail captif et vérification"
+sidebar:
+  order: 6
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+## Informations
+
+- **Durée estimée** : 1h00
+- **Prérequis** : Phase 4 terminée et validée
+- **Acteur principal** : Étudiant Y (Serveur VPN)
+- **Livrable** : Serveur VPN SSL démarré, portail captif accessible depuis le Client X
+
+---
+
+## Objectifs de cette phase
+
+À l'issue de cette phase, vous aurez :
+
+- ✅ Créé les deux objets réseau pour les clients VPN (UDP et TCP)
+- ✅ Activé et configuré le service VPN SSL sur le SNS
+- ✅ Activé le portail captif sur l'interface `out`
+- ✅ Vérifié que le portail est accessible depuis la VM Client VPN
+
+---
+
+## Contexte : Architecture du tunnel VPN SSL
+
+```
+[VM Client X]            [Internet/LABO]          [SNS Serveur Y]
+172.25.X.10   ──── Tunnel SSL/TLS (port 443) ───▶ 172.25.Y.254
+                ou UDP (port 1194)                     │
+                                              IP virtuelle attribuée
+                                              depuis 10.Y.100.0/24 (UDP)
+                                              ou    10.Y.101.0/24 (TCP)
+                                                      │
+                                                      ▼
+                                             [Réseau interne]
+                                              10.Y.1.0/24
+                                             [Serveur Debian]
+                                              10.Y.1.20
+```
+
+**Fonctionnement en trois étapes :**
+1. Le client se connecte au **portail captif** (`172.25.Y.254`) et s'authentifie (login/mot de passe LDAP)
+2. Le SNS vérifie les droits VPN SSL du groupe `VPN` et renvoie un fichier `openvpn_client.zip` contenant les certificats et la configuration *OpenVPN*
+3. Le client *OpenVPN* établit le tunnel et obtient une IP virtuelle — il peut alors accéder au réseau interne `10.Y.1.0/24`
+
+:::note[Deux protocoles de transport]
+Le VPN SSL Stormshield supporte deux protocoles :
+- **UDP** (port 1194) : plus rapide, utilisé en priorité par le client
+- **TCP** (port 443) : utilisé en repli si l'UDP est bloqué (réseaux restrictifs)
+
+Les deux nécessitent chacun un réseau dédié, **différents l'un de l'autre** et distincts des réseaux internes.
+:::
+
+:::caution[Rôle spécifique]
+**Cette phase est réalisée par l'Étudiant Y uniquement** (Serveur VPN).
+L'Étudiant X prépare la VM Client en attendant (Phase 7).
+:::
+
+---
+
+## Étape 5.1 : Création des objets réseau pour les clients VPN
+
+Avant d'activer le service VPN SSL, il faut créer les deux objets réseau qui seront assignés aux clients connectés.
+
+:::danger[Ne pas chevaucher les réseaux internes]
+Ces réseaux doivent être **entièrement dédiés** aux clients VPN SSL et ne pas appartenir aux réseaux internes déjà configurés (`10.Y.1.0/24`). Sinon, le SNS détectera une tentative d'usurpation d'adresse IP (*spoofing*) et bloquera tous les flux VPN.
+:::
+
+<Steps>
+
+1. **Accéder aux objets réseau**
+
+   `Configuration` → `Objets` → `Objets réseau` → `Ajouter` → `Réseau`
+
+2. **Créer l'objet pour les clients UDP**
+
+   | Paramètre | Valeur |
+   |-----------|--------|
+   | **Nom** | `Net-SSLVPN_UDP` |
+   | **Adresse réseau** | `10.Y.100.0` (remplacer Y) |
+   | **Masque** | `255.255.255.0` (/24) |
+
+   Cliquer sur `Créer`.
+
+3. **Créer l'objet pour les clients TCP**
+
+   | Paramètre | Valeur |
+   |-----------|--------|
+   | **Nom** | `Net-SSLVPN_TCP` |
+   | **Adresse réseau** | `10.Y.101.0` (remplacer Y) |
+   | **Masque** | `255.255.255.0` (/24) |
+
+   Cliquer sur `Créer`.
+
+</Steps>
+
+:::note[Capacité maximale]
+Un réseau en /24 permet **62 tunnels simultanés** maximum. Le SNS découpe le réseau en sous-réseaux de /30 (4 adresses chacun) : 2 sont réservés au serveur, les 62 restants sont disponibles pour les clients.
+:::
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 6.1) :**
+- Capture d'écran des deux objets réseau `Net-SSLVPN_UDP` et `Net-SSLVPN_TCP` créés
+:::
+
+---
+
+## Étape 5.2 : Configuration du service VPN SSL
+
+<Steps>
+
+1. **Accéder au module VPN SSL**
+
+   `Configuration` → `VPN` → `VPN SSL`
+
+   Activer le service en cliquant sur le bouton **ON**.
+
+2. **Renseigner les paramètres réseaux**
+
+   | Paramètre | Valeur |
+   |-----------|--------|
+   | **Adresse IP de l'UTM utilisée** | `172.25.Y.254` (interface `out`) |
+   | **Réseaux ou machines accessibles** | `Reseau_Interne_Y` (10.Y.1.0/24) |
+   | **Réseau assigné aux clients (UDP)** | `Net-SSLVPN_UDP` (10.Y.100.0/24) |
+   | **Réseau assigné aux clients (TCP)** | `Net-SSLVPN_TCP` (10.Y.101.0/24) |
+
+3. **Renseigner les paramètres DNS**
+
+   | Paramètre | Valeur |
+   |-----------|--------|
+   | **Nom de domaine** | `techservices.local` |
+   | **Serveur DNS primaire** | `172.25.254.15` (DNS du LABO) |
+
+4. **Appliquer et sauvegarder**
+
+   Cliquer sur `Appliquer` puis `Sauvegarder`.
+
+</Steps>
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 6.2) :**
+- Capture d'écran de la page de configuration VPN SSL avec tous les paramètres renseignés
+:::
+
+---
+
+## Étape 5.3 : Activation du portail captif sur l'interface `out`
+
+Le portail captif est le **point d'entrée obligatoire** pour les clients VPN SSL : c'est là qu'ils s'authentifient et téléchargent leur configuration *OpenVPN*.
+
+:::caution[Étape critique]
+Sans le portail captif activé sur `out`, les clients ne pourront **pas** récupérer leurs certificats ni établir le tunnel. Cette étape est indispensable.
+:::
+
+<Steps>
+
+1. **Accéder au portail captif**
+
+   `Configuration` → `Utilisateurs` → `Authentification` → onglet **Portail captif**
+
+2. **Vérifier ou ajouter l'interface `out`**
+
+   L'interface `out` doit apparaître dans la liste des interfaces associées au portail captif.
+
+   - Si elle est absente : cliquer sur `Ajouter` et sélectionner `out`
+   - Si elle est déjà présente : vérifier que le profil associé est bien **External**
+
+3. **Appliquer**
+
+   Cliquer sur `Appliquer` puis `Sauvegarder`.
+
+</Steps>
+
+:::note[Surface d'attaque]
+L'activation du portail captif sur l'interface externe (`out`) expose le service d'authentification sur Internet. En production, il convient de **restreindre l'accès** à ce portail aux seules plages IP connues (par exemple, les adresses des télétravailleurs) dès que possible.
+:::
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 6.3) :**
+- Capture d'écran du portail captif avec l'interface `out` associée
+:::
+
+---
+
+## Étape 5.4 : Vérification depuis la VM Client VPN
+
+### 🔧 Tâche : Tester l'accès au portail captif
+
+Depuis la **console de la VM `VPN-Client-X`** (Étudiant X), ouvrir un navigateur et accéder à :
+
+```
+https://172.25.Y.254/auth
+```
+
+Accepter l'avertissement de certificat auto-signé (`Avancé` → `Accepter le risque`).
+
+**Résultat attendu :** la page de connexion du portail captif Stormshield s'affiche avec un formulaire login / mot de passe.
+
+:::caution[Ne pas se connecter encore !]
+Le portail est visible, mais **ne tentez pas de vous connecter**. Les règles de filtrage VPN n'ont pas encore été créées (Phase 6). La connexion aboutirait à l'échec ou serait bloquée par le pare-feu.
+:::
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 6.4) :**
+- Capture d'écran de la page de connexion du portail captif depuis la VM Client X
+:::
+
+---
+
+## Tableau de validation de la Phase 5
+
+Complétez ce tableau dans votre compte-rendu :
+
+| Élément | Paramètre | Valeur attendue | ✅/❌ |
+|---------|-----------|-----------------|-------|
+| Objet réseau UDP | Nom / Réseau | `Net-SSLVPN_UDP` / `10.Y.100.0/24` | |
+| Objet réseau TCP | Nom / Réseau | `Net-SSLVPN_TCP` / `10.Y.101.0/24` | |
+| Service VPN SSL | État | Activé (ON) | |
+| Adresse IP UTM | Interface `out` | `172.25.Y.254` | |
+| Réseaux accessibles | Réseau interne | `10.Y.1.0/24` | |
+| DNS primaire | Serveur | `172.25.254.15` | |
+| Portail captif | Interface | `out` associée | |
+| Portail captif | Accessibilité | Page login visible depuis Client X | |
+
+---
+
+## ✅ Critères de validation de la Phase 5
+
+Avant de passer à la Phase 6, assurez-vous que :
+
+- [ ] Les objets `Net-SSLVPN_UDP` (10.Y.100.0/24) et `Net-SSLVPN_TCP` (10.Y.101.0/24) sont créés
+- [ ] Le service VPN SSL est activé (bouton ON)
+- [ ] L'adresse IP UTM, les réseaux accessibles et les réseaux clients sont renseignés
+- [ ] Le DNS primaire `172.25.254.15` est configuré
+- [ ] Le portail captif est actif sur l'interface `out`
+- [ ] La page de connexion du portail est accessible depuis la VM Client X
+- [ ] Votre compte-rendu (Section 6) est complété avec les captures d'écran
+
+:::tip[Checkpoint enseignant]
+👨‍🏫 **Avant de continuer**, faites valider votre configuration par l'enseignant en lui montrant :
+1. La page de configuration VPN SSL avec les paramètres réseaux
+2. Le portail captif avec l'interface `out` associée
+3. La page de connexion du portail visible depuis la VM Client X
+:::
+
+---
+
+## 🎯 Résumé de la Phase 5
+
+Vous avez maintenant :
+
+- ✅ Deux réseaux dédiés aux clients VPN (UDP et TCP)
+- ✅ Un serveur VPN SSL configuré et démarré
+- ✅ Un portail captif actif sur l'interface publique
+- ✅ Le portail accessible depuis le Client VPN
+
+**⚠️ Le tunnel VPN ne fonctionne pas encore !** Il manque les règles de filtrage pour :
+- Autoriser les connexions entrantes vers le portail captif et le service VPN (ports 443 et 1194)
+- Autoriser le trafic des clients VPN vers le réseau interne `10.Y.1.0/24`
+
+## 💡 Pour aller plus loin : changer le port du portail captif
+
+Par défaut, le portail captif écoute sur le **port TCP/443**, comme l'interface
+d'administration. Il est possible de modifier ce port depuis :
+
+`Configuration` → `Utilisateurs` → `Authentification` → onglet **Portail captif**
+→ section **Configuration avancée** → champ **Port du portail captif**
+
+L'URL du portail devient alors `https://172.25.Y.254:<nouveau_port>/auth`.
+
+:::caution[Adapter la politique de sécurité]
+La règle implicite SNS *« Autoriser l'accès au portail d'authentification et au VPN
+SSL »* n'ouvre que le port **443**. Si vous changez le port du portail captif, cette
+règle ne suivra **pas** automatiquement : il faudra ajouter une règle de filtrage
+**explicite** autorisant le nouveau port en entrée sur l'interface `out`, sous peine
+de rendre le portail inaccessible.
+:::
+
+**Prochaine étape** : Phase 6 — Règles de filtrage pour le VPN SSL

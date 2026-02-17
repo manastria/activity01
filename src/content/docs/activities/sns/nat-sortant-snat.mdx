@@ -1,0 +1,257 @@
+---
+title: "NAT sortant (SNAT) sur Stormshield SNS"
+description: "Fiche de référence pour configurer le NAT dynamique sortant (masquerading) sur un pare-feu Stormshield SNS EVA1. Principes, procédure pas à pas, bonnes pratiques et diagnostic."
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+## Présentation du *SNAT* (*Source Network Address Translation*)
+
+Le *SNAT* — ou *NAT* (*Network Address Translation*) sortant — est un mécanisme qui **modifie l'adresse IP source** des paquets émis par les machines d'un réseau privé lorsqu'ils traversent un pare-feu vers un réseau extérieur. L'objectif est de permettre à plusieurs hôtes internes de communiquer avec l'extérieur en partageant une seule adresse IP publique (ou, dans un contexte de laboratoire, l'adresse de l'interface de sortie du pare-feu).
+
+On parle également de *masquerading* ou de *NAPT* (*Network Address Port Translation*) car, en plus de l'adresse source, le **port source** est lui aussi traduit afin de distinguer les différentes connexions simultanées.
+
+### Pourquoi le *SNAT* est-il indispensable ?
+
+Les adresses privées (définies par la *RFC 1918*) ne sont pas routables sur Internet. Sans traduction, les paquets émis depuis un réseau interne seraient tout simplement ignorés par les équipements du réseau public. Le *SNAT* résout ce problème en « masquant » l'adresse privée derrière l'adresse de l'interface de sortie du pare-feu.
+
+### Schéma logique
+
+```
+[Réseaux internes]  ── SNAT via Firewall_out ──▶  [Réseau externe / Internet]
+   (adresses privées)                                 (IP de l'interface OUT)
+```
+
+Concrètement, lorsqu'une machine interne (par exemple `10.0.0.2`) envoie un paquet vers l'extérieur, le pare-feu remplace l'adresse source `10.0.0.2` par l'adresse de son interface de sortie (par exemple `172.25.x.1`) et attribue un port source dans la plage `ephemeral_fw` (ports 20000 à 59999). Lorsque la réponse revient, le pare-feu effectue la traduction inverse et achemine le paquet vers la machine d'origine.
+
+## Fonctionnement sur Stormshield SNS
+
+Sur un pare-feu Stormshield SNS, les règles de **filtrage** et de **NAT** sont regroupées au sein d'une même **politique de sécurité**. Il est possible de définir jusqu'à dix politiques, mais **une seule est active** à un instant donné.
+
+La règle de *NAT* dynamique (*NAPT*/*SNAT*) se crée à l'aide du bouton « Nouvelle règle » puis « Règle de partage d'adresse source (*masquerading*) ». Cette action ajoute automatiquement la plage de ports prédéfinie `ephemeral_fw` [20000–59999] dans le champ « port source » du trafic après traduction.
+
+:::note
+Par défaut, les ports sont choisis **séquentiellement** dans cette plage. Une option permet d'activer un choix **aléatoire** du port source pour chaque nouvelle connexion, rendant la prédiction plus difficile pour un attaquant.
+:::
+
+## Procédure de configuration (interface web)
+
+<Steps>
+
+1. ### Accéder à la politique de sécurité
+
+   Ouvrir l'interface web d'administration du SNS puis naviguer vers **Configuration** → **Politique de sécurité**. Sélectionner la politique active (ou celle que vous souhaitez modifier) et cliquer sur l'onglet **NAT**.
+
+2. ### Créer la règle de *masquerading*
+
+   Cliquer sur **Nouvelle règle** → **Règle de partage d'adresse source (*masquerading*)**. Une règle désactivée apparaît avec les valeurs par défaut `Any` → `Any`. La section « Trafic après translation » définit d'ores et déjà la traduction du port source dans la plage `ephemeral_fw`.
+
+3. ### Configurer le trafic original (avant traduction)
+
+   Double-cliquer sur la règle pour ouvrir la fenêtre d'édition, puis configurer les champs suivants.
+
+   - **Source originale** : sélectionner `Network_internals` (objet qui regroupe l'ensemble des réseaux internes protégés par le pare-feu). Adapter cet objet si votre architecture ne contient qu'un sous-ensemble de réseaux.
+   - **Destination originale** : sélectionner `Internet`.
+
+   :::danger[Ne jamais laisser « Any » en destination originale]
+   Si vous laissez `Any` en destination originale, les flux d'administration du pare-feu (en *SSH* et en *HTTPS*) subiront également la traduction *NAT* vers l'interface « out ». Le pare-feu interprétera alors ces flux comme une tentative d'intrusion et **les bloquera**, vous privant de l'accès à l'interface d'administration.
+   Utilisez systématiquement l'objet `Internet` qui désigne tous les réseaux **sauf** les réseaux internes du pare-feu.
+   :::
+
+4. ### Restreindre l'interface de sortie (recommandé)
+
+   Dans l'onglet **Configuration avancée** de la règle, sélectionner `out` dans le champ **Interface de sortie**. Cela restreint la règle de traduction au seul trafic sortant par l'interface *WAN* et évite tout effet de bord sur d'autres interfaces.
+
+5. ### Configurer le trafic après traduction
+
+   - **Source translatée** : sélectionner `Firewall_out` (l'adresse IP de l'interface de sortie du pare-feu).
+   - **Port source translaté** : laisser `ephemeral_fw`.
+   - Cocher l'option **« Choisir aléatoirement le port source translaté »**.
+
+   :::tip[Pourquoi activer la sélection aléatoire du port ?]
+   Avec un choix séquentiel, un attaquant peut deviner le prochain port utilisé et tenter de détourner une connexion. Le choix aléatoire rend cette prédiction beaucoup plus difficile. Ainsi, si le premier port attribué est 23 417, le suivant ne sera pas 23 418 mais un nombre tiré au hasard dans la plage `ephemeral_fw`. Cela ne rend pas les attaques impossibles, mais les complexifie significativement.
+   :::
+
+6. ### Configurer le protocole
+
+   Dans l'onglet **Protocole**, laisser l'option par défaut « Détection automatique du protocole ». Le pare-feu identifiera automatiquement le protocole applicatif (*HTTP*, *HTTPS*, *FTP*, etc.) utilisé par chaque connexion.
+
+7. ### Activer le traçage
+
+   Dans l'onglet **Options**, cocher **Tracer**. Cette option journalise le premier paquet correspondant à la règle de *NAT* dans le journal de connexions, ce qui est indispensable pour le diagnostic.
+
+   :::note[Marqueurs de traduction dans les journaux]
+   Les entrées du journal de connexions liées au *NAT* sont identifiables grâce aux champs « Adresse source translatée » et « Port source translaté » dans l'interface web, ou par les mots-clés `modsrc` et `modsrcport` en ligne de commande.
+   :::
+
+8. ### Ajouter un commentaire
+
+   Dans l'onglet **Général**, saisir un commentaire explicite, par exemple « *SNAT* – Sortie Internet pour les réseaux internes ». Cela facilite la relecture de la politique par un autre administrateur.
+
+9. ### Activer la règle et appliquer la politique
+
+   - Mettre l'état de la règle sur **On**.
+   - Cliquer sur **Appliquer** puis confirmer avec **Oui, activer la politique**.
+
+   :::caution
+   Avant de lancer vos tests, pensez à **réinitialiser les statistiques des règles** (clic droit sur la règle → « Réinitialiser les statistiques ») afin de repartir de zéro et de faciliter l'interprétation des compteurs.
+   :::
+
+</Steps>
+
+## Règle de filtrage associée
+
+La règle de *SNAT* seule **ne suffit pas**. Vous devez **obligatoirement** créer une règle de **filtrage** qui autorise le trafic sortant correspondant. Sans cette règle, le pare-feu traduira les adresses mais **bloquera** les paquets au niveau du filtrage.
+
+### Principe fondamental : le filtrage s'applique **avant** le *NAT*
+
+Sur les pare-feux Stormshield SNS, la politique de filtrage est évaluée sur les **adresses IP originales**, c'est-à-dire **avant** que le moteur de *NAT* ne modifie l'adresse source du paquet. Par conséquent, la règle de filtrage doit utiliser :
+
+- en **source** : l'adresse IP **privée** de la machine ou du réseau interne qui émet la requête (adresse **avant** traduction) ;
+- en **destination** : l'adresse de destination **réelle** du flux (par exemple `Internet`).
+
+La règle de filtrage ne doit **pas** faire référence à l'adresse IP publique (translatée) du pare-feu, puisque la traduction n'a pas encore eu lieu au moment où le filtrage est évalué.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Paquet émis par le client interne (10.0.0.2 → 93.184.216.34)  │
+│                           │                                     │
+│                    ① FILTRAGE                                   │
+│           (évalué sur les adresses originales)                  │
+│           Source = 10.0.0.2  Destination = 93.184.216.34        │
+│                           │                                     │
+│                     ② NAT (SNAT)                                │
+│           Source translatée = 172.25.x.1 (Firewall_out)         │
+│                           │                                     │
+│              Paquet envoyé sur Internet                          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+:::caution[Erreur fréquente]
+Une erreur courante consiste à créer une règle de filtrage avec `Firewall_out` en source, en pensant que le paquet aura déjà été translaté. Ce n'est pas le cas : le filtrage voit toujours l'adresse **privée** d'origine. Une telle règle ne correspondra jamais au trafic attendu.
+:::
+
+### Procédure de création de la règle de filtrage
+
+<Steps>
+
+1. ### Accéder à l'onglet Filtrage
+
+   Dans la même politique de sécurité que celle où vous avez créé la règle *SNAT*, cliquer sur l'onglet **Filtrage**.
+
+2. ### Créer une nouvelle règle
+
+   Cliquer sur **Nouvelle règle** → **Règle simple**. Configurer les champs suivants :
+
+   - **Action** : **Passer** (*Allow*).
+   - **Source** : `Network_internals` (ou l'objet réseau correspondant à vos réseaux internes — identique à la source de votre règle *SNAT*).
+   - **Destination** : `Internet`.
+   - **Port / Protocole** : sélectionner les services nécessaires (par exemple `http`, `https`, `dns_udp`, etc.).
+
+   :::tip[Conseil pour le laboratoire]
+   En phase de test initial, vous pouvez temporairement laisser le service à `Any` pour valider le fonctionnement global du *SNAT*. Une fois la traduction confirmée, **restreignez immédiatement** les services autorisés conformément au principe du **moindre privilège** (par exemple : uniquement *HTTP*, *HTTPS* et *DNS*).
+   :::
+
+3. ### Activer le traçage
+
+   Dans l'onglet **Options** de la règle, cocher **Tracer** pour journaliser les flux autorisés. Cela permet de vérifier que la règle de filtrage est bien « matchée » par le trafic.
+
+4. ### Ajouter un commentaire
+
+   Dans l'onglet **Général**, saisir un commentaire explicite, par exemple « Filtrage sortant – Autorisation accès Internet pour les réseaux internes ».
+
+5. ### Positionner correctement la règle
+
+   Vérifier que cette règle d'autorisation est placée **au-dessus** de toute règle de blocage générique (type « *Block all* »). Le pare-feu évalue les règles de haut en bas et s'arrête à la première correspondance.
+
+6. ### Activer et appliquer
+
+   Passer l'état de la règle sur **On**, puis cliquer sur **Appliquer** et confirmer.
+
+</Steps>
+
+### Correspondance entre règle *NAT* et règle de filtrage
+
+Le tableau ci-dessous résume la correspondance entre les champs de la règle *SNAT* et ceux de la règle de filtrage :
+
+| Champ | Règle *SNAT* (onglet NAT) | Règle de filtrage (onglet Filtrage) |
+|---|---|---|
+| **Source** | `Network_internals` | `Network_internals` |
+| **Destination** | `Internet` | `Internet` |
+| **Service / Port** | *(non spécifié — tout le trafic est translaté)* | Services autorisés (`http`, `https`, `dns_udp`…) |
+| **Action** | Traduction d'adresse source | **Passer** (*Allow*) |
+
+:::note
+La règle *SNAT* s'applique à **tout le trafic** correspondant (sans distinction de service), tandis que la règle de filtrage permet de **restreindre finement** les services autorisés. C'est cette complémentarité qui assure à la fois la connectivité et la sécurité.
+:::
+
+## Vérifications et diagnostic
+
+### Côté client (réseau interne)
+
+Depuis une machine du réseau interne, testez la connectivité vers l'extérieur :
+
+```bash
+# Résolution DNS
+nslookup www.google.com
+
+# Test de connectivité
+ping -c 4 8.8.8.8
+
+# Test HTTP/HTTPS
+curl -I https://www.google.com
+```
+
+Si ces tests échouent, vérifiez en priorité que la machine interne possède bien une **route par défaut** pointant vers l'interface interne du pare-feu SNS.
+
+### Côté pare-feu SNS
+
+#### Journal de connexions
+
+Ouvrir le menu **Monitoring** → **Journal des connexions** et filtrer les résultats en recherchant les colonnes « Adresse source translatée » et « Port source translaté ». La présence de ces informations confirme que la traduction est effective.
+
+#### Compteurs de règles
+
+Dans la liste des règles *NAT*, vérifier que le compteur de la règle *SNAT* s'incrémente au fur et à mesure des connexions. Une barre verte et une info-bulle indiquent le nombre d'applications de la règle.
+
+## Bonnes pratiques
+
+:::tip[Récapitulatif des bonnes pratiques]
+- **Destination originale** : toujours utiliser `Internet` (ou forcer l'interface `out` en configuration avancée), jamais `Any`.
+- **Port source aléatoire** : toujours activer l'option de choix aléatoire du port dans `ephemeral_fw` pour limiter la prédictibilité.
+- **Traçage** : activer le traçage sur la règle *SNAT* pour disposer de journaux exploitables lors du diagnostic.
+- **Commentaire** : documenter chaque règle avec un commentaire clair et explicite.
+- **Ordre des règles** : placer les règles les plus spécifiques **au-dessus** des règles les plus générales. Une règle plus large située avant une règle spécifique peut « recouvrir » cette dernière et la rendre inopérante.
+- **Filtrage associé** : vérifier qu'une règle de filtrage autorise bien le trafic sortant correspondant.
+- **Principe du moindre privilège** : ne translater et n'autoriser que les flux strictement nécessaires.
+:::
+
+## Pièges courants
+
+:::danger[Erreurs fréquentes à éviter]
+- **`Any` en destination originale** : provoque le blocage de l'administration du pare-feu (voir avertissement ci-dessus).
+- **Règle désactivée** : après création, la règle est désactivée par défaut. Ne pas oublier de passer son état sur **On** avant d'appliquer la politique.
+- **Politique non appliquée** : les modifications ne prennent effet qu'après avoir cliqué sur **Appliquer** et confirmé l'activation de la politique.
+- **Ordre incorrect des règles** : une règle de *NAT* ou de filtrage plus générique placée au-dessus peut court-circuiter votre règle. Le moteur de cohérence du SNS signale les recouvrements par un message d'alerte ; consultez-le systématiquement.
+- **Absence de règle de filtrage** : la règle *SNAT* traduit les adresses, mais sans règle de filtrage autorisant le flux, les paquets seront bloqués. Les deux règles sont indissociables.
+- **Source erronée dans la règle de filtrage** : le filtrage s'évalue **avant** le *NAT*. La source de la règle de filtrage doit être l'adresse **privée** (`Network_internals`), jamais l'adresse translatée (`Firewall_out`).
+- **Absence de route par défaut côté client** : si la machine interne n'a pas de route vers le pare-feu, le trafic n'atteindra jamais la règle de *SNAT*.
+:::
+
+## *Check-list* de fin de configuration
+
+- [ ] Règle *SNAT* (*masquerading*) créée dans l'onglet **NAT**.
+- [ ] **Source originale** = `Network_internals` (ou l'objet réseau adapté).
+- [ ] **Destination originale** = `Internet` (jamais `Any`).
+- [ ] **Interface de sortie** = `out` (en configuration avancée).
+- [ ] **Source translatée** = `Firewall_out`.
+- [ ] **Port source translaté** = `ephemeral_fw` avec l'option **aléatoire** cochée.
+- [ ] **Traçage** activé sur la règle.
+- [ ] **Commentaire** renseigné.
+- [ ] Règle **activée** (état **On**) et **politique appliquée**.
+- [ ] Règle de **filtrage sortant** créée : Source = `Network_internals`, Destination = `Internet`, Services = restreints au nécessaire, Action = **Passer**.
+- [ ] Règle de filtrage **positionnée au-dessus** des règles de blocage génériques.
+- [ ] **Traçage** activé sur la règle de filtrage.
+- [ ] **Tests** réalisés depuis le réseau interne (DNS, ping, HTTP/HTTPS).
+- [ ] **Journaux** vérifiés (présence des marqueurs de traduction).
+- [ ] **Compteurs** de règle contrôlés.

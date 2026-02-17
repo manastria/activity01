@@ -1,0 +1,282 @@
+---
+title: "NAT entrant (DNAT) sur Stormshield SNS"
+description: "Fiche de référence pour configurer le NAT entrant (redirection de port / DNAT) sur un pare-feu Stormshield SNS EVA1. Principes, procédure pas à pas, bonnes pratiques, récupération en cas de perte d'accès et diagnostic."
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+## Présentation du *DNAT* (*Destination Network Address Translation*)
+
+Le *DNAT* — ou *NAT* (*Network Address Translation*) entrant — est un mécanisme qui **modifie l'adresse IP de destination** (et éventuellement le port de destination) d'un paquet entrant lorsqu'il traverse un pare-feu. L'objectif est de permettre à un hôte situé sur un réseau externe d'atteindre un serveur situé sur un réseau interne ou une *DMZ* (*DeMilitarized Zone*), en ne connaissant que l'adresse IP publique (ou externe) du pare-feu.
+
+On parle couramment de « redirection de port » ou de *PAT* (*Port Address Translation*) lorsque le port de destination est également modifié lors de la traduction.
+
+### Pourquoi le *DNAT* est-il nécessaire ?
+
+Les serveurs hébergés sur un réseau interne possèdent des adresses privées (*RFC 1918*) qui ne sont pas directement accessibles depuis l'extérieur. Le *DNAT* permet de « publier » un service interne en associant un couple adresse:port sur l'interface externe du pare-feu à un couple adresse:port sur le serveur interne. Le pare-feu intercepte les paquets destinés à son adresse externe et les redirige de manière transparente vers le serveur cible.
+
+### Schéma logique
+
+```
+Client externe ── (IP_externe:port_public) ──▶  SNS  ── DNAT ──▶  Serveur interne (IP_privée:port_service)
+```
+
+Par exemple, un client du réseau labo qui envoie une requête vers `172.25.x.1:2222` verra ses paquets traduits par le pare-feu vers `10.0.0.100:22` (service *SSH* — *Secure Shell*).
+
+### Deux approches sur Stormshield SNS
+
+Sur un pare-feu Stormshield SNS, il existe **deux façons** de mettre en œuvre un *DNAT* :
+
+- **Via l'onglet NAT** : on crée une règle de traduction dans l'onglet *NAT*, puis une règle d'autorisation correspondante dans l'onglet *Filtrage*. C'est l'approche la plus **pédagogique** car elle sépare clairement la traduction du filtrage.
+- **Directement dans une règle de filtrage** : on intègre la directive de *NAT* sur la destination au sein même de la règle de filtrage. Cette méthode est plus **performante** (un seul traitement au lieu de deux) et regroupe l'autorisation et la redirection en un seul endroit.
+
+:::note
+Dans cette fiche, nous détaillons l'approche par l'onglet *NAT* (séparation NAT/filtrage), qui est la plus lisible pour l'apprentissage. La méthode intégrée au filtrage est présentée en complément à la fin de la fiche.
+:::
+
+## Prérequis
+
+Avant de configurer un *DNAT*, assurez-vous que :
+
+- Le **service cible** est bien actif sur le serveur interne (par exemple `sshd` écoute sur le port 22, ou un serveur web sur le port 80/443).
+- Les **objets réseau** nécessaires sont créés dans la base d'objets du SNS (adresse du serveur interne, éventuel service personnalisé pour le port public).
+- Une règle de **NAT sortant (*SNAT*)** est déjà en place si le serveur interne doit répondre vers l'extérieur via le pare-feu.
+
+## Procédure de configuration — Approche « onglet NAT » (interface web)
+
+<Steps>
+
+1. ### Créer les objets réseau
+
+   Naviguer vers **Configuration** → **Objets** → **Objets réseau** et créer les objets nécessaires s'ils n'existent pas encore :
+
+   - Un objet **Machine** pour le serveur interne cible (par exemple `SRV_WEB_PRIV` = `10.0.0.100`).
+   - Si vous souhaitez publier un port différent du port réel du service, créer un objet **Service** personnalisé pour le port public (par exemple `HTTP_PUBLIC` = TCP/8080).
+
+   :::tip
+   Si le port public est identique au port du service (par exemple TCP/443 vers TCP/443), il n'est pas nécessaire de créer un objet service personnalisé : utilisez directement les objets services prédéfinis (`https`, `ssh`, `http`, etc.).
+   :::
+
+2. ### Accéder à la politique de sécurité — onglet NAT
+
+   Ouvrir **Configuration** → **Politique de sécurité** → **Filtrage et NAT**. Sélectionner la politique active et cliquer sur l'onglet **NAT**.
+
+3. ### Créer la règle de *DNAT*
+
+   Cliquer sur **Nouvelle règle** → **Règle simple**. Une règle désactivée apparaît avec les valeurs par défaut `Any` → `Any`.
+
+   Double-cliquer sur la règle pour ouvrir la fenêtre d'édition et configurer les champs suivants.
+
+4. ### Configurer le trafic original (avant traduction)
+
+   - **Source originale** : sélectionner le réseau ou l'hôte autorisé à joindre le service (par exemple `Internet` pour un accès depuis l'extérieur, ou un objet plus restrictif comme `LAB_SUBNET`).
+   - **Destination originale** : sélectionner l'adresse de l'interface externe du pare-feu (par exemple `Firewall_out`).
+   - **Port destination original** : sélectionner le port public sur lequel le service sera accessible (par exemple `https` pour TCP/443, ou votre objet personnalisé `HTTP_PUBLIC` pour TCP/8080).
+
+   Dans l'onglet **Configuration avancée** :
+   - **Interface d'entrée** : sélectionner `out` (l'interface externe par laquelle arrivent les requêtes).
+
+5. ### Configurer le trafic après traduction
+
+   - **Destination translatée** : sélectionner l'objet correspondant au serveur interne cible (par exemple `SRV_WEB_PRIV`).
+   - **Port destination translaté** : si le port du service interne est **identique** au port public, laisser `None` (pas de traduction de port). Si le port est **différent**, sélectionner l'objet service correspondant au port réel du serveur (par exemple `ssh` pour TCP/22 si le port public était 2222).
+
+   :::note
+   Lorsque le port avant et après traduction est identique, il est recommandé de ne pas le préciser (laisser `None` ou `Any`). Le pare-feu conservera alors le port de destination d'origine.
+   :::
+
+6. ### Activer le traçage
+
+   Dans l'onglet **Options**, cocher **Tracer**. Cela journalise le premier paquet correspondant à la règle de *NAT*, ce qui est essentiel pour le diagnostic.
+
+7. ### Ajouter un commentaire
+
+   Dans l'onglet **Général**, saisir un commentaire explicite, par exemple « *DNAT* – Redirection HTTPS vers SRV_WEB_PRIV ». Documenter chaque règle facilite la maintenance et l'audit de la politique.
+
+8. ### Créer la règle de filtrage associée
+
+   Basculer dans l'onglet **Filtrage** et créer une nouvelle règle d'autorisation :
+
+   - **Source** : le même réseau ou hôte que dans la règle *NAT* (par exemple `Internet` ou `LAB_SUBNET`).
+   - **Destination** : le serveur interne cible (`SRV_WEB_PRIV`). Attention, ici on utilise l'adresse **après traduction**, car le moteur de filtrage évalue le trafic **après** l'application du *NAT*.
+   - **Service** : le port du service interne (par exemple `https` = TCP/443 ou `ssh` = TCP/22).
+   - **Action** : **Allow**.
+   - **Log** : **Enable**.
+
+   :::caution[Placement de la règle de filtrage]
+   Placez cette règle **au-dessus** de toute règle de blocage générique (type « *Block all* »). Le pare-feu évalue les règles de filtrage de haut en bas et s'arrête à la première correspondance. Une règle « *Block* » située plus haut rendrait votre autorisation inopérante.
+   :::
+
+9. ### Activer les règles et appliquer la politique
+
+   - Mettre l'état des deux règles (NAT et filtrage) sur **On**.
+   - Cliquer sur **Appliquer** puis confirmer avec **Oui, activer la politique**.
+
+   :::caution
+   Pensez à **réinitialiser les statistiques des règles** avant vos tests pour faciliter l'interprétation des compteurs.
+   :::
+
+</Steps>
+
+## Perte d'accès à l'administration — Procédure de récupération
+
+:::danger[Ports réservés : attention au conflit avec l'administration du SNS]
+L'interface web d'administration du pare-feu Stormshield SNS écoute par défaut sur le port **443** (*HTTPS*). Si vous créez une règle de *DNAT* qui redirige le port **443** de l'interface externe vers un serveur interne, **vous perdrez l'accès à l'interface web d'administration** du pare-feu depuis le réseau externe.
+
+Le même problème se pose avec le port **22** (*SSH*) si l'accès console *SSH* est activé sur le pare-feu.
+
+**Pour éviter ce problème**, privilégiez l'utilisation d'un **port public différent** du port d'administration (par exemple TCP/8443 redirigé vers TCP/443 sur le serveur interne, ou TCP/2222 redirigé vers TCP/22).
+:::
+
+Si vous avez perdu l'accès à l'interface web d'administration suite à l'application d'une règle de *DNAT* conflictuelle, voici la procédure de récupération :
+
+<Steps>
+
+1. ### Accéder à la console du SNS
+
+   Connectez-vous à la **console directe** du pare-feu. Dans un environnement VirtualBox, cela se fait via la fenêtre de la machine virtuelle SNS. Identifiez-vous avec le compte administrateur (`admin` et le mot de passe associé).
+
+2. ### Désactiver temporairement le filtrage
+
+   Saisissez la commande suivante dans la console :
+
+   ```
+   enfilter off
+   ```
+
+   Cette commande **désactive entièrement le filtrage et le *NAT*** sans modifier la politique enregistrée. Elle fait passer le pare-feu en mode « *pass from any to any* » : tout le trafic est autorisé sans aucune traduction. Vous retrouvez immédiatement l'accès à l'interface web d'administration.
+
+   :::caution
+   La commande `enfilter off` laisse passer **tout le trafic sans filtrage ni *NAT***. Elle ne doit être utilisée que **temporairement** pour reprendre le contrôle du pare-feu. Ne laissez jamais un pare-feu en production dans cet état.
+   :::
+
+3. ### Corriger la politique via l'interface web
+
+   Depuis l'interface web d'administration (désormais accessible), modifiez ou supprimez la règle de *DNAT* à l'origine du conflit. Vous pouvez par exemple changer le port public pour éviter la collision avec le port d'administration.
+
+4. ### Réactiver le filtrage
+
+   Une fois la correction effectuée, réactivez le filtrage en appliquant la politique corrigée. Vous pouvez également utiliser la commande console :
+
+   ```
+   enfilter -u
+   ```
+
+   Cette commande recharge la politique de filtrage et de *NAT* active. Alternativement, la commande `enfilter 10` permet de basculer directement sur la politique par défaut « *Pass all* » (politique n°10) si vous souhaitez un retour à un état sûr avant de travailler sur votre politique personnalisée.
+
+</Steps>
+
+:::tip[Commandes console utiles en cas de perte d'accès]
+| Commande | Effet |
+|---|---|
+| `enfilter off` | Désactive le filtrage et le *NAT* (mode « *pass all* » temporaire) |
+| `enfilter -u` | Recharge la politique de filtrage/*NAT* active |
+| `enfilter 10` | Active la politique n°10 (« *Pass all* » par défaut) |
+| `sfctl -s filter` | Affiche les règles de filtrage générées (utile pour le diagnostic) |
+:::
+
+## Approche alternative : *DNAT* intégré à la règle de filtrage
+
+Comme mentionné en introduction, il est possible d'intégrer la directive de *NAT* sur la destination **directement dans une règle de filtrage**, sans créer de règle dans l'onglet *NAT*. Cette approche présente plusieurs avantages :
+
+- Indication rapide du flux autorisé avec la redirection vers la machine interne dans une seule vue.
+- Gestion et supervision des règles entrantes dans un seul menu.
+- Optimisation du temps de traitement : les règles de l'onglet *NAT* ne sont pas parcourues pour ce flux.
+- Possibilité d'activer des protections applicatives (filtrage *SMTP*, *antispam*, etc.) sur les connexions entrantes translatées.
+
+Pour utiliser cette méthode, créez une règle de filtrage classique, puis dans l'onglet **Destination** de la règle, ouvrez la section **Configuration avancée** et renseignez les champs **NAT sur la destination** : sélectionnez l'objet correspondant au serveur interne, et si nécessaire, précisez le port de destination translaté dans l'onglet **Port/Protocole**.
+
+:::note
+Si le port après traduction est identique au port avant traduction, il est recommandé de laisser le champ « Port destination translaté » à `None` ou `Any`.
+:::
+
+## Vérifications et diagnostic
+
+### Test depuis le réseau externe
+
+Depuis une machine du réseau externe (labo), testez l'accès au service publié :
+
+```bash
+# Exemple pour un service SSH publié sur le port 2222
+ssh -p 2222 user@172.25.x.1
+
+# Exemple pour un service HTTPS publié sur le port 8443
+curl -k https://172.25.x.1:8443
+
+# Exemple pour un service HTTP publié sur le port 80
+curl http://172.25.x.1
+```
+
+### Test côté serveur interne
+
+Sur le serveur cible, vérifiez que le service est bien en écoute et que les connexions arrivent :
+
+```bash
+# Vérifier que le service écoute
+ss -lnt | grep :<port>
+
+# Surveiller les connexions entrantes en temps réel
+sudo tcpdump -nni <interface> tcp port <port>
+
+# Pour SSH : surveiller les tentatives de connexion
+sudo tail -f /var/log/auth.log
+```
+
+### Côté pare-feu SNS
+
+#### Journal de connexions
+
+Ouvrir **Monitoring** → **Journal des connexions** et filtrer les résultats en recherchant les colonnes « Adresse destination translatée » et « Port destination translaté ». La présence de ces informations confirme que la redirection est effective.
+
+#### Compteurs de règles
+
+Dans les listes de règles *NAT* et *Filtrage*, vérifier que les compteurs s'incrémentent au fur et à mesure des connexions. Une barre verte et une info-bulle indiquent le nombre d'applications de chaque règle.
+
+#### Capture réseau
+
+Si le diagnostic par les journaux ne suffit pas, vous pouvez effectuer une capture réseau sur les interfaces du pare-feu pour observer les paquets avant et après traduction.
+
+## Bonnes pratiques
+
+:::tip[Récapitulatif des bonnes pratiques]
+- **Éviter les ports d'administration** : ne jamais rediriger les ports 443 ou 22 de l'interface externe si le pare-feu utilise ces ports pour son administration. Préférer un port public alternatif (par exemple 8443, 2222).
+- **Limiter la source** : restreindre l'accès au service publié au réseau ou aux adresses IP strictement nécessaires. Éviter `Any` en source.
+- **Un seul point d'entrée** : publier un seul service par serveur et éviter de multiplier les règles de *DNAT* vers différents hôtes internes, ce qui augmente la surface d'attaque.
+- **Traçage** : activer le traçage sur les règles *NAT* et *Filtrage* pour disposer de journaux exploitables lors du diagnostic.
+- **Commentaire** : documenter chaque règle avec un commentaire clair.
+- **Ordre des règles** : placer les règles les plus spécifiques **au-dessus** des règles les plus générales, aussi bien dans l'onglet *NAT* que dans l'onglet *Filtrage*.
+- **Sécuriser le service publié** : côté serveur interne, mettre en œuvre les protections adaptées au service exposé (authentification par clés pour *SSH*, certificat *TLS* pour *HTTPS*, pare-feu local type `ufw`, outil de protection type *fail2ban*, etc.).
+- **Désactiver hors usage** : désactiver les règles de *DNAT* lorsque l'accès depuis l'extérieur n'est plus nécessaire.
+:::
+
+## Pièges courants
+
+:::danger[Erreurs fréquentes à éviter]
+- **Conflit de port avec l'administration** : rediriger le port 443 ou 22 de l'interface externe coupe l'accès à l'interface web et/ou à la console *SSH* du pare-feu. Utilisez `enfilter off` en console pour récupérer l'accès (voir section dédiée ci-dessus).
+- **Règle de filtrage manquante** : la règle de *NAT* seule ne suffit pas. Sans règle de filtrage autorisant le flux vers le serveur interne, les paquets seront traduits puis bloqués.
+- **Destination de filtrage incorrecte** : dans la règle de filtrage, la destination doit être le serveur interne (adresse **après** traduction), pas l'adresse externe du pare-feu.
+- **Ordre incorrect des règles** : une règle de blocage placée au-dessus de la règle d'autorisation empêchera le flux. Le moteur de cohérence du SNS signale les recouvrements par un message d'alerte.
+- **Service non actif sur le serveur interne** : vérifiez que le service cible (par exemple `sshd`, `nginx`, `apache2`) est bien démarré et écoute sur le bon port.
+- **Route de retour manquante** : le serveur interne doit avoir une route par défaut passant par l'interface interne du pare-feu pour que les réponses empruntent le même chemin.
+- **Règle désactivée ou politique non appliquée** : après création, les règles sont désactivées par défaut. N'oubliez pas de passer leur état sur **On** et d'**appliquer** la politique.
+:::
+
+## *Check-list* de fin de configuration
+
+- [ ] **Objets réseau** créés (serveur interne, éventuel service personnalisé pour le port public).
+- [ ] Règle **DNAT** créée dans l'onglet *NAT* (ou intégrée au filtrage).
+- [ ] **Source originale** = réseau autorisé (jamais `Any` sans justification).
+- [ ] **Destination originale** = adresse de l'interface externe du pare-feu (`Firewall_out`).
+- [ ] **Port destination original** = port public choisi (vérifier l'absence de conflit avec l'administration).
+- [ ] **Interface d'entrée** = `out`.
+- [ ] **Destination translatée** = serveur interne cible.
+- [ ] **Port destination translaté** = port réel du service (ou `None` si identique au port public).
+- [ ] **Traçage** activé sur la règle *NAT*.
+- [ ] Règle de **filtrage** associée créée et correctement positionnée.
+- [ ] **Commentaires** renseignés sur les règles.
+- [ ] Règles **activées** (état **On**) et **politique appliquée**.
+- [ ] **Service** actif sur le serveur interne et en écoute sur le bon port.
+- [ ] **Route par défaut** configurée sur le serveur interne vers le pare-feu.
+- [ ] **Tests** réalisés depuis le réseau externe.
+- [ ] **Journaux** vérifiés (présence des marqueurs de traduction).
+- [ ] **Compteurs** de règle contrôlés.

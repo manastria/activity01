@@ -1,0 +1,204 @@
+---
+title: "Phase 6 : Règles de filtrage pour le VPN SSL"
+description: "Ajout de la règle de filtrage autorisant les clients VPN SSL à accéder au réseau interne dans la politique VPN-SSL"
+sidebar:
+  order: 7
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+## Informations
+
+- **Durée estimée** : 30 minutes
+- **Prérequis** : Phase 5 terminée et validée
+- **Acteur principal** : Étudiant Y (Serveur VPN)
+- **Livrable** : Le tunnel VPN SSL est opérationnel de bout en bout
+
+---
+
+## Objectifs de cette phase
+
+À l'issue de cette phase, vous aurez :
+
+- ✅ Compris le rôle des règles implicites SNS pour le VPN SSL
+- ✅ Ajouté la règle de filtrage autorisant les clients VPN à accéder au réseau interne
+- ✅ Vérifié la configuration complète avant le test client
+
+---
+
+## Contexte : ce que les règles implicites gèrent déjà
+
+Avant d'écrire la moindre règle, il est important de comprendre ce que le SNS autorise **automatiquement** grâce à ses règles implicites activées lors des phases précédentes.
+
+| Règle implicite     | Ce qu'elle autorise                                                 | Activée par                                                   |
+| ------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
+| **Authd**           | Accès au portail captif sur le port **443/TCP**                     | Association interface `out` ↔ profil portail captif (Phase 5) |
+| **VPN SSL TCP/UDP** | Établissement des tunnels sur les ports **443/TCP** et **1194/UDP** | Activation du service VPN SSL (Phase 5)                       |
+
+:::note[Conséquence pratique]
+Vous **n'avez pas besoin** d'écrire de règles explicites pour les ports 443 et 1194 entrants. Le SNS les gère seul via ses règles implicites, tant que le portail captif est associé à l'interface `out` et que le service VPN SSL est actif.
+:::
+
+En revanche, une fois le tunnel établi, le trafic **à l'intérieur du tunnel** (des clients VPN vers le réseau interne) doit être explicitement autorisé dans la politique active — le SNS ne le fait pas automatiquement.
+
+---
+
+## Étape 6.1 : Ajout de la règle d'accès au réseau interne
+
+### 🎯 Ce que doit faire cette règle
+
+Autoriser les hôtes des réseaux VPN SSL (`Net-SSLVPN_TCP` et `Net-SSLVPN_UDP`) à joindre les ressources du réseau interne (`Network_internals`), à condition que le trafic provienne bien d'un **tunnel VPN SSL** (critère *Via*).
+
+:::caution[Politique active]
+Toutes les manipulations qui suivent sont à effectuer dans la politique **(6) VPN-SSL**, qui doit être la politique **active** depuis la Phase 3.
+:::
+
+<Steps>
+
+1. **Accéder à la politique de filtrage**
+
+   `Configuration` → `Politique de sécurité` → `Filtrage et NAT`
+
+   Vérifier que la politique active est bien **(6) VPN-SSL**.
+
+2. **Créer un séparateur**
+
+   Dans l'onglet **Filtrage**, cliquer sur `Nouvelle règle` → `Séparateur de règles`.
+
+   Nommer le séparateur :
+   ```
+   Accès au réseau interne pour les utilisateurs nomades VPN SSL
+   ```
+
+3. **Créer la règle de filtrage**
+
+   Cliquer sur `Nouvelle règle` → `Règle simple`, puis renseigner :
+
+   **Onglet Général :**
+
+   | Paramètre  | Valeur                 |
+   | ---------- | ---------------------- |
+   | **État**   | `On`                   |
+   | **Nom**    | `VPN-SSL-vers-Interne` |
+   | **Action** | `Passer`               |
+
+   **Onglet Source — Général :**
+
+   | Paramètre            | Valeur                              |
+   | -------------------- | ----------------------------------- |
+   | **Machines sources** | `Net-SSLVPN_TCP` + `Net-SSLVPN_UDP` |
+
+   **Onglet Source — Configuration avancée :**
+
+   | Paramètre | Valeur           |
+   | --------- | ---------------- |
+   | **Via**   | `Tunnel VPN SSL` |
+
+   :::caution[Le critère « Via » est indispensable]
+   Sans ce critère, la règle autoriserait n'importe quel trafic prétendant provenir des plages `10.Y.100.0/24` ou `10.Y.101.0/24`, y compris des paquets forgés (*spoofing*). Avec **Via : Tunnel VPN SSL**, le SNS vérifie que les paquets proviennent réellement d'un tunnel VPN SSL authentifié.
+   :::
+
+   **Onglet Destination — Général :**
+
+   | Paramètre                | Valeur              |
+   | ------------------------ | ------------------- |
+   | **Machines destination** | `Network_internals` |
+
+4. **Valider et appliquer**
+
+   Cliquer sur `OK` pour valider la règle, puis sur `Appliquer`.
+
+</Steps>
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 7.1) :**
+- Capture d'écran de la règle créée dans la politique `(6) VPN-SSL`, montrant la source, le critère *Via* et la destination
+:::
+
+---
+
+## Étape 6.2 : Vérification de la règle NAT
+
+La règle *SNAT* créée en Phase 3 utilise `Network_internals` comme source. Or, **une fois le tunnel VPN SSL établi, les réseaux `Net-SSLVPN_TCP` et `Net-SSLVPN_UDP` font partie des réseaux internes protégés du SNS** — ils sont donc couverts par `Network_internals`.
+
+:::note[Aucune règle NAT supplémentaire n'est nécessaire]
+La règle SNAT existante s'applique automatiquement aux clients VPN SSL qui souhaitent accéder à Internet via le tunnel. Vous n'avez pas à créer de nouvelle règle NAT.
+:::
+
+Pour vérifier, dans l'onglet **NAT** de la politique `(6) VPN-SSL`, la règle SNAT doit ressembler à :
+
+| Source              | Source translatée | Destination |
+| ------------------- | ----------------- | ----------- |
+| `Network_internals` | `Firewall_out`    | `Internet`  |
+
+Si la source est `Network_internals`, les réseaux VPN SSL sont bien inclus. ✅
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 7.2) :**
+- Capture d'écran de la règle NAT confirmant que `Network_internals` est bien la source
+:::
+
+---
+
+## Étape 6.3 : Récapitulatif de la politique `(6) VPN-SSL`
+
+TODO : à vérifier
+
+À l'issue de cette phase, votre politique de filtrage doit contenir les règles suivantes (dans cet ordre) :
+
+| #   | Nom                          | Source                              | Via            | Destination           | Action  |
+| --- | ---------------------------- | ----------------------------------- | -------------- | --------------------- | ------- |
+| 2   | *(ICMP interne)*             | `Any`                               | —              | `Firewall_all`         | Passer  |
+| 3   | *(Internet sortant)*         | `Reseau_Interne_Y`                  | —              | `Internet`            | Passer  |
+| —   | *--- Séparateur VPN SSL ---* |                                     |                |                       |         |
+| 4   | `VPN-SSL-vers-Interne`       | `Net-SSLVPN_TCP` + `Net-SSLVPN_UDP` | Tunnel VPN SSL | `Network_internals`   | Passer  |
+| …   | *(Block all implicite)*      | `Any`                               | —              | `Any`                 | Bloquer |
+
+:::note[Numéros de règles indicatifs]
+Les numéros de règles dépendent de ce que vous avez créé lors des phases précédentes. L'ordre logique est : règles réseau interne → règles VPN SSL → bloc implicite.
+:::
+
+---
+
+## Tableau de validation de la Phase 6
+
+| Élément             | Vérification                                  | ✅/❌ |
+| ------------------- | --------------------------------------------- | ----- |
+| Politique active    | `(6) VPN-SSL`                                 |       |
+| Règle VPN SSL créée | Présente dans l'onglet Filtrage               |       |
+| Source de la règle  | `Net-SSLVPN_TCP` + `Net-SSLVPN_UDP`           |       |
+| Critère *Via*       | `Tunnel VPN SSL`                              |       |
+| Destination         | `Network_internals`                           |       |
+| Règle SNAT          | Source = `Network_internals` (couvre les VPN) |       |
+
+---
+
+## ✅ Critères de validation de la Phase 6
+
+Avant de passer à la Phase 7, assurez-vous que :
+
+- [ ] La politique active est bien `(6) VPN-SSL`
+- [ ] La règle `VPN-SSL-vers-Interne` est créée et activée
+- [ ] La source inclut `Net-SSLVPN_TCP` **et** `Net-SSLVPN_UDP`
+- [ ] Le critère **Via : Tunnel VPN SSL** est renseigné dans la configuration avancée de la source
+- [ ] La destination est `Network_internals`
+- [ ] La règle NAT existante couvre bien les clients VPN (source `Network_internals`)
+- [ ] Votre compte-rendu (Section 7) est complété avec les captures d'écran
+
+:::tip[Checkpoint enseignant]
+👨‍🏫 **Avant de continuer**, faites valider votre configuration par l'enseignant en lui montrant :
+1. La règle de filtrage VPN SSL avec le critère *Via* visible
+2. La règle NAT avec `Network_internals` en source
+:::
+
+---
+
+## 🎯 Résumé de la Phase 6
+
+Vous avez maintenant une configuration **complète et fonctionnelle** côté serveur :
+
+- ✅ Les connexions entrantes (portail + tunnel) sont gérées par les règles implicites SNS
+- ✅ Le trafic des clients VPN vers le réseau interne est explicitement autorisé
+- ✅ Le NAT sortant couvre automatiquement les clients VPN SSL
+
+**Prochaine étape** : Phase 7 — Installation et connexion du client VPN SSL (Étudiant X)

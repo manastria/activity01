@@ -20,7 +20,8 @@ export default defineConfig({
             { label: 'Reset', link: 'activities/sns/reset' },
             { label: 'Configuration de base', link: 'activities/sns/init' },
             { label: 'Modèles pare-feu et NAT', link: 'activities/sns/doc-regles' },
-
+            { label: 'NAT sortant SNAT', link: 'activities/sns/nat-sortant-snat' },
+            { label: 'NAT entrant DNAT', link: 'activities/sns/nat-entrant-dnat' },
           ],
         },
         {
@@ -29,6 +30,10 @@ export default defineConfig({
             { label: 'Déploiement clé SSH', link: '/outils/ssh-key-deployer' },
             { label: 'Mémo', link: '/memo' },
           ],
+        },
+        {
+          label: 'VPN',
+          autogenerate: { directory: 'activities/sns-vpn', collapsed: false },
         },
       ],
       tableOfContents: {

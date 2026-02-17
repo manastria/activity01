@@ -1,0 +1,377 @@
+---
+title: "Phase 7 : Client VPN SSL — connexion et tests"
+description: "Téléchargement du profil OpenVPN depuis le portail captif, connexion au tunnel VPN SSL et validation de l'accès au réseau interne depuis la VM Client X"
+sidebar:
+  order: 8
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+# Phase 7 : Client VPN SSL — connexion et tests
+
+## Informations
+
+- **Durée estimée** : 45 minutes
+- **Prérequis** : Phases 5 et 6 terminées et validées côté Étudiant Y
+- **Acteur principal** : Étudiant X (VM `VPN-Client-X`)
+- **Acteur secondaire** : Étudiant Y (supervision côté SNS)
+- **Livrable** : Tunnel VPN SSL établi, accès au réseau interne `10.Y.1.0/24` validé
+
+---
+
+## Objectifs de cette phase
+
+À l'issue de cette phase, vous aurez :
+
+- ✅ Installé le client *OpenVPN* sur la VM `VPN-Client-X`
+- ✅ Récupéré le profil de connexion `.ovpn` depuis le portail captif du SNS
+- ✅ Établi un tunnel VPN SSL et obtenu une IP virtuelle
+- ✅ Vérifié les routes créées automatiquement
+- ✅ Testé l'accès au réseau interne `10.Y.1.0/24`
+- ✅ Observé le tunnel depuis la supervision du SNS
+
+---
+
+## Rappel du mécanisme en trois étapes
+
+```
+Étape 1 — Authentification sur le portail captif
+  Client X ──HTTPS──▶ https://172.25.Y.254/auth
+  SNS vérifie : droits VPN SSL du groupe VPN ✅
+
+Étape 2 — Téléchargement du profil
+  Client X ◀── openvpn_mobile_client.ovpn (CA + certificats + config)
+
+Étape 3 — Établissement du tunnel TLS
+  Client X ──UDP:1194 (ou TCP:443 en repli)──▶ SNS
+  SNS attribue une IP dans 10.Y.100.0/24 (UDP) ou 10.Y.101.0/24 (TCP)
+```
+
+:::note[Priorité UDP]
+Le client *OpenVPN* tente toujours l'UDP en premier (port 1194) pour de meilleures performances. Il bascule automatiquement sur TCP (port 443) en cas d'échec, par exemple sur un réseau qui bloquerait l'UDP.
+:::
+
+---
+
+## Étape 7.1 : Installation du client OpenVPN
+
+:::caution[Rôle]
+Cette étape est réalisée par l'**Étudiant X** sur la VM `VPN-Client-X`.
+:::
+
+<Steps>
+
+1. **Ouvrir un terminal** sur la VM `VPN-Client-X`
+
+2. **Installer le paquet OpenVPN**
+
+   ```bash
+   sudo apt update && sudo apt install -y openvpn
+   ```
+
+   Vérifier que l'installation s'est bien déroulée :
+
+   ```bash
+   openvpn --version
+   ```
+
+   Le numéro de version doit s'afficher sans erreur.
+
+</Steps>
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 8.1) :**
+- Capture d'écran du résultat de `openvpn --version`
+:::
+
+---
+
+## Étape 7.2 : Téléchargement du profil VPN depuis le portail captif
+
+<Steps>
+
+1. **Ouvrir le navigateur** sur la VM `VPN-Client-X`
+
+2. **Accéder au portail captif** du SNS :
+
+   ```
+   https://172.25.Y.254/auth
+   ```
+
+   Accepter l'avertissement de certificat auto-signé (`Avancé` → `Accepter le risque`).
+
+3. **S'authentifier** avec les identifiants d'un utilisateur du groupe `VPN` :
+
+   | Champ | Valeur |
+   |-------|--------|
+   | **Identifiant** | `jdupont` (ou `mmartin` / `pdurand`) |
+   | **Mot de passe** | `Vpn2025!` |
+
+4. **Télécharger le profil OpenVPN**
+
+   Après authentification, une page de téléchargement s'affiche. Cliquer sur :
+
+   **« Profil VPN SSL pour clients mobile OpenVPN Connect (fichier unique .ovpn) »**
+
+   Le fichier `openvpn_mobile_client.ovpn` est téléchargé dans `/home/user/Downloads/`.
+
+   :::caution[Un seul fichier suffit]
+   Contrairement à l'archive complète `openvpn_client.zip` (qui contient les certificats séparés), le fichier `.ovpn` *mobile* regroupe la configuration **et** les certificats dans un seul fichier. C'est lui qu'il faut utiliser avec la commande `openvpn` en ligne de commande.
+   :::
+
+</Steps>
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 8.2) :**
+- Capture d'écran de la page de téléchargement du portail captif après authentification
+:::
+
+---
+
+## Étape 7.3 : Connexion au tunnel VPN SSL
+
+<Steps>
+
+1. **Ouvrir un terminal** et se placer dans le dossier de téléchargement :
+
+   ```bash
+   cd /home/user/Downloads
+   ```
+
+2. **Lancer la connexion VPN** :
+
+   ```bash
+   sudo openvpn openvpn_mobile_client.ovpn
+   ```
+
+3. **Saisir les identifiants** lorsqu'ils sont demandés :
+
+   ```
+   Enter Auth Username: jdupont
+   Enter Auth Password: Vpn2025!
+   ```
+
+4. **Observer les messages de connexion**
+
+   La connexion est établie lorsque vous lisez une ligne contenant :
+   ```
+   Initialization Sequence Completed
+   ```
+
+   :::note[Message d'erreur de route]
+   Il est possible d'obtenir un avertissement du type `ERROR: Linux route add command failed`. Cela n'empêche pas l'établissement du tunnel — cela signifie simplement qu'une route poussée par le serveur existe déjà sur le client.
+   :::
+
+5. **Laisser ce terminal ouvert** — il maintient le tunnel actif.
+
+</Steps>
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 8.3) :**
+- Capture d'écran du terminal montrant `Initialization Sequence Completed`
+:::
+
+---
+
+## Étape 7.4 : Vérification côté client
+
+**Ouvrir un second terminal** (sans fermer le premier) pour effectuer les vérifications suivantes.
+
+### Vérifier l'interface tunnel créée
+
+```bash
+ip addr show tun0
+```
+
+**Résultat attendu :** une interface `tun0` est présente avec une adresse IP dans le réseau VPN SSL assigné, par exemple :
+
+```
+4: tun0: <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> ...
+    inet 10.Y.100.6/30 brd 10.Y.100.7 scope global tun0
+```
+
+L'adresse doit appartenir à `10.Y.100.0/24` (UDP) ou `10.Y.101.0/24` (TCP).
+
+### Vérifier les routes créées automatiquement
+
+```bash
+ip route show | grep tun0
+```
+
+**Résultat attendu :** plusieurs routes via `tun0` ont été créées automatiquement, notamment vers le réseau interne `10.Y.1.0/24` :
+
+```
+10.Y.1.0/24 via 10.Y.100.5 dev tun0
+10.Y.100.0/24 via 10.Y.100.5 dev tun0
+```
+
+:::note[Route par défaut]
+Sous Linux avec *NetworkManager*, une route par défaut (`0.0.0.0/0`) peut être ajoutée via `tun0`, ce qui fait passer **tout le trafic Internet** par le tunnel. Ce comportement est modifiable mais n'est pas gênant pour les tests.
+:::
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 8.4) :**
+- Capture d'écran de `ip addr show tun0` avec l'IP virtuelle obtenue
+- Capture d'écran de `ip route show | grep tun0` avec les routes créées
+:::
+
+---
+
+## Étape 7.5 : Tests de connectivité
+
+### 🔧 Test 1 — Ping vers l'interface interne du SNS
+
+```bash
+ping -c 4 10.Y.1.254
+```
+
+**Résultat attendu :** 4 réponses reçues, temps de réponse < 10 ms.
+
+### 🔧 Test 2 — Ping vers le serveur Debian interne
+
+```bash
+ping -c 4 10.Y.1.20
+```
+
+**Résultat attendu :** 4 réponses reçues.
+
+### 🔧 Test 3 — Accès au serveur web interne
+
+Dans le navigateur de la VM `VPN-Client-X`, accéder à :
+
+```
+http://10.Y.1.20:8080/
+```
+
+**Résultat attendu :** la page d'accueil du serveur web interne s'affiche.
+
+:::caution[En cas d'échec des tests]
+Si les pings échouent, vérifier dans l'ordre :
+1. Que le tunnel est bien actif (`Initialization Sequence Completed` visible dans le premier terminal)
+2. Que l'interface `tun0` a bien une IP dans `10.Y.100.0/24` ou `10.Y.101.0/24`
+3. Que la règle de filtrage de la Phase 6 est bien activée dans la politique `(6) VPN-SSL`
+4. Que le critère **Via : Tunnel VPN SSL** est bien présent dans la règle
+:::
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 8.5) :**
+- Capture d'écran des pings vers `10.Y.1.254` et `10.Y.1.20`
+- Capture d'écran de la page web interne accessible depuis le client VPN
+:::
+
+---
+
+## Étape 7.6 : Supervision du tunnel côté SNS
+
+:::caution[Rôle]
+Cette étape est réalisée par l'**Étudiant Y** depuis l'interface d'administration du SNS, pendant que le tunnel est actif.
+:::
+
+La supervision d'un tunnel VPN SSL actif s'effectue via **deux vues complémentaires** dans l'interface SNS.
+
+<Steps>
+
+1. **Vérifier l'utilisateur authentifié**
+
+   `Supervision` → **Utilisateurs**
+
+   Le tableau doit afficher une ligne avec :
+
+   | Colonne | Valeur attendue |
+   |---------|-----------------|
+   | **Utilisateur** | `jdupont` (ou l'utilisateur connecté) |
+   | **Méthode d'auth.** | `OPENVPN` |
+   | **Adresse IP** | IP virtuelle dans `10.Y.100.0/24` ou `10.Y.101.0/24` |
+
+   :::note[Méthode OPENVPN]
+   La méthode d'authentification affichée est `OPENVPN` (et non `VPN SSL` comme indiqué dans certaines versions de la documentation). C'est le comportement normal sur SNS EVA — cela confirme que l'utilisateur est bien authentifié via un tunnel VPN SSL.
+   :::
+
+2. **Vérifier les journaux VPN**
+
+   `Supervision` → `Journaux` → **VPN**
+
+   Les événements de connexion et déconnexion du tunnel doivent y apparaître, avec horodatage et identifiant utilisateur.
+
+   :::note[Logs anonymisés par défaut]
+   Par défaut, les logs SNS anonymisent les noms d'utilisateurs. Pour afficher les identifiants en clair, aller dans `Préférences` de l'administrateur et passer en mode **Logs : accès complet**.
+   :::
+
+</Steps>
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 8.6) :**
+- Capture d'écran de `Supervision` → `Utilisateurs` montrant l'utilisateur connecté avec la méthode `OPENVPN`
+- Capture d'écran des journaux VPN montrant la création du tunnel
+:::
+
+---
+
+## Étape 7.7 : Fermeture du tunnel
+
+Depuis le **premier terminal** (celui où `openvpn` est en cours d'exécution), appuyer sur :
+
+```
+Ctrl + C
+```
+
+L'interface `tun0` est supprimée et les routes VPN sont retirées automatiquement.
+
+Vérifier depuis la supervision du SNS (Étudiant Y) que le tunnel a bien disparu de la liste.
+
+---
+
+## Tableau de validation de la Phase 7
+
+| Test | Résultat attendu | ✅/❌ |
+|------|-----------------|-------|
+| Installation OpenVPN | `openvpn --version` sans erreur | |
+| Portail captif | Page de téléchargement visible après authentification | |
+| Téléchargement `.ovpn` | Fichier `openvpn_mobile_client.ovpn` présent | |
+| Connexion tunnel | `Initialization Sequence Completed` | |
+| Interface `tun0` | IP dans `10.Y.100.0/24` ou `10.Y.101.0/24` | |
+| Routes | Routes vers `10.Y.1.0/24` via `tun0` | |
+| Ping SNS interne | Réponses de `10.Y.1.254` | |
+| Ping serveur Debian | Réponses de `10.Y.1.20` | |
+| Accès web interne | Page web visible dans le navigateur | |
+| Supervision → Utilisateurs | Utilisateur visible avec méthode `OPENVPN` | |
+| Journaux VPN | Création du tunnel visible dans les logs | |
+| Fermeture tunnel | `tun0` disparaît après `Ctrl+C` | |
+
+---
+
+## ✅ Critères de validation de la Phase 7
+
+Avant de conclure l'activité, assurez-vous que :
+
+- [ ] Le client *OpenVPN* est installé sur la VM `VPN-Client-X`
+- [ ] Le fichier `openvpn_mobile_client.ovpn` a été téléchargé depuis le portail captif
+- [ ] Le tunnel VPN SSL a été établi (`Initialization Sequence Completed`)
+- [ ] L'interface `tun0` dispose d'une IP dans le réseau VPN SSL
+- [ ] Les routes vers `10.Y.1.0/24` sont présentes via `tun0`
+- [ ] Le ping vers `10.Y.1.254` et `10.Y.1.20` fonctionne
+- [ ] Le serveur web interne est accessible depuis le client VPN
+- [ ] L'utilisateur est visible dans `Supervision` → `Utilisateurs` avec la méthode `OPENVPN`
+- [ ] La création du tunnel est visible dans `Journaux` → `VPN`
+- [ ] Le compte-rendu (Section 8) est complété avec toutes les captures d'écran
+
+:::tip[Checkpoint enseignant]
+👨‍🏫 **Validation finale** — Montrez à l'enseignant simultanément :
+1. Le terminal Client X avec `Initialization Sequence Completed` et un ping réussi
+2. La supervision SNS avec le tunnel actif et l'utilisateur identifié
+:::
+
+---
+
+## 🎯 Résumé de l'activité
+
+Félicitations ! Vous avez mis en place une infrastructure VPN SSL complète :
+
+| Phase | Réalisé |
+|-------|---------|
+| 1–2 | Plan d'adressage et configuration des VMs |
+| 3 | Configuration de base du SNS (interfaces, filtrage, NAT) |
+| 4 | Annuaire LDAP interne, utilisateurs, groupe VPN, droits d'accès |
+| 5 | Service VPN SSL (réseaux clients, portail captif) |
+| 6 | Règle de filtrage pour les clients VPN |
+| 7 | Client *OpenVPN*, connexion et tests de bout en bout |

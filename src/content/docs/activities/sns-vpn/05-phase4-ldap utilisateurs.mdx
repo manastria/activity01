@@ -1,0 +1,276 @@
+---
+title: "Phase 4 : Annuaire LDAP et utilisateurs VPN"
+description: "Activation de l'annuaire LDAP interne du Stormshield et création des utilisateurs pour l'authentification VPN SSL"
+sidebar:
+  order: 5
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+# Phase 4 : Annuaire LDAP et utilisateurs VPN
+
+## Informations
+
+- **Durée estimée** : 1h00
+- **Prérequis** : Phase 3 terminée et validée
+- **Acteur principal** : Étudiant Y (Serveur VPN)
+- **Livrable** : Annuaire LDAP configuré avec utilisateurs et groupe prêts pour le VPN
+
+---
+
+## Objectifs de cette phase
+
+À l'issue de cette phase, vous aurez :
+
+- ✅ Compris le rôle de l'authentification dans un VPN
+- ✅ Activé et configuré l'annuaire *LDAP* interne du SNS
+- ✅ Créé les comptes utilisateurs pour l'accès VPN
+- ✅ Créé un groupe d'utilisateurs VPN
+- ✅ Attribué les droits d'accès VPN SSL au groupe
+- ✅ Validé l'authentification via l'outil de diagnostic
+
+---
+
+## Contexte : Pourquoi un annuaire *LDAP* ?
+
+Avant d'ouvrir un tunnel VPN, le pare-feu doit **vérifier l'identité** de l'utilisateur qui se connecte. Pour **TechServices SARL**, cela signifie :
+
+- Les collaborateurs s'authentifient avec leur login/mot de passe
+- Seuls les utilisateurs autorisés peuvent établir un tunnel VPN
+- L'administrateur peut révoquer un accès en désactivant un compte
+
+*LDAP* (*Lightweight Directory Access Protocol* — Protocole léger d'accès aux annuaires) est le protocole standard pour stocker et interroger des informations sur les utilisateurs. Le SNS intègre un **annuaire LDAP interne** : pas besoin de serveur supplémentaire, tout est géré directement dans le pare-feu.
+
+:::tip[En production]
+Dans une vraie entreprise, le SNS se connecterait à l'*Active Directory* (*AD*) existant pour centraliser la gestion des utilisateurs. L'annuaire interne est idéal pour une PME ou un environnement de test comme celui-ci.
+:::
+
+:::caution[Rôle spécifique]
+**Cette phase est réalisée par l'Étudiant Y uniquement** (Serveur VPN).
+L'Étudiant X peut observer et prendre des notes.
+:::
+
+---
+
+## Étape 4.1 : Activation de l'annuaire LDAP interne
+
+<Steps>
+
+1. **Accéder à la configuration des annuaires**
+
+   `Configuration` → `Utilisateurs` → `Configuration des annuaires`
+
+   Cliquer sur **Création d'un annuaire LDAP interne** puis `Suivant`.
+
+2. **Renseigner les paramètres de l'annuaire**
+
+   | Paramètre | Signification | Valeur |
+   |-----------|---------------|--------|
+   | **Organisation** | Nom de domaine de l'organisation | `techservices` |
+   | **Domaine** | *TLD* (*Top Level Domain*) | `local` |
+   | **Mot de passe** | Mot de passe d'accès à l'annuaire LDAP | `netlab123` |
+   | **Haché du mot de passe** | Algorithme de hachage des mots de passe utilisateurs | (laisser par défaut) |
+
+   Cliquer sur `Suivant`.
+
+3. **Associer le profil d'authentification à l'interface**
+
+   - Sélectionner l'interface **`out`** pour le profil 0
+   - Cliquer sur `Terminer`
+
+   Un résumé de la configuration s'affiche confirmant la création de l'annuaire.
+
+</Steps>
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 5.1) :**
+- Capture d'écran du résumé de configuration affiché après la création de l'annuaire
+:::
+
+---
+
+## Étape 4.2 : Création des utilisateurs
+
+### Utilisateurs à créer
+
+Voici les comptes à créer pour l'entreprise **TechServices SARL** :
+
+| Nom complet | Identifiant | Service | Mot de passe |
+|-------------|-------------|---------|--------------|
+| Jean Dupont | `jdupont` | Commercial Lyon | `Vpn2025!` |
+| Marie Martin | `mmartin` | Commercial Lyon | `Vpn2025!` |
+| Pierre Durand | `pdurand` | Support — télétravail | `Vpn2025!` |
+
+### 🔧 Tâche : Créer les trois utilisateurs
+
+<Steps>
+
+1. **Accéder à la gestion des utilisateurs**
+
+   `Configuration` → `Utilisateurs` → `Utilisateurs`
+
+2. **Créer les utilisateurs**
+
+</Steps>
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 5.2) :**
+- Capture d'écran de la liste des utilisateurs montrant les 3 comptes créés
+:::
+
+---
+
+## Étape 4.3 : Création du groupe d'utilisateurs VPN
+
+### 🎯 Pourquoi un groupe ?
+
+Plutôt que d'attribuer des droits d'accès VPN utilisateur par utilisateur, on autorise un **groupe entier** : plus simple à gérer et à faire évoluer (ajouter un utilisateur = l'ajouter au groupe).
+
+### 🔧 Tâche : Créer le groupe « VPN »
+
+<Steps>
+
+1. **Créer le groupe**
+
+   Toujours dans `Configuration` → `Utilisateurs` → `Utilisateurs` :
+
+   Cliquer sur `Ajouter un groupe` :
+   - **Nom du groupe** : `VPN`
+
+2. **Ajouter les membres au groupe**
+
+   Dans la fiche du groupe, cliquer sur `+Ajouter` et rechercher chaque utilisateur par son *CN* (*Common Name*), le _drag and drop_ est aussi possible :
+   - ✅ `jdupont`
+   - ✅ `mmartin`
+   - ✅ `pdurand`
+
+   :::caution[Recherche par CN obligatoire]
+   Recherchez les utilisateurs dans le champ **Cn** — sinon le SNS affichera un message d'erreur lors de la création du groupe.
+   :::
+
+3. **Sauvegarder le groupe**
+
+   Cliquer sur `Appliquer` puis `Sauvegarder`.
+
+</Steps>
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 5.3) :**
+- Capture d'écran de la fiche du groupe `VPN` montrant ses 3 membres
+:::
+
+---
+
+## Étape 4.4 : Attribution des droits d'accès VPN SSL
+
+Il ne suffit pas de créer un groupe : il faut **explicitement autoriser** ce groupe à utiliser le service VPN SSL via la politique des droits d'accès.
+
+<Steps>
+
+1. **Accéder aux droits d'accès**
+
+   `Configuration` → `Utilisateurs` → `Droits d'accès`
+
+2. **Sélectionner l'onglet « Accès détaillé »**
+
+3. **Ajouter le groupe VPN**
+
+   Cliquer sur `+Ajouter` et sélectionner le groupe `VPN`.
+
+4. **Autoriser l'accès VPN SSL**
+
+   Sur la ligne du groupe `VPN` :
+   - Colonne **VPN SSL** : sélectionner `Autoriser`
+   - Double-cliquer sur la colonne **État** pour passer la règle à `Activé`
+
+5. **Appliquer et sauvegarder**
+
+   Cliquer sur `Appliquer` puis `Sauvegarder`.
+
+</Steps>
+
+:::note[Rôle de cette étape]
+Cette configuration est **indépendante** des règles de filtrage que vous créerez en Phase 6. Elle définit les **droits applicatifs** : qui a le droit d'utiliser le service VPN SSL. Le filtrage réseau contrôle, lui, les flux autorisés à traverser le pare-feu.
+:::
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 5.4) :**
+- Capture d'écran de la page des droits d'accès montrant le groupe `VPN` avec l'accès VPN SSL autorisé et activé
+:::
+
+---
+
+## Étape 4.5 : Validation de l'annuaire LDAP
+
+### 🔧 Tâche : Tester l'authentification
+
+TODO : l'outil ne se trouve pas à cet endroit
+
+Le SNS dispose d'un outil de diagnostic intégré pour vérifier qu'un utilisateur peut bien s'authentifier.
+
+`Configuration` → `Utilisateurs` → `Configuration des annuaires` → onglet **Test d'authentification** (ou depuis le menu Authentification)
+
+**Tests à effectuer :**
+
+| Utilisateur | Mot de passe | Résultat attendu |
+|-------------|--------------|------------------|
+| `jdupont` | `Vpn2025!` | ✅ Authentification réussie |
+| `mmartin` | `Vpn2025!` | ✅ Authentification réussie |
+| `jdupont` | `MauvaisMotDePasse` | ❌ Échec (attendu) |
+
+:::tip[Compte-rendu]
+📝 **À ajouter dans votre compte-rendu (Section 5.5) :**
+- Capture d'écran d'un test réussi pour `jdupont`
+- Capture d'écran d'un test échoué (mauvais mot de passe)
+:::
+
+---
+
+## Tableau de validation de la Phase 4
+
+Complétez ce tableau dans votre compte-rendu :
+
+| Élément | Vérification | ✅/❌ |
+|---------|--------------|-------|
+| Annuaire LDAP activé | Résumé de configuration affiché | |
+| Interface `out` associée au profil 0 | Résumé de configuration | |
+| 3 utilisateurs créés | Liste des utilisateurs | |
+| Groupe `VPN` créé | Liste des utilisateurs | |
+| Groupe `VPN` contient 3 membres | Fiche du groupe | |
+| Droits VPN SSL attribués au groupe | Droits d'accès → Accès détaillé | |
+| Règle d'accès activée | Colonne État → Activé | |
+| Auth. `jdupont` réussie | Outil de test | |
+| Auth. mauvais mdp refusée | Outil de test | |
+
+---
+
+## ✅ Critères de validation de la Phase 4
+
+Avant de passer à la Phase 5, assurez-vous que :
+
+- [ ] L'annuaire LDAP interne est activé et associé à l'interface `out`
+- [ ] Les 3 utilisateurs (`jdupont`, `mmartin`, `pdurand`) sont créés
+- [ ] Le groupe `VPN` est créé avec ses 3 membres
+- [ ] Le groupe `VPN` dispose du droit d'accès **VPN SSL → Autoriser** et est **activé**
+- [ ] L'authentification des utilisateurs est validée par l'outil de test
+- [ ] Un mauvais mot de passe est bien refusé
+- [ ] Votre compte-rendu (Section 5) est complété avec les captures d'écran
+
+:::tip[Checkpoint enseignant]
+👨‍🏫 **Avant de continuer**, faites valider votre configuration par l'enseignant en lui montrant :
+1. La liste des utilisateurs et la fiche du groupe `VPN`
+2. La page des droits d'accès avec le groupe `VPN` autorisé en VPN SSL
+3. Un test d'authentification réussi
+:::
+
+---
+
+## 🎯 Résumé de la Phase 4
+
+Vous avez maintenant :
+
+- ✅ Un annuaire LDAP interne opérationnel sur le SNS
+- ✅ 3 comptes utilisateurs prêts pour l'authentification VPN
+- ✅ Un groupe `VPN` avec les droits d'accès VPN SSL
+
+**Prochaine étape** : Phase 5 — Configuration du serveur VPN SSL
