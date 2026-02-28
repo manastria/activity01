@@ -517,83 +517,32 @@ Rédigez un **rapport d'audit de sécurité** professionnel incluant :
 
 ### ⭐ Livrables niveau 1 (obligatoires)
 
-<CardGrid>
-  <Card title="Schéma réseau détaillé" icon="diagram">
-    Topologie complète avec zones, VMs, interfaces, flux
-  </Card>
-  <Card title="Plan d'adressage" icon="table">
-    Tableau complet des IP, masques, passerelles (utilisez le template fourni)
-  </Card>
-  <Card title="Matrice de flux implémentée" icon="list-format">
-    Tableau des règles pare-feu créées avec justifications
-  </Card>
-  <Card title="Documentation NAT/PAT" icon="network">
-    Règles NAT configurées et expliquées
-  </Card>
-  <Card title="Résultats des tests" icon="checkmark">
-    Tests 1 à 6 réalisés et documentés avec résultats
-  </Card>
-  <Card title="Captures d'écran" icon="image">
-    Interface EVA1, règles configurées, logs de blocage DMZ→LAN
-  </Card>
-</CardGrid>
+| Livrable | Description |
+|----------|-------------|
+| **Schéma réseau détaillé** | Topologie complète avec zones, VMs, interfaces, flux |
+| **Plan d'adressage** | Tableau complet des IP, masques, passerelles (utilisez le template fourni) |
+| **Matrice de flux implémentée** | Tableau des règles pare-feu créées avec justifications |
+| **Documentation NAT/PAT** | Règles NAT configurées et expliquées |
+| **Résultats des tests** | Tests 1 à 6 réalisés et documentés avec résultats |
+| **Captures d'écran** | Interface EVA1, règles configurées, logs de blocage DMZ→LAN |
 
 ### ⭐⭐ Livrables niveau 2
 
-<CardGrid>
-  <Card title="Configuration IPS" icon="shield">
-    Profils activés, mode de fonctionnement choisi
-  </Card>
-  <Card title="Logs d'attaques" icon="warning">
-    Résultats des tests de scan avec alertes IPS générées
-  </Card>
-  <Card title="Logs centralisés" icon="server">
-    Configuration Syslog + dashboard ou requêtes créées
-  </Card>
-  <Card title="Règles affinées" icon="lock">
-    Restrictions par IP source, gestion ICMP documentée
-  </Card>
-</CardGrid>
+| Livrable | Description |
+|----------|-------------|
+| **Configuration IPS** | Profils activés, mode de fonctionnement choisi |
+| **Logs d'attaques** | Résultats des tests de scan avec alertes IPS générées |
+| **Logs centralisés** | Configuration Syslog + dashboard ou requêtes créées |
+| **Règles affinées** | Restrictions par IP source, gestion ICMP documentée |
 
 ### ⭐⭐⭐ Livrables niveau 3
 
-<CardGrid>
-  <Card title="Fonctionnalités avancées" icon="rocket">
-    Filtrage URL, QoS, géo-restriction configurés
-  </Card>
-  <Card title="Rapport d'audit complet" icon="document">
-    Document professionnel avec méthodologie, résultats, recommandations
-  </Card>
-  <Card title="Analyse de sécurité" icon="magnifier">
-    Vulnérabilités identifiées et plan de remédiation
-  </Card>
-  <Card title="Tests avancés documentés" icon="scan">
-    5 tests d'audit réalisés avec outils avancés
-  </Card>
-</CardGrid>
-
----
-
-## Critères d'évaluation
-
-| Critère                 | ⭐ Niveau 1                             | ⭐⭐ Niveau 2                       | ⭐⭐⭐ Niveau 3                  |
-| ----------------------- | --------------------------------------- | ----------------------------------- | -------------------------------- |
-| **Architecture réseau** | 3 zones fonctionnelles                  | + Architecture modulaire gérée      | + Optimisations (QoS, géo)       |
-| **Plan d'adressage**    | Cohérent et documenté                   | + Justifications des choix          | + Plan évolutif documenté        |
-| **Règles pare-feu**     | 8 règles de base conformes à la matrice | + Règles affinées (IP source)       | + Règles avancées (ICMP, etc.)   |
-| **NAT/PAT**             | Fonctionnel et testé                    | + Documentation technique détaillée | + Tests de validation avancés    |
-| **Sécurité**            | Blocage DMZ→LAN validé                  | + IPS activé et testé               | + Audit complet avec outils pros |
-| **Tests**               | 6 tests de base réussis                 | + Tests d'attaque documentés        | + 5 tests d'audit avancés        |
-| **Logs**                | Consultés et compris                    | + Centralisation + exploitation     | + Corrélation et dashboards      |
-| **Documentation**       | Schémas + procédures                    | + Analyse technique                 | + Rapport d'audit professionnel  |
-
-:::tip[Conseils pour l'évaluation]
-- La **qualité de la documentation** compte autant que la réalisation technique
-- Les **justifications** de vos choix sont essentielles
-- Les **tests de sécurité** doivent être rigoureux et documentés
-- Le **rapport d'audit** (⭐⭐⭐) valorise fortement votre travail
-:::
-
+| Livrable | Description |
+|----------|-------------|
+| **Fonctionnalités avancées** | Filtrage URL, QoS, géo-restriction configurés |
+| **Rapport d'audit complet** | Document professionnel avec méthodologie, résultats, recommandations |
+| **Analyse de sécurité** | Vulnérabilités identifiées et plan de remédiation |
+| **Tests avancés documentés** | 5 tests d'audit réalisés avec outils avancés |
 ---
 
 ## Ressources complémentaires

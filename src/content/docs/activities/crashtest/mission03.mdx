@@ -4,6 +4,8 @@ description: Configuration d'un accès d'administration à distance sécurisé p
 ---
 
 import { Steps, Card, CardGrid, Aside } from '@astrojs/starlight/components';
+import TaskLevel from "@/components/TaskLevel.astro";
+
 
 ## Objectif
 
@@ -13,7 +15,7 @@ Mettre en place une solution permettant l'administration à distance sécurisée
   <Card title="Difficulté" icon="star">
     Moyen 🤔
   </Card>
-  <Card title="Temps estimé" icon="clock">
+  <Card title="Temps estimé" icon="seti:clock">
     3 heures
   </Card>
 </CardGrid>
@@ -140,6 +142,8 @@ Internet
 
 ### Tâche 1 ⭐ : Analyse de risques et choix de solution
 
+<TaskLevel level={1} summary="Travail à réaliser">
+
 Avant toute mise en œuvre technique, vous devez analyser les risques et choisir une solution adaptée.
 
 #### Étape 1.1 : Identification des menaces
@@ -180,9 +184,13 @@ Comparez les trois solutions proposées (A, B, C) selon les critères suivants :
 Cette analyse de risques et ce comparatif sont des éléments essentiels qui démontrent votre capacité à prendre des décisions techniques argumentées.
 :::
 
+</TaskLevel>
+
 ---
 
 ### Tâche 2 ⭐ : Mise en place de l'authentification par clés SSH
+
+<TaskLevel level={1} summary="Travail à réaliser">
 
 Quelle que soit la solution choisie, l'authentification par clés SSH est **obligatoire**. Les mots de passe doivent être désactivés.
 
@@ -225,9 +233,12 @@ Avant de désactiver l'authentification par mot de passe, assurez-vous que :
 3. Vous avez un accès de secours (console VirtualBox) en cas de problème
 :::
 
+</TaskLevel>
 ---
 
 ### Tâche 3 ⭐ : Configuration du pare-feu pour l'accès SSH externe
+
+<TaskLevel level={1} summary="Travail à réaliser">
 
 Configurez le pare-feu `fw-crash` pour autoriser les connexions SSH depuis Internet.
 
@@ -285,9 +296,13 @@ ssh -J user@bastion user@glpi-srv01
 
 ✅ **Attendu** : La connexion fonctionne avec authentification par clés.
 
+</TaskLevel>
+
 ---
 
 ### Tâche 4 ⭐⭐ : Durcissement de la configuration SSH
+
+<TaskLevel level={2} summary="Travail à réaliser">
 
 Renforcez la sécurité de votre serveur SSH en appliquant les bonnes pratiques.
 
@@ -329,9 +344,13 @@ Consultez les recommandations de l'ANSSI ou de Mozilla pour connaître les algor
 
 Après chaque modification, **redémarrez le service SSH** et **testez** que vous pouvez toujours vous connecter.
 
+</TaskLevel>
+
 ---
 
 ### Tâche 5 ⭐⭐ : Protection contre les attaques par force brute
+
+<TaskLevel level={2} summary="Travail à réaliser">
 
 Mettez en place des mécanismes de détection et de blocage des tentatives d'intrusion.
 
@@ -373,9 +392,13 @@ Le **port knocking** cache le port SSH jusqu'à ce qu'une séquence de ports soi
 
 Documentez la solution choisie et testez son efficacité.
 
+</TaskLevel>
+
 ---
 
 ### Tâche 6 ⭐⭐ : Surveillance et audit des connexions SSH
+
+<TaskLevel level={2} summary="Travail à réaliser">
 
 Mettez en place une surveillance des accès SSH pour détecter les comportements anormaux.
 
@@ -414,9 +437,13 @@ Créez un **script ou dashboard** affichant :
 - Nombre de tentatives échouées par IP
 - Horaires des connexions (identifier les patterns anormaux)
 
+</TaskLevel>
+
 ---
 
 ### Tâche 7 ⭐⭐⭐ : Architecture bastion SSH professionnelle
+
+<TaskLevel level={3} summary="Travail à réaliser">
 
 Si vous avez choisi la Solution B, ou si vous souhaitez améliorer votre architecture, déployez un bastion SSH professionnel.
 
@@ -475,9 +502,13 @@ Sur le bastion, activez le **logging exhaustif** :
 - Alertes sur toute connexion au bastion
 - Notification des administrateurs en cas de commande suspecte
 
+</TaskLevel>
+
 ---
 
 ### Tâche 8 ⭐⭐⭐ : Authentification multi-facteurs (2FA)
+
+<TaskLevel level={3} summary="Travail à réaliser">
 
 Ajoutez une couche de sécurité supplémentaire avec l'authentification à deux facteurs.
 
@@ -509,9 +540,13 @@ Pour les environnements hautement sécurisés, les clés matérielles (YubiKey, 
 
 Documentez la solution 2FA choisie et le processus d'authentification complet.
 
+</TaskLevel>
+
 ---
 
 ### Tâche 9 ⭐⭐⭐ : Tests d'intrusion SSH
+
+<TaskLevel level={3} summary="Travail à réaliser">
 
 Réalisez des tests pour valider la robustesse de votre configuration.
 
@@ -560,66 +595,40 @@ Documentez vos tests d'intrusion avec :
 - Captures d'écran
 - Analyse de la sécurité de votre configuration
 
+</TaskLevel>
+
 ---
 
 ## Livrables attendus
 
 ### ⭐ Livrables niveau 1 (obligatoires)
 
-<CardGrid>
-  <Card title="Analyse de risques" icon="warning">
-    Document d'analyse des menaces, vulnérabilités et impacts
-  </Card>
-  <Card title="Comparatif de solutions" icon="table">
-    Tableau comparatif des 3 solutions avec justification du choix
-  </Card>
-  <Card title="Configuration SSH" icon="document">
-    Authentification par clés configurée et testée
-  </Card>
-  <Card title="Règles pare-feu" icon="shield">
-    Accès SSH depuis Internet fonctionnel et sécurisé
-  </Card>
-  <Card title="Documentation d'accès" icon="open-book">
-    Procédure de connexion SSH depuis l'extérieur
-  </Card>
-  <Card title="Tests de connexion" icon="checkmark">
-    Connexion réussie depuis Internet documentée
-  </Card>
-</CardGrid>
+| Livrable | Description |
+|----------|-------------|
+| **Analyse de risques** | Document d'analyse des menaces, vulnérabilités et impacts |
+| **Comparatif de solutions** | Tableau comparatif des 3 solutions avec justification du choix |
+| **Configuration SSH** | Authentification par clés configurée et testée |
+| **Règles pare-feu** | Accès SSH depuis Internet fonctionnel et sécurisé |
+| **Documentation d'accès** | Procédure de connexion SSH depuis l'extérieur |
+| **Tests de connexion** | Connexion réussie depuis Internet documentée |
 
 ### ⭐⭐ Livrables niveau 2
 
-<CardGrid>
-  <Card title="Configuration durcie" icon="lock">
-    Fichier sshd_config optimisé et commenté
-  </Card>
-  <Card title="Protection anti-bruteforce" icon="shield-check">
-    Fail2ban ou équivalent configuré et testé
-  </Card>
-  <Card title="Logs centralisés" icon="server">
-    Logs SSH envoyés au Syslog + alertes configurées
-  </Card>
-  <Card title="Dashboard de surveillance" icon="chart">
-    Visualisation des connexions et tentatives d'intrusion
-  </Card>
-</CardGrid>
+| Livrable | Description |
+|----------|-------------|
+| **Configuration durcie** | Fichier `sshd_config` optimisé et commenté |
+| **Protection anti-bruteforce** | Fail2ban ou équivalent configuré et testé |
+| **Logs centralisés** | Logs SSH envoyés au Syslog + alertes configurées |
+| **Dashboard de surveillance** | Visualisation des connexions et tentatives d'intrusion |
 
 ### ⭐⭐⭐ Livrables niveau 3
 
-<CardGrid>
-  <Card title="Architecture bastion" icon="template">
-    Bastion SSH opérationnel avec logs exhaustifs
-  </Card>
-  <Card title="Authentification 2FA" icon="key">
-    Second facteur configuré et testé
-  </Card>
-  <Card title="Rapport de tests d'intrusion" icon="scan">
-    Tests de force brute, scan de vulnérabilités documentés
-  </Card>
-  <Card title="Procédures d'urgence" icon="emergency">
-    Documentation de récupération en cas de verrouillage
-  </Card>
-</CardGrid>
+| Livrable | Description |
+|----------|-------------|
+| **Architecture bastion** | Bastion SSH opérationnel avec logs exhaustifs |
+| **Authentification 2FA** | Second facteur configuré et testé |
+| **Rapport de tests d'intrusion** | Tests de force brute, scan de vulnérabilités documentés |
+| **Procédures d'urgence** | Documentation de récupération en cas de verrouillage |
 
 ---
 

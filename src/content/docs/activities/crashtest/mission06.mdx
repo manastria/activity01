@@ -5,6 +5,8 @@ description: Ajout de services professionnels sur le cluster et optimisation glo
 
 import { Steps, Card, CardGrid, Aside } from '@astrojs/starlight/components';
 
+import TaskLevel from "@/components/TaskLevel.astro";
+
 # Mission 6 : Services complémentaires et optimisation
 
 ## Objectif
@@ -15,7 +17,7 @@ Enrichir l'infrastructure haute disponibilité avec des services complémentaire
   <Card title="Difficulté" icon="star">
     Difficile 💪
   </Card>
-  <Card title="Temps estimé" icon="clock">
+  <Card title="Temps estimé" icon="seti:clock">
     6 heures
   </Card>
 </CardGrid>
@@ -172,6 +174,8 @@ Centraliser l'authentification simplifie la gestion des utilisateurs.
 
 ### Tâche 1 ⭐ : Mise en place d'une PKI interne
 
+<TaskLevel level={1}>
+
 Créez votre propre autorité de certification pour générer des certificats SSL professionnels.
 
 #### Étape 1.1 : Création de la CA racine
@@ -307,9 +311,13 @@ sudo update-ca-certificates
 
 **Testez** : Accédez à `https://[VIP]` → Pas d'avertissement de sécurité.
 
+</TaskLevel>
+
 ---
 
 ### Tâche 2 ⭐⭐⭐ : Mise en cache avec Varnish
+
+<TaskLevel level={3} summary="Travail à réaliser">
 
 Améliorez les performances en mettant en cache les contenus statiques et certaines pages dynamiques.
 
@@ -406,9 +414,13 @@ ab -n 1000 -c 10 https://[VIP]/
 
 **Objectif** : Temps de chargement < 2 secondes, amélioration d'au moins 30% pour le contenu statique.
 
+</TaskLevel>
+
 ---
 
 ### Tâche 3 ⭐⭐⭐ : Sauvegarde automatisée du cluster
+
+<TaskLevel level={3} summary="Travail à réaliser">
 
 Mettez en place une stratégie de sauvegarde complète de l'infrastructure.
 
@@ -487,9 +499,13 @@ Créez une VM dédiée `backup-srv` :
 
 **Mesurez le RTO réel** : Temps total de restauration.
 
+</TaskLevel>
+
 ---
 
 ### Tâche 4 ⭐⭐⭐ : Optimisation des performances MySQL
+
+<TaskLevel level={3} summary="Travail à réaliser">
 
 Optimisez la base de données pour améliorer les performances globales.
 
@@ -547,9 +563,13 @@ mysqlslap --auto-generate-sql --concurrency=50 --iterations=10
 - Configurez GLPI pour utiliser Redis comme cache backend
 - Stockage des sessions PHP dans Redis (partagé entre serveurs web)
 
+</TaskLevel>
+
 ---
 
 ### Tâche 5 ⭐⭐⭐ : Déploiement d'un WAF (_Web Application Firewall_)
+
+<TaskLevel level={3} summary="Travail à réaliser">
 
 Protégez GLPI contre les attaques web courantes.
 
@@ -614,9 +634,13 @@ Le WAF peut générer des **faux positifs** (bloquer des requêtes légitimes).
 - Tentez un XSS dans un champ texte
 - Vérifiez que les attaques sont bloquées et loguées
 
+</TaskLevel>
+
 ---
 
 ### Tâche 6 ⭐⭐⭐ : Monitoring avancé et dashboards
+
+<TaskLevel level={3} summary="Travail à réaliser">
 
 Améliorez la supervision avec des dashboards détaillés et des alertes pertinentes.
 
@@ -677,9 +701,13 @@ Configurez des alertes avec seuils adaptatifs :
 - Slack/Mattermost/Discord pour les warnings
 - SMS (via service externe) pour les pannes critiques hors heures ouvrables
 
+</TaskLevel>
+
 ---
 
 ### Tâche 7 ⭐⭐⭐ : Authentification centralisée LDAP
+
+<TaskLevel level={3} summary="Travail à réaliser">
 
 Intégrez GLPI avec un annuaire LDAP pour centraliser la gestion des utilisateurs.
 
@@ -750,9 +778,13 @@ Dans l'interface d'administration GLPI :
 3. Vérifiez que les droits sont correctement attribués selon le groupe LDAP
 4. Modifiez un attribut dans LDAP (email) et vérifiez la synchronisation
 
+</TaskLevel>
+
 ---
 
 ### Tâche 8 ⭐⭐⭐ : Infrastructure as Code avec Ansible
+
+<TaskLevel level={3} summary="Travail à réaliser">
 
 Automatisez complètement le déploiement de votre infrastructure avec Ansible.
 
@@ -870,9 +902,13 @@ Assurez-vous que vos playbooks sont **idempotents** :
 3. Modifiez une configuration manuellement
 4. Rejouez le playbook → La configuration doit être remise dans l'état voulu
 
+</TaskLevel>
+
 ---
 
 ### Tâche 9 ⭐⭐⭐ : Documentation automatisée
+
+<TaskLevel level={3} summary="Travail à réaliser">
 
 Générez automatiquement la documentation de votre infrastructure.
 
@@ -955,9 +991,13 @@ Documentez toutes les procédures opérationnelles en Markdown :
 
 **Intégrez dans un wiki** (ex: GitLab Wiki, BookStack, DokuWiki) pour faciliter l'accès.
 
+</TaskLevel>
+
 ---
 
 ### Tâche 10 ⭐⭐⭐ : Tests finaux et validation
+
+<TaskLevel level={3} summary="Travail à réaliser">
 
 Réalisez une batterie de tests pour valider l'ensemble de l'infrastructure.
 
@@ -1033,6 +1073,8 @@ Rédigez un **rapport de validation finale** incluant :
 4. **Sécurité** : Tests WAF, PKI, authentification
 5. **Métriques atteintes** vs objectifs du cahier des charges
 6. **Améliorations futures** : Pistes d'optimisation
+
+</TaskLevel>
 
 ---
 
