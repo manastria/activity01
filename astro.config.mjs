@@ -11,6 +11,7 @@ export default defineConfig({
         { label: 'Accueil', link: '/' },
         {
           label: 'CRASH Test',
+          collapsed: false,
           autogenerate: { directory: 'activities/crashtest', collapsed: false },
         },
         // Ajout manuel de la catégorie SNS
@@ -33,6 +34,7 @@ export default defineConfig({
         },
         {
           label: 'VPN',
+          collapsed: true,
           autogenerate: { directory: 'activities/sns-vpn', collapsed: false },
         },
       ],
