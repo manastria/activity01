@@ -1,0 +1,195 @@
+---
+title: Configurer une interface réseau SNS via le CLI
+description: >
+  Procédure pas à pas pour modifier manuellement l'adresse IP
+  d'une interface réseau sur un pare-feu Stormshield SNS depuis
+  la console CLI, à destination des étudiants BTS SIO 1ère année.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+## Introduction
+
+Ce guide explique comment modifier l'adresse IP d'une interface réseau sur un
+pare-feu *SNS* (*Stormshield Network Security*) en éditant directement son
+fichier de configuration depuis le *CLI* (*Command Line Interface* — interface
+en ligne de commande).
+
+<Aside type="note" title="Deux méthodes disponibles">
+La commande `wizardinit` permet de reconfigurer les paramètres réseau de base
+du *SNS* de façon interactive et guidée. Elle est plus rapide mais reconfigure
+l'ensemble des paramètres fondamentaux. La méthode présentée ici permet une
+modification « chirurgicale » : on ne touche qu'au paramètre voulu, sans
+affecter le reste de la configuration.
+</Aside>
+
+---
+
+## Rappel sur l'éditeur `vi`
+
+Vous avez l'habitude de `nano`, éditeur simple et intuitif. L'éditeur `vi`
+fonctionne différemment : il repose sur plusieurs **modes** distincts.
+
+<Aside type="caution" title="vi n'est pas nano !">
+Dans `vi`, vous ne pouvez pas saisir du texte immédiatement après l'ouverture
+du fichier. Vous devez d'abord passer en **mode insertion** en appuyant sur
+la touche `i`.
+</Aside>
+
+### Les modes essentiels
+
+| Mode | Rôle | Accès |
+|---|---|---|
+| *Normal* | Mode par défaut, navigation et commandes | Touche `Échap` |
+| *Insert* | Saisie et modification du texte | Touche `i` |
+| *Command* | Commandes avancées (sauvegarde, quitter…) | Touche `:` |
+
+### Commandes indispensables
+
+| Commande | Action |
+|---|---|
+| `i` | Passer en mode insertion |
+| `Échap` | Revenir en mode normal |
+| `:w` | Enregistrer |
+| `:q` | Quitter |
+| `:wq` | Enregistrer et quitter |
+| `:q!` | Quitter sans enregistrer |
+| `/texte` | Rechercher « texte » dans le fichier |
+| `n` | Occurrence suivante |
+
+---
+
+## Procédure
+
+<Steps>
+
+1. ### Ouvrir le fichier de configuration réseau
+
+   Depuis la console *SNS*, exécutez :
+   ```bash
+   vi ConfigFiles/network
+   ```
+
+   Le fichier de configuration réseau s'ouvre dans `vi`.
+
+   <Aside type="note" title="Le mode wrap">
+   Par défaut, `vi` active le mode *wrap* (retour à la ligne automatique) :
+   les lignes trop longues sont visuellement découpées sur plusieurs lignes à
+   l'écran, ce qui peut gêner la lecture. Pour activer le défilement horizontal
+   à la place, entrez la commande suivante depuis le mode *Normal* :
+   ```
+   :set leftright
+   ```
+
+   Appuyez sur `:`, tapez `set leftright`, puis validez avec `Entrée`. Le contenu
+   défilera désormais horizontalement plutôt que de passer à la ligne.
+
+   :::note
+   Cette version de `vi` est une implémentation allégée (de type *BusyBox*), qui
+   ne dispose pas de toutes les options de `vim`. La commande `:set nowrap`,
+   couramment documentée pour `vim`, n'est **pas disponible** ici.
+   :::
+   </Aside>
+
+2. ### Localiser la section de l'interface à modifier
+
+   Utilisez la recherche de `vi` pour atteindre rapidement la section
+   correspondant à l'interface souhaitée :
+   ```
+   /ethernet0
+   ```
+
+   Vous devriez trouver un bloc similaire à celui-ci :
+   ```ini
+   [ethernet0]
+   State=1
+   Name=out
+   Media=0
+   Color=800040
+   EEE=0
+   Address=DHCP
+   ```
+
+   <Aside type="note" title="Signification des paramètres">
+   - `State=1` : l'interface est **active**.
+   - `Name=out` : nom logique de l'interface dans le *SNS*.
+   - `Address=DHCP` : l'interface obtient actuellement son adresse
+     automatiquement via le protocole *DHCP* (*Dynamic Host Configuration
+     Protocol*).
+   </Aside>
+
+3. ### Modifier l'adresse IP
+
+   Passez en mode insertion (`i`) et remplacez la ligne `Address=DHCP` par
+   l'adresse IP souhaitée :
+   ```ini
+   Address=192.168.1.246
+   ```
+
+4. ### Ajouter ou modifier le masque de sous-réseau
+
+   Ajoutez (ou modifiez si elle est déjà présente) la ligne `Mask`.
+   Deux notations sont acceptées :
+
+   **Notation décimale pointée :**
+   ```ini
+   Mask=255.255.255.0
+   ```
+
+   **Notation *CIDR* (*Classless Inter-Domain Routing* — adressage sans
+   classe) :**
+   ```ini
+   Mask=24
+   ```
+
+   <Aside type="note">
+   Les deux notations sont strictement équivalentes : `255.255.255.0`
+   et `24` désignent le même masque de sous-réseau. Utilisez celle avec
+   laquelle vous êtes le plus à l'aise.
+   </Aside>
+
+5. ### Enregistrer et quitter
+
+   Repassez en mode *Normal* (`Échap`), puis enregistrez et quittez :
+   ```
+   :wq
+   ```
+
+6. ### Appliquer la configuration
+
+   L'édition du fichier ne suffit pas : il faut **activer** explicitement la
+   nouvelle configuration réseau avec la commande :
+   ```bash
+   ennetwork
+   ```
+
+   <Aside type="caution">
+   Tant que `ennetwork` n'a pas été exécuté, l'ancienne configuration reste
+   active en mémoire. Le fichier modifié n'est pris en compte qu'après
+   l'exécution de cette commande.
+   </Aside>
+
+7. ### Vérifier la configuration
+
+   Contrôlez que l'adresse IP a bien été appliquée sur l'interface :
+   ```bash
+   portinfo
+   ```
+
+   La commande `portinfo` affiche l'état de toutes les interfaces réseau du
+   *SNS* avec leur adresse IP, leur masque et leur statut. Vérifiez que
+   l'interface `out` affiche bien l'adresse que vous venez de configurer.
+
+</Steps>
+
+---
+
+## Récapitulatif des commandes
+
+| Commande | Rôle |
+|---|---|
+| `wizardinit` | Assistant de reconfiguration guidée du *SNS* |
+| `vi ConfigFiles/network` | Ouvrir le fichier de configuration réseau |
+| `:set nowrap` | Désactiver le retour à la ligne dans `vi` |
+| `ennetwork` | Appliquer la nouvelle configuration réseau |
+| `portinfo` | Afficher l'état des interfaces réseau |
