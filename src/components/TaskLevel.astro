@@ -1,0 +1,130 @@
+---
+/**
+ * TaskLevel - Composant de tâche repliable par niveau de difficulté
+ *
+ * Encapsule le contenu d'une tâche dans un bloc <details> avec un style
+ * adapté au niveau (⭐, ⭐⭐, ⭐⭐⭐).
+ *
+ * Par défaut, seul le niveau 1 est déplié. Les niveaux 2 et 3 sont repliés.
+ * Ce comportement peut être surchargé avec la prop `open`.
+ *
+ * @example
+ * <TaskLevel level={1} title="Tâche 1 : Analyse et choix architectural">
+ *   Contenu de la tâche...
+ * </TaskLevel>
+ *
+ * <TaskLevel level={3} title="Tâche 1.1 : Architecture modulaire">
+ *   Contenu avancé...
+ * </TaskLevel>
+ */
+export interface Props {
+  /** Niveau de difficulté : 1, 2 ou 3 */
+  level: 1 | 2 | 3;
+  /** Titre affiché dans le résumé (sans les étoiles, elles sont ajoutées automatiquement) */
+  title: string;
+  /** Forcer l'état ouvert/fermé (par défaut : ouvert pour niveau 1, fermé sinon) */
+  open?: boolean;
+}
+
+const { level, title, open } = Astro.props;
+
+const stars = '⭐'.repeat(level);
+
+// Par défaut, seul le niveau 1 est déplié
+const isOpen = open !== undefined ? open : level === 1;
+
+// Classe CSS selon le niveau
+const levelClass = `task-level-${level}`;
+---
+
+<details class:list={['task-level', levelClass]} open={isOpen || undefined}>
+  <summary>
+    <span class="task-stars" aria-label={`Niveau ${level}`}>{stars}</span>
+    <span class="task-title">{title}</span>
+  </summary>
+  <div class="task-content">
+    <slot />
+  </div>
+</details>
+
+<style>
+  .task-level {
+    border-radius: 0.5rem;
+    margin: 1.5rem 0;
+    border: 1px solid var(--sl-color-gray-5);
+    border-left: 4px solid var(--sl-color-gray-4);
+    background: transparent;
+  }
+
+  /* --- Couleurs par niveau --- */
+  .task-level-1 {
+    border-left-color: var(--sl-color-green-high, #22c55e);
+  }
+
+  .task-level-2 {
+    border-left-color: var(--sl-color-blue-high, #3b82f6);
+  }
+
+  .task-level-3 {
+    border-left-color: var(--sl-color-purple-high, #a855f7);
+  }
+
+  /* --- Summary --- */
+  .task-level summary {
+    cursor: pointer;
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    font-size: 1.1rem;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    user-select: none;
+  }
+
+  /* Suppression du marqueur natif */
+  .task-level summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .task-level summary::marker {
+    content: '';
+  }
+
+  /* Chevron animé */
+  .task-level summary::before {
+    content: '▶';
+    font-size: 0.65em;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+    color: var(--sl-color-gray-3);
+  }
+
+  .task-level[open] > summary::before {
+    transform: rotate(90deg);
+  }
+
+  /* Hover */
+  .task-level summary:hover {
+    background: var(--sl-color-gray-6, rgba(128, 128, 128, 0.05));
+    border-radius: 0.5rem 0.5rem 0 0;
+  }
+
+  .task-level:not([open]) summary:hover {
+    border-radius: 0.5rem;
+  }
+
+  .task-stars {
+    font-style: normal;
+    line-height: 1;
+  }
+
+  .task-title {
+    flex: 1;
+  }
+
+  /* --- Contenu --- */
+  .task-content {
+    padding: 0.25rem 1.25rem 1.25rem;
+  }
+</style>
