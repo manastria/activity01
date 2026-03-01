@@ -23,6 +23,7 @@ export default defineConfig({
             { label: 'Modèles pare-feu et NAT', link: 'activities/sns/doc-regles' },
             { label: 'NAT sortant SNAT', link: 'activities/sns/nat-sortant-snat' },
             { label: 'NAT entrant DNAT', link: 'activities/sns/nat-entrant-dnat' },
+            { label: 'Configurer interface réseau CLI', link: 'activities/sns/sns-configuration-interface-reseau-cli' },
           ],
         },
         {
