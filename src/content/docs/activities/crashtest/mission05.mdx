@@ -4,6 +4,8 @@ description: Mise en place d'une architecture haute disponibilité avec load bal
 ---
 
 import { Steps, Card, CardGrid, Aside } from '@astrojs/starlight/components';
+import TaskLevel from "@/components/TaskLevel.astro";
+
 
 ## Objectif
 
@@ -13,7 +15,7 @@ Mettre en place une architecture haute disponibilité pour garantir la continuit
   <Card title="Difficulté" icon="star">
     Difficile 💪
   </Card>
-  <Card title="Temps estimé" icon="clock">
+  <Card title="Temps estimé" icon="seti:clock">
     8 heures
   </Card>
 </CardGrid>
@@ -266,6 +268,8 @@ Utilisez des noms cohérents pour faciliter la gestion :
 
 ### Tâche 1 ⭐ : Analyse et justification de l'architecture
 
+<TaskLevel level={1} summary="Travail à réaliser">
+
 Avant de déployer, analysez les besoins et choisissez vos technologies.
 
 #### Étape 1.1 : Identification des SPOF actuels
@@ -316,9 +320,13 @@ Considérez :
 - La compatibilité avec votre infrastructure existante
 :::
 
+</TaskLevel>
+
 ---
 
 ### Tâche 2 ⭐ : Préparation de l'infrastructure
+
+<TaskLevel level={1} summary="Travail à réaliser">
 
 Créez les machines virtuelles nécessaires à votre architecture.
 
@@ -349,9 +357,13 @@ Configurez NTP sur toutes les machines :
 - Même serveur NTP pour tout le cluster
 - Vérifiez la synchronisation avec `ntpdate -q` ou `timedatectl`
 
+</TaskLevel>
+
 ---
 
 ### Tâche 3 ⭐ : Clonage et configuration des serveurs web
+
+<TaskLevel level={1} summary="Travail à réaliser">
 
 Vous devez avoir au moins **2 serveurs web identiques** pour le load balancing.
 
@@ -388,9 +400,13 @@ $CFG_GLPI['session_use_db'] = true;
 Ainsi, un utilisateur peut changer de serveur web sans perdre sa session.
 :::
 
+</TaskLevel>
+
 ---
 
 ### Tâche 4 ⭐ : Installation et configuration de HAProxy
+
+<TaskLevel level={1} summary="Travail à réaliser">
 
 Installez HAProxy pour répartir le trafic entre vos serveurs web.
 
@@ -434,9 +450,13 @@ Pour le HTTPS, HAProxy a besoin des certificats SSL :
 
 _Astuce :_ Consultez les statistiques HAProxy via l'interface web (si activée) ou les logs.
 
+</TaskLevel>
+
 ---
 
 ### Tâche 5 ⭐⭐ : Mise en place de l'IP virtuelle avec Keepalived
+
+<TaskLevel level={2} summary="Travail à réaliser">
 
 Créez une IP virtuelle flottante pour éliminer HAProxy comme SPOF.
 
@@ -490,9 +510,13 @@ Modifiez les règles Stormshield (Mission 2) :
 
 **Documentez** le temps de basculement observé et les éventuelles interruptions.
 
+</TaskLevel>
+
 ---
 
 ### Tâche 6 ⭐⭐ : Réplication de la base de données MySQL/MariaDB
+
+<TaskLevel level={2} summary="Travail à réaliser">
 
 Mettez en place la réplication Master-Slave pour sécuriser les données.
 
@@ -545,9 +569,13 @@ En réplication Master-Slave :
 Ce n'est pas un failover automatique. Pour cela, il faudrait du Master-Master (niveau ⭐⭐⭐) ou un outil d'orchestration.
 :::
 
+</TaskLevel>
+
 ---
 
 ### Tâche 7 ⭐⭐ : Synchronisation des fichiers GLPI
+
+<TaskLevel level={2} summary="Travail à réaliser">
 
 Les fichiers uploadés dans GLPI (documents, images de tickets, etc.) doivent être accessibles par tous les serveurs web.
 
@@ -592,9 +620,13 @@ Pour une vraie réplication sans SPOF :
 **Avantage** : Aucun SPOF, haute disponibilité complète du stockage.
 **Inconvénient** : Plus complexe à configurer et maintenir.
 
+</TaskLevel>
+
 ---
 
 ### Tâche 8 ⭐⭐⭐ : Réplication Master-Master MySQL
+
+<TaskLevel level={3} summary="Travail à réaliser">
 
 Passez à une réplication bidirectionnelle pour permettre l'écriture sur les deux serveurs BDD.
 
@@ -639,9 +671,13 @@ Ajoutez un frontend/backend dans HAProxy pour la base de données :
 
 Les serveurs web pointent vers HAProxy (IP:3306) plutôt que directement vers un serveur BDD.
 
+</TaskLevel>
+
 ---
 
 ### Tâche 9 ⭐⭐⭐ : Monitoring et supervision
+
+<TaskLevel level={3} summary="Travail à réaliser">
 
 Mettez en place une surveillance complète du cluster.
 
@@ -696,9 +732,13 @@ Configurez des alertes (Prometheus Alertmanager ou Grafana Alerts) :
 - Slack/Discord/Mattermost (webhook)
 - SMS (via service externe)
 
+</TaskLevel>
+
 ---
 
 ### Tâche 10 ⭐⭐⭐ : Tests de charge et scénarios de panne
+
+<TaskLevel level={3} summary="Travail à réaliser">
 
 Validez la robustesse de votre architecture par des tests approfondis.
 
@@ -799,96 +839,43 @@ Rédigez un **rapport de tests de résilience** incluant :
 4. **Analyse** : Points forts et points faibles de l'architecture
 5. **Recommandations** : Améliorations possibles
 
+</TaskLevel>
+
 ---
 
 ## Livrables attendus
 
 ### ⭐ Livrables niveau 1 (obligatoires)
 
-<CardGrid>
-  <Card title="Analyse des SPOF" icon="warning">
-    Identification des points de défaillance avec matrice de risques
-  </Card>
-  <Card title="Justification des choix" icon="pencil">
-    Choix technologiques argumentés (HAProxy, Keepalived, réplication...)
-  </Card>
-  <Card title="Schéma d'architecture HA" icon="diagram">
-    Architecture complète avec tous les composants et flux
-  </Card>
-  <Card title="Plan d'adressage cluster" icon="table">
-    Tableau IP complet de tous les nœuds
-  </Card>
-  <Card title="Configuration HAProxy" icon="document">
-    Fichier de config commenté et expliqué
-  </Card>
-  <Card title="Tests de load balancing" icon="checkmark">
-    Validation du fonctionnement et de la répartition
-  </Card>
-</CardGrid>
+| Livrable | Description |
+|----------|-------------|
+| **Analyse des SPOF** | Identification des points de défaillance avec matrice de risques |
+| **Justification des choix** | Choix technologiques argumentés (HAProxy, Keepalived, réplication...) |
+| **Schéma d'architecture HA** | Architecture complète avec tous les composants et flux |
+| **Plan d'adressage cluster** | Tableau IP complet de tous les nœuds |
+| **Configuration HAProxy** | Fichier de config commenté et expliqué |
+| **Tests de load balancing** | Validation du fonctionnement et de la répartition |
 
 ### ⭐⭐ Livrables niveau 2
 
-<CardGrid>
-  <Card title="Configuration Keepalived" icon="network">
-    IP virtuelle fonctionnelle avec tests de basculement
-  </Card>
-  <Card title="Réplication MySQL" icon="database">
-    Master-Slave configuré et validé
-  </Card>
-  <Card title="Synchronisation fichiers" icon="folder">
-    Solution déployée et testée (NFS ou Lsyncd)
-  </Card>
-  <Card title="Tests de panne" icon="scan">
-    Scénarios de failover documentés (web, HAProxy)
-  </Card>
-  <Card title="Procédures de reprise" icon="open-book">
-    Documentation pour promouvoir slave en master
-  </Card>
-</CardGrid>
+| Livrable | Description |
+|----------|-------------|
+| **Configuration Keepalived** | IP virtuelle fonctionnelle avec tests de basculement |
+| **Réplication MySQL** | Master-Slave configuré et validé |
+| **Synchronisation fichiers** | Solution déployée et testée (NFS ou Lsyncd) |
+| **Tests de panne** | Scénarios de failover documentés (web, HAProxy) |
+| **Procédures de reprise** | Documentation pour promouvoir slave en master |
 
 ### ⭐⭐⭐ Livrables niveau 3
 
-<CardGrid>
-  <Card title="Architecture sans SPOF" icon="template">
-    Aucun point de défaillance unique
-  </Card>
-  <Card title="Master-Master MySQL" icon="database">
-    Réplication bidirectionnelle avec ProxySQL
-  </Card>
-  <Card title="Monitoring complet" icon="chart">
-    Prometheus + Grafana avec dashboards et alertes
-  </Card>
-  <Card title="GlusterFS" icon="folder">
-    Stockage répliqué sans SPOF (optionnel)
-  </Card>
-  <Card title="Rapport de tests de charge" icon="document">
-    Tests de résilience avec métriques RTO/RPO
-  </Card>
-  <Card title="Automatisation" icon="rocket">
-    Scripts de déploiement et de reprise automatiques
-  </Card>
-</CardGrid>
-
----
-
-## Critères d'évaluation
-
-| Critère | ⭐ Niveau 1 | ⭐⭐ Niveau 2 | ⭐⭐⭐ Niveau 3 |
-|---------|------------|--------------|---------------|
-| **Architecture** | Load balancing web fonctionnel | + IP virtuelle + réplication BDD | Architecture sans SPOF |
-| **Disponibilité** | Service web redondant | RTO < 5 min, RPO < 5 min | RTO < 2 min, RPO < 1 min |
-| **Basculement** | Manuel (redémarrage service) | Automatique HAProxy, manuel BDD | Tout automatique |
-| **Synchronisation** | Fichiers non traités (acceptable) | Solution implémentée (NFS/Lsyncd) | GlusterFS ou équivalent HA |
-| **Tests** | Load balancing validé | Tests de panne web + HAProxy | Tests de charge + scénarios multiples |
-| **Monitoring** | Logs consultables | Supervision de base | Prometheus/Grafana + alertes |
-| **Documentation** | Schéma + justifications | + Procédures de reprise | Runbook complet + rapport tests |
-
-:::tip[Conseils pour l'évaluation]
-- L'**analyse initiale** des SPOF et la **justification** des choix sont essentielles
-- Les **tests de panne** doivent être rigoureux et documentés avec métriques
-- La **qualité de la documentation** permet la reprise par un autre admin
-- Le **rapport de tests** (⭐⭐⭐) démontre la maîtrise professionnelle
-:::
+| Livrable | Description |
+|----------|-------------|
+| **Architecture sans SPOF** | Aucun point de défaillance unique |
+| **Master-Master MySQL** | Réplication bidirectionnelle avec ProxySQL |
+| **Monitoring complet** | Prometheus + Grafana avec dashboards et alertes |
+| **GlusterFS** | Stockage répliqué sans SPOF (optionnel) |
+| **Rapport de tests de charge** | Tests de résilience avec métriques RTO/RPO |
+| **Automatisation** | Scripts de déploiement et de reprise automatiques |
 
 ---
 

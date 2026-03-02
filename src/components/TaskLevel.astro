@@ -1,0 +1,129 @@
+---
+/**
+ * TaskLevel - Bloc de contenu repliable par niveau de difficulté
+ *
+ * Encapsule le contenu d'une tâche dans un bloc <details> avec un style
+ * adapté au niveau (⭐, ⭐⭐, ⭐⭐⭐).
+ *
+ * Le titre de la tâche doit rester un heading Markdown (###, ####) pour
+ * apparaître dans le sommaire Starlight. Ce composant ne gère que le
+ * contenu repliable.
+ *
+ * Par défaut, seul le niveau 1 est déplié. Les niveaux 2 et 3 sont repliés.
+ *
+ * @example
+ * ### ⭐ Tâche 1 : Analyse et choix architectural
+ *
+ * <TaskLevel level={1}>
+ *   Contenu de la tâche...
+ * </TaskLevel>
+ *
+ * #### ⭐⭐⭐ Tâche 1.1 : Architecture modulaire
+ *
+ * <TaskLevel level={3} summary="Voir les consignes avancées">
+ *   Contenu avancé...
+ * </TaskLevel>
+ */
+export interface Props {
+  /** Niveau de difficulté : 1, 2 ou 3 */
+  level: 1 | 2 | 3;
+  /** Texte du summary cliquable (par défaut : chevron seul) */
+  summary?: string;
+  /** Forcer l'état ouvert/fermé (par défaut : ouvert pour niveau 1, fermé sinon) */
+  open?: boolean;
+}
+
+const { level, summary, open } = Astro.props;
+
+// Par défaut, seul le niveau 1 est déplié
+const isOpen = open !== undefined ? open : level === 1;
+
+const levelClass = `task-level-${level}`;
+const hasLabel = !!summary;
+---
+
+<details class:list={['task-level', levelClass, { 'has-label': hasLabel }]} open={isOpen || undefined}>
+  <summary>
+    {summary && <span class="task-summary-text">{summary}</span>}
+  </summary>
+  <div class="task-content">
+    <slot />
+  </div>
+</details>
+
+<style>
+  .task-level {
+    border-radius: 0.5rem;
+    margin: 0.5rem 0 1.5rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-left: 4px solid var(--sl-color-gray-4);
+    background: transparent;
+  }
+
+  /* --- Couleurs par niveau --- */
+  .task-level-1 {
+    border-left-color: var(--sl-color-green-high, #22c55e);
+  }
+
+  .task-level-2 {
+    border-left-color: var(--sl-color-blue-high, #3b82f6);
+  }
+
+  .task-level-3 {
+    border-left-color: var(--sl-color-purple-high, #a855f7);
+  }
+
+  /* --- Summary --- */
+  .task-level summary {
+    cursor: pointer;
+    padding: 0.5rem 1rem;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    user-select: none;
+    font-size: 0.85rem;
+    color: var(--sl-color-gray-3);
+  }
+
+  /* Suppression du marqueur natif */
+  .task-level summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .task-level summary::marker {
+    content: '';
+  }
+
+  /* Chevron animé */
+  .task-level summary::before {
+    content: '▶';
+    font-size: 0.6em;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .task-level[open] > summary::before {
+    transform: rotate(90deg);
+  }
+
+  /* Hover */
+  .task-level summary:hover {
+    color: var(--sl-color-gray-2);
+  }
+
+  /* --- Quand il y a un label textuel, on le rend plus visible --- */
+  .task-level.has-label summary {
+    font-weight: 500;
+  }
+
+  /* --- Contenu --- */
+  .task-content {
+    padding: 0.25rem 1.25rem 1rem;
+  }
+
+  /* Bordure séparatrice entre summary et contenu quand ouvert */
+  .task-level[open] > .task-content {
+    border-top: 1px solid var(--sl-color-gray-6);
+  }
+</style>

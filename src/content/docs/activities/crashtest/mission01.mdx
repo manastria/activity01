@@ -316,76 +316,32 @@ Planifiez l'exécution quotidienne avec `cron`.
 
 ### ⭐ Livrables niveau 1 (obligatoires)
 
-<CardGrid>
-  <Card title="Schéma d'architecture" icon="document">
-    Composants, flux, adressage IP
-  </Card>
-  <Card title="Procédure d'installation" icon="list-format">
-    Guide pas à pas reproductible
-  </Card>
-  <Card title="Documentation sécurité" icon="shield">
-    Mesures appliquées sur MySQL et GLPI
-  </Card>
-  <Card title="Guide des logs" icon="open-book">
-    Où trouver chaque type de log
-  </Card>
-  <Card title="Sauvegarde testée" icon="backup">
-    Export fonctionnel de l'installation
-  </Card>
-  <Card title="Justifications" icon="pencil">
-    Choix VM/Docker, serveur web, etc.
-  </Card>
-</CardGrid>
+| Livrable | Description |
+|----------|-------------|
+| **Schéma d'architecture** | Composants, flux, adressage IP |
+| **Procédure d'installation** | Guide pas à pas reproductible |
+| **Documentation sécurité** | Mesures appliquées sur MySQL et GLPI |
+| **Guide des logs** | Où trouver chaque type de log |
+| **Sauvegarde testée** | Export fonctionnel de l'installation |
+| **Justifications** | Choix VM/Docker, serveur web, etc. |
 
 ### ⭐⭐ Livrables niveau 2
 
-<CardGrid>
-  <Card title="Configuration optimisée" icon="rocket">
-    Paramètres modifiés et justifications
-  </Card>
-  <Card title="Certificat SSL" icon="lock">
-    Certificat généré et testé
-  </Card>
-  <Card title="Scripts de sauvegarde" icon="clockwise">
-    Automatisation planifiée
-  </Card>
-</CardGrid>
+| Livrable | Description |
+|----------|-------------|
+| **Configuration optimisée** | Paramètres modifiés et justifications |
+| **Certificat SSL** | Certificat généré et testé |
+| **Scripts de sauvegarde** | Automatisation planifiée avec cron |
 
 ### ⭐⭐⭐ Livrables niveau 3
 
-<CardGrid>
-  <Card title="Architecture modulaire" icon="template">
-    Services web et BDD séparés
-  </Card>
-  <Card title="Déploiement automatisé" icon="workflow">
-    Script Bash ou Playbook Ansible
-  </Card>
-  <Card title="HTTPS actif" icon="shield-check">
-    Redirection HTTP→HTTPS fonctionnelle
-  </Card>
-  <Card title="Sauvegarde externalisée" icon="backup">
-    Transfert automatique testé
-  </Card>
-</CardGrid>
+| Livrable | Description |
+|----------|-------------|
+| **Architecture modulaire** | Services web et BDD séparés |
+| **Déploiement automatisé** | Script Bash ou Playbook Ansible |
+| **HTTPS actif** | Redirection HTTP→HTTPS fonctionnelle |
+| **Sauvegarde externalisée** | Transfert automatique testé |
 
-## Critères d'évaluation
-
-| Critère | ⭐ Niveau 1 | ⭐⭐ Niveau 2 | ⭐⭐⭐ Niveau 3 |
-|---------|------------|--------------|---------------|
-| **Installation** | GLPI fonctionnel | Configuration optimisée | Architecture modulaire |
-| **Sécurité BDD** | Utilisateur dédié créé | Accès réseau désactivé | Chiffrement connexions |
-| **Sécurité GLPI** | Comptes par défaut traités | Politique mots de passe | Tests de sécurité |
-| **Logs** | Emplacements documentés | Centralisation opérationnelle | Rotation configurée |
-| **HTTPS** | - | Certificat généré et testé | HTTPS actif avec redirection |
-| **Sauvegarde** | Backup manuel testé | Script automatisé | Externalisation fonctionnelle |
-| **Automatisation** | - | - | Déploiement scriptés |
-| **Documentation** | Schémas + procédures | Justifications détaillées | Documentation complète |
-
-:::tip[Conseils]
-- Le niveau ⭐ doit être **entièrement réalisé** pour valider la mission
-- La **qualité de la documentation** est aussi importante que la technique
-- Les **justifications** de vos choix valorisent votre travail
-:::
 
 ## Ressources complémentaires
 
