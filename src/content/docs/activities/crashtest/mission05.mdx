@@ -387,17 +387,75 @@ Si vous avez déjà `glpi-web01` (ou `glpi-srv01`) fonctionnel depuis la Mission
 - Sur `glpi-web02` (et web03), désactivez le cron GLPI
 
 **Configurez les sessions PHP** :
-- Par défaut, PHP stocke les sessions en fichiers locaux → problème en cluster
-- Solution 1 : Sessions en base de données (recommandé pour GLPI)
-- Solution 2 : Memcached ou Redis partagé (plus performant)
 
-:::tip[Sessions GLPI en base de données]
-Dans le fichier de configuration GLPI, activez le stockage des sessions en BDD :
-```php
-// config/config_db.php
-$CFG_GLPI['session_use_db'] = true;
+Par défaut, PHP stocke les sessions dans des fichiers locaux à chaque serveur. Dans un cluster, si HAProxy envoie deux requêtes successives du même utilisateur sur deux serveurs différents, la session est perdue et l'utilisateur est déconnecté. Vous devez choisir une stratégie pour résoudre ce problème.
+
+:::note[Trois approches possibles]
+
+⚠ Les configurations sont données à titre indicatif.
+
+**Option A — Persistance de session côté HAProxy (sticky sessions)**
+
+HAProxy force chaque client à toujours revenir sur le même serveur backend grâce à un cookie. PHP ne change pas, aucun service supplémentaire n'est nécessaire.
+```haproxy
+backend glpi_backend
+    balance roundrobin
+    cookie SERVERID insert indirect nocache
+    server web01 10.54.0.11:80 check cookie web01
+    server web02 10.54.0.12:80 check cookie web02
 ```
-Ainsi, un utilisateur peut changer de serveur web sans perdre sa session.
+
+⚠️ Limite : si `web01` tombe, tous ses utilisateurs sont quand même déconnectés. Ce n'est pas une vraie réplication de sessions, mais une redirection stable.
+
+---
+
+**Option B — Sessions partagées via Redis**
+
+Redis est un service de stockage clé-valeur en mémoire. PHP y stocke les sessions au lieu de les écrire sur disque. Tous les serveurs web lisent et écrivent dans le même Redis → un utilisateur peut changer de backend sans perdre sa session.
+
+À installer sur un serveur dédié (ou sur `glpi-db01`) :
+```bash
+apt install redis-server php-redis
+```
+
+Fichier à configurer : `/etc/php/8.x/fpm/conf.d/redis-sessions.ini` (ou équivalent selon votre version PHP) :
+```ini
+session.save_handler = redis
+session.save_path = "tcp://10.54.0.20:6379"
+```
+
+GLPI ne nécessite aucune modification. Redémarrez PHP-FPM après le changement.
+
+⚠️ Limite : un Redis unique est un nouveau SPOF. Pour l'éliminer, il faudrait Redis Sentinel (haute disponibilité Redis) — complexité supplémentaire à justifier dans votre portfolio.
+
+---
+
+**Option C — Partage du répertoire de sessions via NFS**
+
+PHP continue à stocker les sessions en fichiers, mais dans un répertoire partagé monté sur tous les serveurs web via NFS. Aucune modification de PHP.ini n'est nécessaire si vous montez le partage sur le chemin par défaut des sessions (`/var/lib/php/sessions`).
+
+À installer sur le serveur NFS (`glpi-nfs01` ou `glpi-db01`) :
+```bash
+apt install nfs-kernel-server
+```
+
+Fichier à configurer : `/etc/exports`
+```
+/var/lib/php/sessions  10.54.0.0/24(rw,sync,no_subtree_check)
+```
+
+Sur chaque serveur web, montez le partage sur `/var/lib/php/sessions`.
+
+⚠️ Limite : le serveur NFS est un SPOF, et les accès concurrents aux fichiers de session peuvent provoquer des problèmes de verrous (_file locking_) sous charge.
+
+:::
+
+:::tip[Quel choix faire ?]
+- L'**option A** est la plus rapide à mettre en œuvre et suffit pour un niveau ⭐. Elle est cependant la moins robuste en cas de panne d'un backend.
+- L'**option B** est la solution professionnelle recommandée pour un cluster HA. Elle convient bien au niveau ⭐⭐, en complément de la réplication de base de données.
+- L'**option C** est pédagogiquement intéressante si vous avez déjà mis en place NFS pour les fichiers GLPI (Tâche 7), car elle réutilise la même infrastructure — mais elle déplace le SPOF sans vraiment le résoudre.
+
+**Documentez votre choix dans votre portfolio** : pourquoi cette option plutôt qu'une autre ? Quels compromis avez-vous acceptés ?
 :::
 
 </TaskLevel>
