@@ -38,6 +38,11 @@ export default defineConfig({
           collapsed: true,
           autogenerate: { directory: 'activities/sns-vpn', collapsed: false },
         },
+        {
+          label: 'Fiches',
+          collapsed: true,
+          autogenerate: { directory: 'fiches', collapsed: false },
+        },
       ],
       tableOfContents: {
         heading: 'Sommaire',
