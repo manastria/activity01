@@ -16,15 +16,19 @@ interface QuizData {
 
 interface Props {
   data: QuizData;
+  range?: string;
+  start?: number;
 }
 
-const { data } = Astro.props;
+const { data, range, start } = Astro.props;
 ---
 
 <div
   class="quiz-root"
   data-quiz={JSON.stringify(data.quizData)}
   data-quiz-title={data.quizTitle}
+  data-quiz-range={range}
+  data-quiz-start={start?.toString()}
 >
   <div data-el="quiz-container">
     <header class="quiz-header">
@@ -36,7 +40,7 @@ const { data } = Astro.props;
       <p data-el="question" class="quiz-question">Chargement de la question...</p>
       <div data-el="options" class="quiz-options"></div>
 
-      <div class="quiz-hint-area">
+      <div data-el="hint-area" class="quiz-hint-area">
         <button data-el="hint-btn" class="quiz-hint-btn">Voir l'indice</button>
         <div data-el="hint-container" class="quiz-hint-box">
           <div class="quiz-hint-inner">
@@ -97,6 +101,7 @@ const { data } = Astro.props;
     const feedbackTitleEl = el('feedback-title');
     const nextBtn         = el('next-btn') as HTMLButtonElement;
     const progressEl      = el('progress');
+    const hintArea        = el('hint-area');
     const hintBtn         = el('hint-btn') as HTMLButtonElement;
     const hintContainer   = el('hint-container');
     const hintText        = el('hint-text');
@@ -126,37 +131,67 @@ const { data } = Astro.props;
       }
     }
 
-    function parseHashSettings() {
-      const raw = window.location.hash.replace(/^#/, '').trim();
+    function parseSegments(raw: string): Array<[number, number]> {
       const total = allQuestions.length;
-      if (!raw || total === 0) {
-        return { mode: 'full', startIndex: 0, rangeStart: 0, rangeEnd: 0 };
+      const result: Array<[number, number]> = [];
+      for (const part of raw.split(/[,;]+/)) {
+        const m = part.trim().match(/^(\d+)\s*-\s*(\d+)$/);
+        if (m) {
+          let s = clamp(parseInt(m[1], 10), 1, total);
+          let e = clamp(parseInt(m[2], 10), 1, total);
+          if (s > e) { const tmp = s; s = e; e = tmp; }
+          result.push([s - 1, e - 1]);
+        }
       }
-      const rangeMatch = raw.match(/^(\d+)\s*-\s*(\d+)$/);
-      if (rangeMatch) {
-        let start = clamp(parseInt(rangeMatch[1], 10), 1, total);
-        let end   = clamp(parseInt(rangeMatch[2], 10), 1, total);
-        if (start > end) { const tmp = start; start = end; end = tmp; }
-        return { mode: 'range', startIndex: 0, rangeStart: start - 1, rangeEnd: end - 1 };
-      }
-      const singleMatch = raw.match(/^(\d+)$/);
-      if (singleMatch) {
-        const startIndex = clamp(parseInt(singleMatch[1], 10), 1, total) - 1;
-        return { mode: 'full', startIndex, rangeStart: 0, rangeEnd: 0 };
-      }
-      return { mode: 'full', startIndex: 0, rangeStart: 0, rangeEnd: 0 };
+      return result;
     }
 
-    function applyHashSettings() {
-      const settings = parseHashSettings();
-      if (settings.mode === 'range') {
-        questions = allQuestions.slice(settings.rangeStart, settings.rangeEnd + 1);
-        initialQuestionIndex = 0;
-      } else {
-        questions = allQuestions;
-        initialQuestionIndex = settings.startIndex;
+    function applySettings() {
+      const hash  = window.location.hash.replace(/^#/, '').trim();
+      const total = allQuestions.length;
+
+      // 1. Hash (prioritaire sur les props)
+      if (hash && total > 0) {
+        const segments = parseSegments(hash);
+        if (segments.length > 0) {
+          questions = segments.flatMap(([s, e]) => allQuestions.slice(s, e + 1));
+          initialQuestionIndex = 0;
+          currentQuestionIndex = 0;
+          return;
+        }
+        const single = hash.match(/^(\d+)$/);
+        if (single) {
+          questions = allQuestions;
+          initialQuestionIndex = clamp(parseInt(single[1], 10), 1, total) - 1;
+          currentQuestionIndex = initialQuestionIndex;
+          return;
+        }
       }
-      currentQuestionIndex = initialQuestionIndex;
+
+      // 2. Prop range
+      const propRange = root.dataset.quizRange ?? '';
+      if (propRange && total > 0) {
+        const segments = parseSegments(propRange);
+        if (segments.length > 0) {
+          questions = segments.flatMap(([s, e]) => allQuestions.slice(s, e + 1));
+          initialQuestionIndex = 0;
+          currentQuestionIndex = 0;
+          return;
+        }
+      }
+
+      // 3. Prop start
+      if (!hash && root.dataset.quizStart && total > 0) {
+        questions = allQuestions;
+        initialQuestionIndex = clamp(parseInt(root.dataset.quizStart, 10), 1, total) - 1;
+        currentQuestionIndex = initialQuestionIndex;
+        return;
+      }
+
+      // 4. Par défaut : quiz complet
+      questions = allQuestions;
+      initialQuestionIndex = 0;
+      currentQuestionIndex = 0;
     }
 
     function updateProgressBar() {
@@ -182,6 +217,7 @@ const { data } = Astro.props;
         feedbackWrapper.classList.remove('visible');
         hintContainer.classList.remove('visible');
         hintText.innerHTML = q.hint;
+        hintArea.style.display = '';
         hintBtn.style.display = 'block';
       } else {
         showResults();
@@ -221,7 +257,7 @@ const { data } = Astro.props;
       Array.from(optionsEl.children).forEach(btn => {
         (btn as HTMLButtonElement).disabled = true;
       });
-      hintBtn.style.display = 'none';
+      hintArea.style.display = 'none';
       hintContainer.classList.remove('visible');
       if (currentQuestionIndex === questions.length - 1) {
         nextBtn.innerText = 'Voir les résultats';
@@ -273,13 +309,13 @@ const { data } = Astro.props;
     restartBtn.addEventListener('click', restartQuiz);
     window.addEventListener('resize', adjustTitleFontSize);
     window.addEventListener('hashchange', () => {
-      applyHashSettings();
+      applySettings();
       resetQuizState();
     });
 
     titleEl.innerText = quizTitle;
     adjustTitleFontSize();
-    applyHashSettings();
+    applySettings();
     resetQuizState();
   }
 </script>
@@ -290,13 +326,14 @@ const { data } = Astro.props;
 
   /* ── Root ────────────────────────────────────────────────── */
   .quiz-root {
-    border: 1px solid var(--sl-color-hairline);
+    border: 1px solid var(--sl-color-gray-5);
     border-radius: 0.75rem;
     overflow: hidden;
     max-width: 42rem;
     margin: 1.5rem auto;
     font-family: var(--sl-font);
-    background-color: var(--sl-color-bg);
+    background-color: var(--sl-color-bg-sidebar);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   }
 
   /* ── Header ──────────────────────────────────────────────── */
@@ -334,7 +371,7 @@ const { data } = Astro.props;
   }
 
   /* ── Content ─────────────────────────────────────────────── */
-  .quiz-root .quiz-content { padding: 1.5rem; }
+  .quiz-root .quiz-content { padding: 1.5rem; background-color: var(--sl-color-bg); }
 
   .quiz-root .quiz-question {
     margin: 0 0 1rem;
@@ -518,7 +555,7 @@ const { data } = Astro.props;
     border: none;
     border-radius: 0.4rem;
     background-color: var(--sl-color-accent);
-    color: var(--sl-color-white);
+    color: #fff;
     font-size: var(--sl-text-sm);
     font-weight: 700;
     font-family: var(--sl-font);
@@ -532,8 +569,7 @@ const { data } = Astro.props;
     outline-offset: 2px;
   }
   .quiz-root .quiz-btn:disabled {
-    background-color: var(--sl-color-gray-5);
-    color: var(--sl-color-gray-3);
+    opacity: 0.4;
     cursor: not-allowed;
   }
 
