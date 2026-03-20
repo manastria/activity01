@@ -78,3 +78,41 @@ GitHub Pages via `.github/workflows/deploy-gh-pages.yml` on push to `main` branc
 | `tools/organize_images.py` | Image organization + MDX link rewriting |
 | `tools/migrate_markdown_images.py` | Convert Markdown images to Astro components |
 | `scripts/new-activity.mjs` | Activity scaffolding CLI |
+| `src/components/Quiz.astro` | Self-contained interactive QCM widget |
+
+## Quiz Component
+
+`src/components/Quiz.astro` — self-contained interactive QCM widget.
+
+**Props**: `data: QuizData`
+
+```ts
+interface QuizData {
+  templateVersion: string;
+  quizTitle: string;
+  quizData: QuizQuestion[];
+}
+
+interface QuizQuestion {
+  question: string;
+  options: string[];
+  correct: number;           // 0-based index of the correct option
+  hint: string;
+  feedback: string;          // explanation shown after a correct answer
+  wrong_feedbacks: string[]; // per-option explanation shown after a wrong answer
+}
+```
+
+**URL hash navigation** (useful for linking to a subset of questions):
+
+- `#5` — start at question 5
+- `#3-7` — restrict quiz to questions 3 through 7
+
+**Usage in MDX**:
+
+```mdx
+import Quiz from '@/components/Quiz.astro';
+import quizData from '@/data/quiz/my-quiz.json';
+
+<Quiz data={quizData} />
+```
