@@ -1,0 +1,55 @@
+---
+title: Ordonnancement du filtrage et du NAT sur un pare-feu SNS
+description: Comprendre l'ordre d'exécution des trois niveaux de filtrage (implicite, global, local) et des trois niveaux de NAT appliqués par le pare-feu SNS lors du traitement d'un paquet réseau.
+slug: sns-ordonnancement-filtrage-nat
+topic: sns
+section: reseau
+---
+
+# Comprendre l'ordonnancement du pare-feu : Le parcours du combattant d'un paquet réseau
+
+Imaginez votre pare-feu (_firewall_) comme un poste de sécurité ultra-strict à l'entrée d'un bâtiment très secret. Quand une donnée informatique (que l'on appelle ici un **« Paquet initial »**) se présente à l'entrée, elle ne rentre pas comme dans un moulin. Elle doit passer par plusieurs séries de contrôles dans un ordre très précis.
+
+<ImageFigureViewer
+  src="/images/fiches/sns-ordonnancement-filtrage-nat/Pasted-image-20260323100659.png"
+  alt="Schéma d'ordonnancement du filtrage et du NAT sur un pare-feu SNS : filtrage implicite, global et local, puis NAT implicite, global et local"
+  scale={1}
+/>
+
+Le schéma décrit deux grandes étapes : d'abord le **Filtrage** (est-ce que tu as le droit de passer ?), puis le **NAT** (est-ce que je dois déguiser/traduire ton adresse IP avant de te laisser continuer ?).
+
+Voici comment lire ce schéma étape par étape :
+
+### 1. L'étape de Filtrage (Le contrôle d'accès)
+
+Le paquet arrive et doit faire valider son billet. Il va être confronté à trois classeurs de règles, lus de haut en bas et par ordre de priorité :
+
+- **Filtrage implicite (Les règles de survie) :** Ce sont des règles automatiques, créées par le pare-feu lui-même pour son propre fonctionnement.
+    - _Exemple :_ Le pare-feu autorise toujours l'administrateur réseau à se connecter à son interface Web (en HTTPS) pour pouvoir le configurer.
+- **Filtrage global (Les règles du grand patron) :** Ce sont des règles envoyées par un serveur central à tous les pare-feux d'une même grande entreprise (via un outil d'administration centralisée).
+    - _Exemple :_ Le siège social de Paris décide de bloquer l'accès à certains sites dangereux pour toutes ses agences dans le monde.
+- **Filtrage local (Vos propres règles) :** Ce sont les règles que l'administrateur réseau local (vous !) configure à la main, spécifiquement pour ce bâtiment.
+    - _Exemple :_ Vous autorisez les ordinateurs du service comptabilité à accéder au serveur des impôts.
+
+**Que veut dire « N/A » ?** « N/A » signifie « Non Applicable ». Quand le paquet est analysé dans un classeur (par exemple le filtrage implicite), le pare-feu cherche si une règle correspond à ce paquet. Si aucune règle ne le concerne, la décision est « N/A ». Le paquet glisse alors vers le niveau suivant pour être à nouveau analysé.
+
+**L'action « Passer » ou « Bloquer par défaut » :**
+
+- Dès qu'une règle correspond au paquet dans l'un des classeurs et dit qu'il a le droit de rentrer, il obtient l'action **« Passer »** et s'échappe vers la deuxième grande étape (le NAT).
+- À l'inverse, si le paquet traverse les 3 classeurs (Implicite, Global, Local) et que toutes les réponses sont « N/A », le couperet tombe : il est détruit. C'est la règle d'or en sécurité informatique, tout ce qui n'est pas explicitement autorisé est **bloqué par défaut**.
+
+### 2. L'étape de NAT (Le service de déguisement)
+
+Si le paquet a obtenu l'autorisation de « Passer », il n'est pas encore totalement libre. Il passe par le service **NAT** (Translation d'Adresses). Le NAT sert souvent à masquer une adresse IP privée derrière l'adresse IP publique de l'entreprise pour aller sur Internet.
+
+Là encore, le paquet affronte trois classeurs, selon la même logique :
+
+- **NAT implicite** (Règles automatiques du système).
+- **NAT global** (Règles de traduction imposées par le siège social).
+- **NAT local** (Règles de traduction configurées par l'administrateur local).
+
+**L'action finale « Action de NAT » ou « Pas de NAT » :** Si le paquet correspond à une règle dans l'un de ces classeurs, le pare-feu applique l'**« Action de NAT »** (il modifie l'adresse IP du paquet avant de l'envoyer à sa destination finale). Mais si le paquet traverse tous les niveaux de NAT avec la mention **« N/A »** (aucune règle ne s'applique à lui), il subit l'action **« Pas de NAT »** : le pare-feu le laisse simplement continuer son chemin avec son adresse IP d'origine intacte.
+
+**En résumé :** Le pare-feu est méthodique. Il vérifie d'abord si vous avez le droit de passer (Filtrage) en cherchant la moindre règle qui vous l'autorise, de la plus automatique à la plus personnalisée. Si oui, il vérifie ensuite s'il doit modifier votre adresse (NAT) selon la même logique descendante.
+
+Page 240 du fichier `CSNA_v4.8_Livre_de_formation_avec_annexes_2026_01_20.pdf`
