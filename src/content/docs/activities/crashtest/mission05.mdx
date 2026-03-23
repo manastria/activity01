@@ -397,7 +397,7 @@ Par défaut, PHP stocke les sessions dans des fichiers locaux à chaque serveur.
 **Option A — Persistance de session côté HAProxy (sticky sessions)**
 
 HAProxy force chaque client à toujours revenir sur le même serveur backend grâce à un cookie. PHP ne change pas, aucun service supplémentaire n'est nécessaire.
-```haproxy
+```
 backend glpi_backend
     balance roundrobin
     cookie SERVERID insert indirect nocache

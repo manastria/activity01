@@ -40,8 +40,7 @@ export default defineConfig({
         },
         {
           label: 'Fiches',
-          collapsed: true,
-          autogenerate: { directory: 'fiches', collapsed: false },
+          link: 'fiches'
         },
       ],
       tableOfContents: {
@@ -59,5 +58,5 @@ export default defineConfig({
   },
   site: 'https://manastria.github.io',
   base: '/activity01/',
-  trailingSlash: 'always',
+  trailingSlash: 'ignore',
 });
