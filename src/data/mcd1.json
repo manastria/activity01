@@ -1,0 +1,186 @@
+{
+  "templateVersion": "v1",
+  "quizTitle": "Conception de Bases de Données : MCD et Dictionnaire de Données",
+  "quizData": [
+    {
+      "question": "Quel est le principal avantage de l'utilisation d'un Type Personnalisé comme <code>T_ADRESSE</code> dans un Modèle Conceptuel des Données (MCD) ?",
+      "options": [
+        "Simplifier la représentation graphique tout en garantissant une structure de données rigoureuse et centralisée.",
+        "Permettre le stockage de l'adresse en un seul champ texte pour optimiser la base de données.",
+        "Créer de nouveaux types de données physiques (comme <code>INTEGER</code> ou <code>VARCHAR</code>) reconnus par tous les SGBDR.",
+        "Remplacer complètement le dictionnaire des données par une légende graphique plus simple."
+      ],
+      "correct": 0,
+      "hint": "Pensez à l'équilibre entre la clarté visuelle du modèle et le respect des règles fondamentales de conception.",
+      "feedback": "Les types personnalisés permettent de masquer la complexité d'une structure répétitive (comme une adresse) sur le schéma, tout en conservant une définition précise de ses composants dans le dictionnaire.",
+      "wrong_feedbacks": [
+        "",
+        "Le stockage en un seul champ texte (adresse mono-bloc) est une mauvaise pratique car cela empêche les tris par ville ou code postal.",
+        "Les types personnalisés au niveau conceptuel sont indépendants des types physiques du SGBDR.",
+        "Un type personnalisé ne remplace pas le dictionnaire des données ; il s'appuie justement sur celui-ci pour définir sa structure interne."
+      ]
+    },
+    {
+      "question": "À quel niveau de la méthode Merise se préoccupe-t-on de la traduction du modèle en scripts SQL pour un SGBDR spécifique comme <i>PostgreSQL</i> ?",
+      "options": [
+        "Au niveau Conceptuel (MCD)",
+        "Au niveau Logique (MLD)",
+        "À tous les niveaux simultanément",
+        "Au niveau Physique (MPD)"
+      ],
+      "correct": 3,
+      "hint": "Considérez la toute dernière étape avant la création effective des tables dans la base de données.",
+      "feedback": "Le <b>Modèle Physique des Données</b> (MPD) est la dernière étape : il adapte le modèle aux contraintes techniques et à la syntaxe spécifique du logiciel de base de données choisi.",
+      "wrong_feedbacks": [
+        "Le MCD est totalement indépendant de l'informatique et du choix du logiciel.",
+        "Le MLD organise les données en tables mais reste théorique vis-à-vis du code SQL final.",
+        "La méthode Merise sépare strictement les préoccupations pour ne pas mélanger les règles métier et les contraintes techniques."
+      ],
+      "" : ""
+    },
+    {
+      "question": "Selon les règles d'audit d'un MCD, laquelle de ces qualités n'est <b>PAS</b> une obligation stricte pour un identifiant d'entité ?",
+      "options": [
+        "Être unique",
+        "Être obligatoire",
+        "Être simple",
+        "Être invariant"
+      ],
+      "correct": 2,
+      "hint": "L'une de ces qualités est une forte recommandation de praticité, mais pas une règle absolue de définition.",
+      "feedback": "Bien qu'un identifiant court et simple soit préférable pour la performance, un identifiant peut techniquement être 'complexe' (composé de plusieurs attributs) tout en restant valide.",
+      "wrong_feedbacks": [
+        "L'unicité est le fondement même d'un identifiant : il doit permettre de distinguer chaque occurrence sans erreur.",
+        "L'identifiant doit être renseigné pour chaque occurrence, il ne peut pas être vide (NULL).",
+        "",
+        "L'identifiant ne doit pas changer au cours du temps pour garantir la stabilité des liens entre les données."
+      ]
+    },
+    {
+      "question": "Lors de l'épuration d'un dictionnaire de données, pourquoi la donnée <code>total HT par article</code> est-elle généralement supprimée ?",
+      "options": [
+        "Car c'est un synonyme de <code>prix unitaire facturé</code>.",
+        "Car c'est une donnée calculée à partir du prix unitaire et de la quantité.",
+        "Car elle est toujours nulle si la quantité est de zéro.",
+        "Car son type numérique est trop complexe à gérer."
+      ],
+      "correct": 1,
+      "hint": "Pensez à la règle qui vise à éviter de stocker des informations redondantes.",
+      "feedback": "On ne conserve pas les données calculées dans le dictionnaire pour éviter la redondance : elles peuvent être recalculées à tout moment lors d'une requête.",
+      "wrong_feedbacks": [
+        "Ce ne sont pas des synonymes : le prix unitaire concerne un seul objet, le total concerne la ligne de commande entière.",
+        "",
+        "Même si la donnée est nulle, ce n'est pas une raison de suppression ; c'est le caractère 'déductible' qui prime.",
+        "Le type numérique est parfaitement géré par les systèmes ; le problème est ici la structure logique."
+      ]
+    },
+    {
+      "question": "Selon les bonnes pratiques, quel type de donnée devrait être assigné à un code postal comme <code>75001</code> ?",
+      "options": [
+        "NE (Numérique Entier), car il ne contient que des chiffres.",
+        "P (Paramètre), car il est défini par l'administration postale.",
+        "AN (Alphanumérique), car on n'effectue jamais de calculs dessus.",
+        "N(5,0), pour indiquer un nombre à 5 chiffres sans décimales."
+      ],
+      "correct": 2,
+      "hint": "La finalité de la donnée (sert-elle à calculer ou à identifier ?) est plus importante que sa composition.",
+      "feedback": "Un code postal est un <b>identifiant textuel</b> composé de chiffres. Puisqu'on ne fera jamais d'addition ou de multiplication avec, le type Alphanumérique est plus rigoureux (et permet de gérer les codes étrangers avec des lettres).",
+      "wrong_feedbacks": [
+        "Le type NE supprimerait le '0' initial des codes comme 06000 (Nice), ce qui fausserait la donnée.",
+        "Le type P est réservé aux données fixes comme le taux de TVA, pas à des informations variables comme une adresse.",
+        "",
+        "Le type numérique, même formaté, est inadapté car il traite la donnée comme une quantité et non comme un code."
+      ]
+    },
+    {
+      "question": "Dans un MCD, une association entre les entités ÉTUDIANT et COURS peut porter la propriété <code>note_obtenue</code> uniquement si les cardinalités maximales sont...",
+      "options": [
+        "1 d'un côté et n de l'autre (1,n)",
+        "n d'un côté et n de l'autre (n,n)",
+        "1 d'un côté et 1 de l'autre (1,1)",
+        "0 d'un côté et 1 de l'autre (0,1)"
+      ],
+      "correct": 1,
+      "hint": "La règle dépend de la capacité de chaque entité à être liée à plusieurs occurrences de l'autre.",
+      "feedback": "Une propriété est placée dans une association si elle dépend des deux entités. Si un étudiant a plusieurs cours et qu'un cours a plusieurs étudiants (n,n), la note appartient à la relation entre les deux.",
+      "wrong_feedbacks": [
+        "Si la cardinalité est 1,n, la propriété 'note' devrait migrer directement dans l'entité située du côté 'n'.",
+        "",
+        "Dans une relation 1,1, la propriété peut être placée dans l'une des deux entités sans perte de sens.",
+        "Une cardinalité 0,1 indique que la propriété appartient probablement à l'entité ayant la cardinalité 1."
+      ]
+    },
+    {
+      "question": "Quelle affirmation décrit le mieux la différence entre le <b>MCD</b> et le <b>MEA</b> ?",
+      "options": [
+        "Le MCD est le résultat de l'analyse métier, tandis que le MEA est le langage graphique utilisé pour le dessiner.",
+        "Le MCD est utilisé en UML, alors que le MEA est spécifique à Merise.",
+        "Il n'y a aucune différence, les deux termes désignent exactement la même chose.",
+        "Le MEA est l'ancienne appellation du MCD dans la méthode Merise."
+      ],
+      "correct": 0,
+      "hint": "L'un représente le fond (la réflexion) et l'autre la forme (la notation graphique).",
+      "feedback": "Le Modèle Conceptuel des Données est le concept intellectuel, alors que le Modèle Entité-Association est le standard visuel (les boîtes et les traits) utilisé pour le matérialiser.",
+      "wrong_feedbacks": [
+        "",
+        "Les deux termes appartiennent au monde Merise ; UML utilise des Diagrammes de Classes.",
+        "Bien que souvent confondus par abus de langage, ils distinguent la sémantique de la représentation graphique.",
+        "Le terme MEA n'est pas une ancienne version, mais bien la définition du formalisme graphique actuel."
+      ]
+    },
+    {
+      "question": "Sur une facture finalisée, le <code>total TTC</code> doit être conservé tel quel, même si les prix changent. Quelle est la nature de cette donnée ?",
+      "options": [
+        "Mouvement (M)",
+        "Calculée (C)",
+        "Situation (S)",
+        "Calculée Persistante (CP)"
+      ],
+      "correct": 3,
+      "hint": "Cette donnée est issue d'un calcul, mais elle doit être figée dans le temps.",
+      "feedback": "Une donnée <b>CP</b> est une donnée calculée dont on garde une trace historique figée pour garantir l'intégrité des documents passés.",
+      "wrong_feedbacks": [
+        "Une donnée de mouvement représente un flux (ex: une quantité vendue), pas un résultat de calcul stocké.",
+        "Une donnée calculée simple (C) ne serait pas stockée et serait recalculée à la volée, ce qui risquerait de modifier le total si les prix changent.",
+        "Une donnée de situation représente l'état d'un stock ou d'un solde à un instant T.",
+        ""
+      ]
+    },
+    {
+      "question": "Pourquoi un concepteur pourrait-il préférer la norme <b>S42</b> de l'UPU plutôt que l'ISO 19160-1 pour structurer les adresses ?",
+      "options": [
+        "La norme S42 est la seule reconnue par les services postaux français.",
+        "La norme S42 est gratuite, tandis que la consultation des documents ISO est payante.",
+        "La norme S42 est plus récente et donc plus adaptée au Cloud.",
+        "La norme ISO n'est pas applicable aux adresses en Europe."
+      ],
+      "correct": 1,
+      "hint": "Pensez à l'aspect financier et à l'accessibilité de la documentation pour une entreprise.",
+      "feedback": "L'aspect économique est crucial : l'UPU (Union Postale Universelle) diffuse gratuitement ses standards, contrairement à l'ISO qui vend ses documentations.",
+      "wrong_feedbacks": [
+        "L'ISO est tout aussi reconnue, mais son accès est plus restreint financièrement.",
+        "",
+        "L'ancienneté d'une norme n'est pas ici le critère déterminant face à la gratuité.",
+        "Les normes ISO ont une portée internationale et s'appliquent parfaitement en Europe."
+      ]
+    },
+    {
+      "question": "Si <code>CLIENT</code> est une entité dans un MCD, qu'est-ce qu'une <b>occurrence</b> de cette entité ?",
+      "options": [
+        "La personne spécifique 'M. Jean Dupont' avec le numéro client C78S41.",
+        "L'entité CLIENT elle-même.",
+        "La liste des propriétés : num_client, nom_client, adr_client.",
+        "La relation entre l'entité CLIENT et l'entité COMMANDE."
+      ],
+      "correct": 0,
+      "hint": "L'entité est la 'classe' ou le 'modèle', l'occurrence est l'objet concret.",
+      "feedback": "Une occurrence est un enregistrement unique et réel qui appartient à la catégorie définie par l'entité.",
+      "wrong_feedbacks": [
+        "",
+        "L'entité est le concept général (le contenant), pas une occurrence (le contenu).",
+        "Ceci correspond à la structure (les attributs) de l'entité, pas à une donnée concrète.",
+        "Une relation entre deux entités est appelée une association, pas une occurrence."
+      ]
+    }
+  ]
+}

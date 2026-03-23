@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # tools/organize_images.py
-# Range les images collées dans public/images/_inbox vers public/images/activities/<activity>/<page>/,
+# Range les images collées dans public/images/_inbox vers public/images/<section>/<slug>/,
 # puis réécrit les liens dans les fichiers .mdx.
+# Scanne tout src/content/docs/ (activities/, fiches/, etc.).
 
 from __future__ import annotations
 
@@ -13,7 +14,7 @@ from pathlib import Path
 
 
 INBOX_WEB_PREFIX = "/images/_inbox/"
-DEST_WEB_PREFIX = "/images/activities/"
+DEST_WEB_PREFIX = "/images/"
 
 
 @dataclass
@@ -29,10 +30,13 @@ FRONTMATTER_RE = re.compile(r"(?s)\A---\s*\n(.*?)\n---\s*\n")
 SLUG_LINE_RE = re.compile(r"(?m)^\s*slug\s*:\s*(.+?)\s*$")
 
 # Capture des chemins web /images/_inbox/... dans des contextes variés :
-# - Markdown: ![](...)
-# - attributs/objets: "src": "..."
-# - liens simples: (...), "...", etc.
-INBOX_PATH_RE = re.compile(r"(?P<p>/images/_inbox/[^\s\"')\]]+)")
+# - attributs JSX/HTML: src="..." ou src='...' (espaces autorisés dans le nom)
+# - Markdown: ![](...) et liens simples sans guillemets (pas d'espaces)
+INBOX_PATH_RE = re.compile(
+    r'"(?P<dq>/images/_inbox/[^"]+)"'
+    r"|'(?P<sq>/images/_inbox/[^']+)'"
+    r"|(?P<bare>/images/_inbox/[^\s\"')\]]+)"
+)
 
 
 def parse_frontmatter_slug(text: str) -> str | None:
@@ -69,35 +73,31 @@ def main() -> int:
     args = ap.parse_args()
 
     root = args.root or Path(__file__).resolve().parents[1]
-    activities_dir = root / "src" / "content" / "docs" / "activities"
+    docs_dir = root / "src" / "content" / "docs"
     public_dir = root / "public"
 
-    if not activities_dir.exists():
-        raise SystemExit(f"Introuvable: {activities_dir}")
+    if not docs_dir.exists():
+        raise SystemExit(f"Introuvable: {docs_dir}")
 
-    mdx_files = sorted(list(activities_dir.rglob("*.mdx")))
+    mdx_files = sorted(list(docs_dir.rglob("*.mdx")))
     plans: list[MovePlan] = []
     missing: list[tuple[Path, str]] = []
 
     for mdx in mdx_files:
-        rel = mdx.relative_to(activities_dir)  # ex: sns/reset.mdx
-        parts = rel.parts
-        if len(parts) < 2:
-            # activities/<slug>/index.mdx minimum
-            continue
-
-        folder_slug = parts[0]
-        page_stem = mdx.stem  # reset, index, ...
+        rel = mdx.relative_to(docs_dir)  # ex: activities/sns/reset.mdx ou fiches/sns-nat.mdx
+        page_stem = mdx.stem
         text = mdx.read_text(encoding="utf-8")
 
         fm_slug = parse_frontmatter_slug(text)
-        activity_slug = fm_slug or folder_slug
 
-        # destination = /public/images/activities/<activity>/<page>/
-        dest_dir_abs = public_dir / "images" / "activities" / activity_slug / page_stem
+        # destination = /public/images/<section>/<slug-ou-stem>/
+        dest_dir_abs = public_dir / "images" / rel.parent / (fm_slug or page_stem)
 
         # collecte des occurrences inbox
-        found = sorted(set(m.group("p") for m in INBOX_PATH_RE.finditer(text)))
+        found = sorted(set(
+            next(v for v in m.groups() if v is not None)
+            for m in INBOX_PATH_RE.finditer(text)
+        ))
         if not found:
             continue
 
@@ -107,7 +107,8 @@ def main() -> int:
                 missing.append((mdx, src_web))
                 continue
 
-            dst_abs = dest_dir_abs / src_abs.name
+            safe_name = src_abs.name.replace(" ", "-")
+            dst_abs = dest_dir_abs / safe_name
             dst_abs = unique_dest_path(dst_abs)
             dst_web = "/" + str(dst_abs.relative_to(public_dir)).replace("\\", "/")
 

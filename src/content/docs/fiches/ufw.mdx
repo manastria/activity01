@@ -1,0 +1,542 @@
+---
+title: "Pare-feu local avec ufw"
+description: "Protéger un serveur Nginx avec ufw sur Debian 12 / XUbuntu 25.10 — activité BTS SIO (SLAM et SISR)"
+sidebar:
+  label: "ufw — Pare-feu local"
+draft: true
+source: "https://claude.ai/chat/d053c6ce-cd63-408a-a882-b407df2133d6"
+---
+
+import { Aside, Steps, Code } from '@astrojs/starlight/components';
+
+## Contexte
+
+Vous venez de déployer un serveur web **Nginx** sur une machine virtuelle Debian 12 (ou XUbuntu 25.10).
+Ce serveur est accessible depuis le réseau local de l'entreprise.
+Votre responsable vous demande de mettre en place un **pare-feu local** pour n'autoriser que les flux strictement nécessaires.
+
+L'outil retenu est **ufw** (*Uncomplicated Firewall*), disponible en standard sur les distributions Debian/Ubuntu.
+
+### Schéma de l'environnement
+
+```
+┌─────────────────────────────────────────────┐
+│              Réseau hôte VirtualBox          │
+│                 192.168.56.0/24              │
+│                                              │
+│  ┌──────────────┐      ┌──────────────────┐  │
+│  │  Poste test  │◄────►│  VM Serveur      │  │
+│  │  (client)    │      │  Debian 12       │  │
+│  │ 192.168.56.1 │      │  Nginx + ufw     │  │
+│  └──────────────┘      │  192.168.56.10   │  │
+│                        └──────────────────┘  │
+└─────────────────────────────────────────────┘
+```
+
+<Aside type="note" title="Adresses IP">
+Adaptez les adresses IP à votre environnement VirtualBox.
+Vérifiez les adresses avec `ip a` sur chaque machine.
+</Aside>
+
+---
+
+## Partie 1 — Découverte de ufw (SLAM et SISR)
+
+### Objectifs
+
+- Comprendre le rôle d'un pare-feu local
+- Installer et activer ufw
+- Définir une politique par défaut
+- Ouvrir des ports et services nommés
+- Vérifier et tester les règles en place
+
+---
+
+### 1.1 — Qu'est-ce qu'un pare-feu local ?
+
+Un pare-feu (*firewall*) est un dispositif qui **filtre le trafic réseau** selon des règles définies par l'administrateur.
+
+On distingue :
+
+| Type | Emplacement | Rôle |
+|------|-------------|------|
+| Pare-feu réseau | En coupure entre deux réseaux | Protège un segment entier |
+| Pare-feu local (*host-based*) | Sur la machine elle-même | Protège uniquement ce serveur |
+
+**ufw** est un pare-feu local. Il s'installe sur la machine à protéger et filtre les connexions qui arrivent dessus (et celles qui en partent).
+
+<Aside type="tip" title="ufw et iptables">
+ufw est une **interface simplifiée** au-dessus du moteur de filtrage du noyau Linux (iptables/nftables).
+On n'écrit jamais de règles iptables directement avec ufw — c'est précisément son intérêt.
+</Aside>
+
+---
+
+### 1.2 — Installation de ufw
+
+Sur Debian 12, ufw n'est pas installé par défaut.
+
+```bash title="Installation"
+sudo apt update
+sudo apt install ufw
+```
+
+Vérifiez que ufw est bien présent :
+
+```bash title="Vérification"
+ufw --version
+```
+
+---
+
+### 1.3 — État initial
+
+Avant toute configuration, consultez l'état de ufw :
+
+```bash title="État de ufw"
+sudo ufw status
+```
+
+Vous devriez obtenir :
+
+```
+Status: inactive
+```
+
+ufw est installé mais **inactif** : aucun filtrage n'est appliqué pour l'instant.
+
+---
+
+### 1.4 — Politique par défaut
+
+Avant d'activer le pare-feu, il faut définir la **politique par défaut**, c'est-à-dire ce qui se passe quand aucune règle ne correspond à un paquet.
+
+La bonne pratique est :
+
+- **Bloquer tout le trafic entrant** par défaut
+- **Autoriser tout le trafic sortant** par défaut
+
+```bash title="Politique par défaut"
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+```
+
+<Aside type="caution" title="N'activez pas encore ufw !">
+Si vous activez ufw maintenant sans autoriser SSH, vous risquez de **vous couper de la machine** si vous êtes connecté à distance.
+Ajoutez d'abord toutes les règles nécessaires.
+</Aside>
+
+---
+
+### 1.5 — Autoriser les services nécessaires
+
+#### SSH (port 22)
+
+```bash title="Autoriser SSH"
+sudo ufw allow ssh
+```
+
+ufw reconnaît les noms de services définis dans `/etc/services`. `ssh` correspond au port 22/TCP.
+
+#### HTTP et HTTPS (ports 80 et 443)
+
+```bash title="Autoriser HTTP et HTTPS"
+sudo ufw allow http
+sudo ufw allow https
+```
+
+Vous pouvez aussi utiliser les numéros de port directement :
+
+```bash title="Syntaxe alternative avec numéro de port"
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+```
+
+---
+
+### 1.6 — Activation de ufw
+
+Une fois les règles nécessaires ajoutées, activez le pare-feu :
+
+```bash title="Activation"
+sudo ufw enable
+```
+
+ufw vous avertit que les connexions SSH existantes pourraient être interrompues. Confirmez avec `y`.
+
+---
+
+### 1.7 — Vérification des règles
+
+```bash title="État détaillé"
+sudo ufw status verbose
+```
+
+Exemple de sortie attendue :
+
+```
+Status: active
+Logging: on (low)
+Default: deny (incoming), allow (outgoing), disabled (routed)
+New profiles: skip
+
+To                         Action      From
+--                         ------      ----
+22/tcp                     ALLOW IN    Anywhere
+80/tcp                     ALLOW IN    Anywhere
+443/tcp                    ALLOW IN    Anywhere
+22/tcp (v6)                ALLOW IN    Anywhere (v6)
+80/tcp (v6)                ALLOW IN    Anywhere (v6)
+443/tcp (v6)               ALLOW IN    Anywhere (v6)
+```
+
+<Aside type="note" title="Règles IPv6">
+ufw gère automatiquement les règles IPv4 **et** IPv6. Vous verrez chaque règle doublée avec la mention `(v6)`.
+</Aside>
+
+---
+
+### 1.8 — Tests depuis le poste client
+
+Depuis votre **machine cliente** (ou l'hôte VirtualBox), testez les connexions :
+
+#### Tester HTTP
+
+```bash title="Test HTTP depuis le client"
+curl http://192.168.56.10
+```
+
+→ Vous devez obtenir la page d'accueil Nginx.
+
+#### Tester un port bloqué
+
+```bash title="Test sur un port non autorisé"
+curl --connect-timeout 5 http://192.168.56.10:8080
+```
+
+→ La connexion doit **expirer** (timeout) : le paquet est silencieusement bloqué.
+
+<Aside type="tip" title="DROP vs REJECT">
+Avec la politique `deny`, ufw utilise `DROP` : les paquets sont jetés sans réponse.
+Le client attend jusqu'au timeout. C'est plus discret qu'un `REJECT` qui renverrait un message d'erreur immédiat.
+</Aside>
+
+---
+
+### 1.9 — Supprimer une règle
+
+Pour supprimer une règle existante :
+
+```bash title="Supprimer une règle"
+sudo ufw delete allow http
+```
+
+Vérifiez avec `sudo ufw status verbose` que la règle a bien disparu.
+
+Puis réajoutez-la :
+
+```bash
+sudo ufw allow http
+```
+
+---
+
+### ✅ Bilan — Partie 1
+
+<details>
+<summary>Questions de synthèse</summary>
+
+1. Quelle est la différence entre un pare-feu réseau et un pare-feu local ?
+2. Pourquoi définit-on une politique par défaut **avant** d'activer ufw ?
+3. Quelle est la différence entre `ufw allow ssh` et `ufw allow 22/tcp` ?
+4. Que se passe-t-il côté client lorsqu'un port est filtré en `DROP` ?
+5. Où ufw stocke-t-il sa configuration ? (Indice : explorez `/etc/ufw/`)
+
+</details>
+
+---
+
+## Partie 2 — Administration avancée (SISR uniquement)
+
+### Objectifs
+
+- Filtrer par adresse IP source et plage réseau
+- Maîtriser les règles numérotées (insertion, suppression ciblée)
+- Limiter le débit pour contrer le brute-force SSH
+- Lire les logs ufw
+- Comprendre la relation ufw / iptables sur une VM avec Docker
+
+---
+
+### 2.1 — Filtrage par source IP
+
+La politique actuelle autorise SSH depuis **n'importe quelle adresse**. En production, on restreint SSH aux seuls postes d'administration.
+
+#### Supprimer la règle SSH générale
+
+```bash title="Suppression de la règle SSH ouverte"
+sudo ufw delete allow ssh
+```
+
+#### Autoriser SSH uniquement depuis le sous-réseau admin
+
+```bash title="SSH restreint au sous-réseau"
+sudo ufw allow from 192.168.56.0/24 to any port 22 proto tcp
+```
+
+Testez depuis le poste client (qui est dans ce sous-réseau) : la connexion doit fonctionner.
+
+<Aside type="tip" title="Adresse IP précise">
+Pour restreindre à **une seule machine** plutôt qu'un sous-réseau :
+
+```bash
+sudo ufw allow from 192.168.56.1 to any port 22 proto tcp
+```
+</Aside>
+
+---
+
+### 2.2 — Règles numérotées
+
+Avec un nombre croissant de règles, il devient utile de les gérer par numéro.
+
+#### Afficher les règles numérotées
+
+```bash title="Liste numérotée"
+sudo ufw status numbered
+```
+
+Exemple de sortie :
+
+```
+Status: active
+
+     To                         Action      From
+     --                         ------      ----
+[ 1] 22/tcp                     ALLOW IN    192.168.56.0/24
+[ 2] 80/tcp                     ALLOW IN    Anywhere
+[ 3] 443/tcp                    ALLOW IN    Anywhere
+```
+
+#### Insérer une règle à une position précise
+
+```bash title="Insertion en position 2"
+sudo ufw insert 2 allow from 192.168.56.0/24 to any port 8080 proto tcp
+```
+
+#### Supprimer une règle par numéro
+
+```bash title="Suppression par numéro"
+sudo ufw delete 2
+```
+
+<Aside type="caution" title="Les numéros se décalent">
+Après chaque suppression, les numéros des règles suivantes se décalent.
+Toujours relancer `sudo ufw status numbered` avant de supprimer plusieurs règles d'affilée.
+</Aside>
+
+---
+
+### 2.3 — Limitation du débit (protection brute-force)
+
+ufw permet de **limiter le nombre de tentatives de connexion** sur un port. Si une adresse IP tente plus de 6 connexions en 30 secondes, elle est temporairement bloquée.
+
+```bash title="Activation de la limite sur SSH"
+sudo ufw limit ssh
+```
+
+Vérifiez avec `sudo ufw status verbose` : la règle SSH passe de `ALLOW` à `LIMIT`.
+
+<Aside type="note" title="Cas d'usage">
+Cette protection est particulièrement utile sur les serveurs exposés à Internet pour ralentir les attaques par dictionnaire sur SSH.
+</Aside>
+
+---
+
+### 2.4 — Lecture des logs ufw
+
+ufw peut enregistrer les paquets bloqués (et autorisés). C'est indispensable pour diagnostiquer un problème de connectivité.
+
+#### Activer la journalisation
+
+```bash title="Activation des logs"
+sudo ufw logging on
+```
+
+Le niveau par défaut est `low` (paquets bloqués uniquement). Les niveaux disponibles sont : `off`, `low`, `medium`, `high`, `full`.
+
+#### Consulter les logs
+
+```bash title="Lecture des logs ufw"
+sudo tail -f /var/log/ufw.log
+```
+
+Depuis le poste client, tentez une connexion sur un port bloqué (par exemple le port 3306) :
+
+```bash title="Connexion refusée — côté client"
+curl --connect-timeout 5 http://192.168.56.10:3306
+```
+
+Observez l'entrée générée dans le log :
+
+```
+[UFW BLOCK] IN=enp0s8 OUT= MAC=... SRC=192.168.56.1 DST=192.168.56.10
+            LEN=60 TOS=0x00 PREC=0x00 TTL=64 ID=... DF PROTO=TCP
+            SPT=54321 DPT=3306 WINDOW=64240 RES=0x00 SYN URGP=0
+```
+
+<details>
+<summary>Décodage d'une ligne de log ufw</summary>
+
+| Champ | Signification |
+|-------|--------------|
+| `[UFW BLOCK]` | Paquet bloqué par une règle ufw |
+| `IN=enp0s8` | Interface réseau d'entrée |
+| `SRC=192.168.56.1` | Adresse IP source |
+| `DST=192.168.56.10` | Adresse IP destination |
+| `PROTO=TCP` | Protocole |
+| `SPT=54321` | Port source |
+| `DPT=3306` | Port destination (cible de la connexion) |
+| `SYN` | Paquet SYN — tentative d'établissement de connexion TCP |
+
+</details>
+
+---
+
+### 2.5 — ufw et iptables : lire sans écrire
+
+ufw génère des règles **iptables** dans le noyau. Sur cette VM, Docker est également installé — il injecte lui aussi un grand nombre de règles iptables automatiquement.
+
+#### Observer la sortie brute d'iptables
+
+```bash title="Affichage de toutes les règles iptables"
+sudo iptables -L -v --line-numbers
+```
+
+La sortie est volumineuse. Vous verrez de nombreuses chaînes dont vous n'êtes pas l'auteur :
+
+```
+Chain DOCKER (1 references)
+Chain DOCKER-ISOLATION-STAGE-1 (1 references)
+Chain DOCKER-ISOLATION-STAGE-2 (1 references)
+Chain DOCKER-USER (1 references)
+Chain ufw-after-forward (1 references)
+Chain ufw-after-input (1 references)
+Chain ufw-after-logging-forward (1 references)
+Chain ufw-after-logging-input (1 references)
+Chain ufw-after-output (1 references)
+Chain ufw-before-forward (1 references)
+Chain ufw-before-input (1 references)
+Chain ufw-before-output (1 references)
+Chain ufw-user-input (1 references)
+Chain ufw-user-output (1 references)
+```
+
+<Aside type="note" title="Ne pas paniquer">
+Cette sortie peut sembler intimidante. Retenez deux points :
+
+1. Les chaînes préfixées `DOCKER-*` sont gérées par Docker — **ne jamais les modifier manuellement**.
+2. Les chaînes préfixées `ufw-*` sont gérées par ufw — **on ne les modifie qu'à travers les commandes ufw**.
+</Aside>
+
+#### Retrouver ses règles ufw dans iptables
+
+Les règles que vous avez créées se trouvent dans la chaîne **`ufw-user-input`** :
+
+```bash title="Afficher uniquement les règles ufw utilisateur"
+sudo iptables -L ufw-user-input -v --line-numbers
+```
+
+Exemple de sortie après notre configuration :
+
+```
+Chain ufw-user-input (1 references)
+ pkts bytes target     prot opt in     out     source               destination
+    0     0 ACCEPT     tcp  --  any    any     192.168.56.0/24      anywhere             tcp dpt:ssh
+    5  320 ACCEPT      tcp  --  any    any     anywhere             anywhere             tcp dpt:http
+    0     0 ACCEPT     tcp  --  any    any     anywhere             anywhere             tcp dpt:https
+```
+
+<details>
+<summary>Correspondance règles ufw ↔ iptables</summary>
+
+| Commande ufw | Chaîne iptables | Cible | Protocole | Port |
+|---|---|---|---|---|
+| `ufw allow from 192.168.56.0/24 to any port 22 proto tcp` | `ufw-user-input` | `ACCEPT` | `tcp` | `dpt:ssh` |
+| `ufw allow http` | `ufw-user-input` | `ACCEPT` | `tcp` | `dpt:http` |
+| `ufw allow https` | `ufw-user-input` | `ACCEPT` | `tcp` | `dpt:https` |
+
+La colonne `pkts` (paquets) et `bytes` vous indique le trafic réellement traité par chaque règle — utile pour vérifier qu'une règle est bien activée.
+
+</details>
+
+#### Pourquoi on ne touche pas iptables directement
+
+```
+ufw → génère → iptables
+Docker → génère → iptables
+```
+
+Si vous modifiez iptables manuellement, vous risquez de :
+- Entrer en conflit avec les règles ufw ou Docker
+- Voir vos règles effacées au prochain redémarrage de ufw ou Docker
+- Rendre la configuration incohérente et difficile à déboguer
+
+**Règle d'or :** on lit iptables pour comprendre et diagnostiquer, on écrit uniquement via ufw.
+
+---
+
+### 2.6 — Scénario de durcissement complet
+
+Vous devez configurer le serveur selon la politique de sécurité suivante :
+
+| Service | Autorisation |
+|---------|-------------|
+| SSH (port 22) | Uniquement depuis `192.168.56.0/24`, avec limite brute-force |
+| HTTP (port 80) | Tout le monde |
+| HTTPS (port 443) | Tout le monde |
+| Tout autre trafic entrant | Bloqué |
+
+<details>
+<summary>Solution</summary>
+
+```bash title="Remise à zéro et reconfiguration complète"
+# 1. Remettre ufw à zéro
+sudo ufw reset
+
+# 2. Politiques par défaut
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+
+# 3. SSH restreint avec limitation
+sudo ufw allow from 192.168.56.0/24 to any port 22 proto tcp
+sudo ufw limit ssh
+
+# 4. HTTP et HTTPS ouverts
+sudo ufw allow http
+sudo ufw allow https
+
+# 5. Activation
+sudo ufw enable
+
+# 6. Vérification
+sudo ufw status verbose
+```
+
+</details>
+
+---
+
+### ✅ Bilan — Partie 2
+
+<details>
+<summary>Questions de synthèse</summary>
+
+1. Quelle commande permet de restreindre SSH à une plage d'adresses précise ?
+2. Pourquoi faut-il relancer `ufw status numbered` avant chaque suppression de règle ?
+3. À quoi correspond le champ `DPT` dans un log ufw ?
+4. Dans quelle chaîne iptables retrouve-t-on les règles créées par ufw ?
+5. Pourquoi ne faut-il pas modifier iptables directement sur une VM qui fait tourner Docker ?
+6. Quelle est la différence entre les niveaux de log `low` et `medium` dans ufw ?
+
+</details>
