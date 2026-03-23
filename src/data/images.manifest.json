@@ -1,4 +1,112 @@
 {
+  "/images/fiches/sns-nat-destination-regle-filtrage/Pasted-image-20260323143251.png": {
+    "full": {
+      "avif": "/images/fiches/sns-nat-destination-regle-filtrage/Pasted-image-20260323143251.avif",
+      "webp": "/images/fiches/sns-nat-destination-regle-filtrage/Pasted-image-20260323143251.webp",
+      "fallback": "/images/fiches/sns-nat-destination-regle-filtrage/Pasted-image-20260323143251.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/sns-nat-destination-regle-filtrage/Pasted-image-20260323143251.thumb.avif",
+      "webp": "/images/fiches/sns-nat-destination-regle-filtrage/Pasted-image-20260323143251.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/fiches/sns-ordonnancement-filtrage-nat/Pasted-image-20260323100659.png": {
+    "full": {
+      "avif": "/images/fiches/sns-ordonnancement-filtrage-nat/Pasted-image-20260323100659.avif",
+      "webp": "/images/fiches/sns-ordonnancement-filtrage-nat/Pasted-image-20260323100659.webp",
+      "fallback": "/images/fiches/sns-ordonnancement-filtrage-nat/Pasted-image-20260323100659.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/sns-ordonnancement-filtrage-nat/Pasted-image-20260323100659.thumb.avif",
+      "webp": "/images/fiches/sns-ordonnancement-filtrage-nat/Pasted-image-20260323100659.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/activities/sns/reset/20260207230513.png": {
+    "full": {
+      "avif": "/images/activities/sns/reset/20260207230513.avif",
+      "webp": null,
+      "fallback": "/images/activities/sns/reset/20260207230513.png"
+    },
+    "thumb": {
+      "avif": "/images/activities/sns/reset/20260207230513.thumb.avif",
+      "webp": "/images/activities/sns/reset/20260207230513.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/activities/sns/reset/20260207230634.png": {
+    "full": {
+      "avif": "/images/activities/sns/reset/20260207230634.avif",
+      "webp": null,
+      "fallback": "/images/activities/sns/reset/20260207230634.png"
+    },
+    "thumb": {
+      "avif": "/images/activities/sns/reset/20260207230634.thumb.avif",
+      "webp": "/images/activities/sns/reset/20260207230634.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/activities/sns/reset/20260207230705.png": {
+    "full": {
+      "avif": null,
+      "webp": null,
+      "fallback": "/images/activities/sns/reset/20260207230705.png"
+    },
+    "thumb": {
+      "avif": "/images/activities/sns/reset/20260207230705.thumb.avif",
+      "webp": "/images/activities/sns/reset/20260207230705.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/activities/sns/reset/20260207230820.png": {
+    "full": {
+      "avif": "/images/activities/sns/reset/20260207230820.avif",
+      "webp": null,
+      "fallback": "/images/activities/sns/reset/20260207230820.png"
+    },
+    "thumb": {
+      "avif": "/images/activities/sns/reset/20260207230820.thumb.avif",
+      "webp": "/images/activities/sns/reset/20260207230820.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/activities/sns/reset/20260207230837.png": {
+    "full": {
+      "avif": "/images/activities/sns/reset/20260207230837.avif",
+      "webp": null,
+      "fallback": "/images/activities/sns/reset/20260207230837.png"
+    },
+    "thumb": {
+      "avif": "/images/activities/sns/reset/20260207230837.thumb.avif",
+      "webp": "/images/activities/sns/reset/20260207230837.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/activities/sns/reset/20260207230857.png": {
+    "full": {
+      "avif": "/images/activities/sns/reset/20260207230857.avif",
+      "webp": null,
+      "fallback": "/images/activities/sns/reset/20260207230857.png"
+    },
+    "thumb": {
+      "avif": "/images/activities/sns/reset/20260207230857.thumb.avif",
+      "webp": "/images/activities/sns/reset/20260207230857.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/activities/sns/reset/20260207230921.png": {
+    "full": {
+      "avif": "/images/activities/sns/reset/20260207230921.avif",
+      "webp": null,
+      "fallback": "/images/activities/sns/reset/20260207230921.png"
+    },
+    "thumb": {
+      "avif": "/images/activities/sns/reset/20260207230921.thumb.avif",
+      "webp": "/images/activities/sns/reset/20260207230921.thumb.webp",
+      "fallback": null
+    }
+  },
   "/images/activities/sns/reset/reset-2026-02-09-11-28-50.png": {
     "full": {
       "avif": "/images/activities/sns/reset/reset-2026-02-09-11-28-50.avif",
