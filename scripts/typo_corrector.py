@@ -41,6 +41,22 @@ class MarkdownTypoCorrector:
         """Extrait et remplace les blocs de code ET commentaires HTML par des placeholders"""
         self.code_blocks = []
 
+        # Frontmatter YAML (à extraire EN TOUT PREMIER — avant tout le reste)
+        def replace_frontmatter(match):
+            placeholder = f"___FRONTMATTER_{len(self.code_blocks)}___"
+            self.code_blocks.append(match.group(0))
+            return placeholder
+
+        text = re.sub(r'\A---\n.*?\n---\n?', replace_frontmatter, text, flags=re.DOTALL)
+
+        # Blocs callout MDX (:::) — à extraire avant les commentaires HTML
+        def replace_callout(match):
+            placeholder = f"___CALLOUT_{len(self.code_blocks)}___"
+            self.code_blocks.append(match.group(0))
+            return placeholder
+
+        text = re.sub(r'^:{3,}[^\n]*\n.*?^:{3,}[^\n]*\n?', replace_callout, text, flags=re.DOTALL | re.MULTILINE)
+
         # Commentaires HTML (à extraire EN PREMIER)
         def replace_html_comment(match):
             placeholder = f"___HTML_COMMENT_{len(self.code_blocks)}___"
@@ -70,6 +86,8 @@ class MarkdownTypoCorrector:
     def restore_code_blocks(self, text):
         """Restaure les blocs de code et commentaires HTML depuis les placeholders"""
         for i, code_block in enumerate(self.code_blocks):
+            text = text.replace(f"___FRONTMATTER_{i}___", code_block)
+            text = text.replace(f"___CALLOUT_{i}___", code_block)
             text = text.replace(f"___HTML_COMMENT_{i}___", code_block)
             text = text.replace(f"___CODE_BLOCK_{i}___", code_block)
             text = text.replace(f"___INLINE_CODE_{i}___", code_block)
