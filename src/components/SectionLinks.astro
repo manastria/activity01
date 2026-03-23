@@ -1,0 +1,29 @@
+---
+import { getCollection } from 'astro:content';
+import { LinkCard } from '@astrojs/starlight/components';
+import { base } from 'astro:config/client';
+
+interface Props {
+  prefix: string;
+}
+
+const { prefix } = Astro.props;
+
+const fiches = await getCollection('docs');
+const filtered = fiches
+  .filter(f => f.id.startsWith(prefix))
+  .sort((a, b) => {
+    const orderA = a.data.order ?? 99;
+    const orderB = b.data.order ?? 99;
+    if (orderA !== orderB) return orderA - orderB;
+    return a.id.localeCompare(b.id);
+  });
+---
+
+{filtered.map(f => (
+  <LinkCard
+    title={f.data.title}
+    href={`${base}${f.id}`}
+    description={f.data.description}
+  />
+))}
