@@ -1,0 +1,135 @@
+---
+title: Commandes SNS
+description: Référence des principales commandes de diagnostic et gestion du pare-feu SNS, incluant portinfo, slotinfo, sfctl, enfilter et outils de supervision.
+slug: sns-commandes-reference
+topic: sns
+section: reseau
+---
+
+# 1. SNS – Mémo commande
+
+## 1.1. portinfo
+
+La commande `portinfo` est un alias pour la commande `ifinfo show_ports`.
+
+```text
+>portinfo
+port       name       NS-BSD   state  addressIPv4         addressIPv6
+   1        out          em0      up  192.168.1.34/24
+   2         in          em1      up  169.254.33.205/16
+   3       dmz1          em2      up  169.254.203.199/16
+```
+
+## 1.2. wizardinit
+
+**Description :** Cette commande lance l'assistant d'installation initiale. Elle est spécifiquement conçue pour les appliances virtuelles (VM) afin de réaliser la première configuration lors du déploiement.
+
+**Fonctionnement :** En exécutant simplement la commande `wizardinit` depuis la console, vous démarrez le processus qui vous guidera à travers les étapes de configuration de base du pare-feu virtuel (configuration des interfaces, mot de passe admin, etc.).
+
+## 1.3. slotinfo
+
+**Description :** La commande `slotinfo` permet de gérer et d'obtenir des informations sur les différents "slots" (emplacements) de configuration du pare-feu. Ces slots contiennent les politiques de sécurité (Filtrage, NAT) et les configurations VPN.
+
+**Fonctionnement :** Elle s'utilise avec différents arguments pour lire ou modifier l'état des slots.
+
+- **Afficher le slot actif :** `slotinfo -a <nom_du_slot>` (ex: `filter`, `vpn`, `nat`...) retourne le numéro du slot actuellement utilisé.
+- **Changer le slot actif :** `slotinfo -A <index> <nom_du_slot>` active le slot correspondant au numéro d'index donné.
+- **Obtenir le nom du fichier :** `slotinfo -f` ou `-g <index>` permet de connaître le nom du fichier de configuration associé au slot actif ou à un index précis.
+
+## 1.4. sfctl
+
+**Description :** `sfctl` est l'outil de contrôle du module ASQ (*Active Security Qualification*), le moteur de prévention d'intrusion et de filtrage du pare-feu. C'est une commande puissante qui permet d'interagir directement avec le cœur de sécurité. _Note : Son utilisation peut impacter les connexions réseaux actives et doit être effectuée avec précaution._
+
+**Fonctionnement :** Elle offre de nombreuses options pour visualiser l'état, vider des tables ou recharger des configurations :
+
+- **Afficher des informations (`-s`) :** Permet de visualiser des états internes. Par exemple, `sfctl -s filter` affiche les règles de filtrage chargées, y compris les règles implicites (ACL). `sfctl -s stat` affiche les statistiques.
+- **Vider des tables (`-F`) :** Permet de "flusher" (vider) certaines tables. Par exemple, `sfctl -F state` vide la table des états (connexions) ou `sfctl -F host` vide la table des hôtes.
+- **Gérer le module (`-e`) :** `sfctl -e 1` active le module, `sfctl -e 0` le désactive.
+
+## 1.5. enfilter
+
+**Description :** La commande `enfilter` est utilisée pour activer, désactiver ou recharger (appliquer) une politique de filtrage (un slot de filtrage). C'est la commande qui compile et charge les règles définies dans les fichiers de configuration vers le moteur ASQ.
+
+**Fonctionnement :**
+
+- **Activer un slot spécifique :** `enfilter <numéro_du_slot>` active le slot de filtrage spécifié (de 00 à 10).
+- **Réactiver le slot courant :** `enfilter -u` recharge la politique de filtrage actuellement active. C'est utile après avoir modifié le fichier de règles pour appliquer les changements.
+- **Désactiver le filtrage :** `enfilter off` désactive le filtrage, laissant passer tout le trafic (mode "pass all").
+- **Options :** Des options comme `-v` (verbeux) peuvent être ajoutées pour le débogage. L'option `--no-routing` permet de ne pas mettre à jour les informations de routage lors du chargement.
+
+## 1.6. ifinfo
+
+**Description :** La commande `ifinfo` permet de consulter les informations détaillées et la configuration actuelle des interfaces réseau du pare-feu. Elle prend en charge tous les types d'interfaces (Ethernet physique, VLAN, Bridge, IPsec, Dialup, etc.).
+
+**Fonctionnement :** Elle s'utilise en spécifiant le type ou le nom de l'interface cible, suivi de l'information spécifique que l'on souhaite récupérer.
+
+- **Syntaxe :** `ifinfo <nom_interface> <commande> [<index>]`
+    - **<nom_interface> :** Peut être un nom système (ex: `ethernet`, `vlan`) ou un nom logique (ex: `in`, `out`).
+    - **:** L'information à extraire. Les plus courantes sont :
+        - `mac_address` : Affiche l'adresse MAC de l'interface.
+        - `ip_address` : Affiche l'adresse IP configurée.
+        - `mac_throughput` : Affiche le débit maximal supporté par le média.
+        - `link` : (Dépend du contexte) Peut être utilisé pour vérifier l'état du lien.
+    - **Exemple global :** Pour lister toutes les interfaces avec leur statut (up/down) et leurs adresses, il suffit de lancer la commande sans arguments spécifiques ou via un script, mais la commande `ifinfo interface list` est souvent utilisée pour un résumé.
+
+_Exemple de résultat :_ `ifinfo interface list` retournera une liste type : `bridge0 10.2.32.254 ... out (fxp1) in (protected,fxp0) ...`.
+
+## 1.7. sysinfo
+
+**Description :** C'est la commande la plus complète pour le diagnostic. Elle génère un rapport technique système (souvent demandé par le support technique) qui contient l'état instantané du boîtier, les tables de connexions, les routes, les processus en cours, etc.
+
+**Fonctionnement :**
+
+- **Génération standard :** `sysinfo` (le résultat s'affiche à l'écran ou peut être redirigé vers un fichier).
+- **Génération complète :** `sysinfo -a` inclut des informations optionnelles supplémentaires.
+- **Options spécifiques :** Vous pouvez cibler des modules précis, par exemple `sysinfo -raid` pour les disques ou `sysinfo -asp` pour la table ARP.
+
+## 1.8. tcpdump
+
+**Description :** Il s'agit de l'outil standard d'analyse de paquets. Il permet de capturer et d'analyser le trafic réseau traversant les interfaces du pare-feu en temps réel.
+
+**Fonctionnement :**
+
+- **Syntaxe :** `tcpdump -[ne]i <interface> [options] [filtres]`.
+- **Exemple :** Pour voir le trafic sur l'interface de sortie pour le port 3784 (utilisé par BFD) : `tcpdump –ni enc1 port 3784`.
+    - `-n` : Ne pas résoudre les noms DNS (affiche les IP), ce qui est plus rapide.
+    - `-i` : Spécifie l'interface.
+
+## 1.9. monitor
+
+**Description :** Cette commande permet d'interagir avec le système de supervision en temps réel. Elle est très utile pour voir les logs défiler en direct ou vérifier l'état de santé du boîtier.
+
+**Fonctionnement :**
+
+- **Voir les logs en direct :** `monitor log <nom_du_log>`.
+    - Exemple : `monitor log connection` pour voir les connexions, ou `monitor log alarm` pour les alarmes,.
+- **État de santé :** `monitor health` affiche l'état global du matériel (CPU, Disque, RAID, etc.),.
+
+## 1.10. system ping / system nslookup
+
+**Description :** Ces commandes permettent de tester la connectivité réseau et la résolution de noms DNS directement depuis le pare-feu (utile pour vérifier si le boîtier lui-même accède à Internet ou à ses serveurs de mise à jour).
+
+**Fonctionnement :**
+
+- **Ping :** `system ping host=<adresse_ip>`.
+    - Exemple : `system ping host=8.8.8.8`.
+- **Résolution DNS :** `system nslookup host=<nom_de_domaine>`.
+    - Exemple : `system nslookup host=www.stormshield.com`.
+
+## 1.11. swaninfo
+
+**Description :** Cette commande est dédiée au diagnostic des tunnels VPN IPsec. Elle fournit des statistiques détaillées et l'état des associations de sécurité (SA) gérées par le démon IKE (Charon/StrongSwan).
+
+**Fonctionnement :**
+
+- **Lister les connexions :** `swaninfo --list` (ou simplement `swaninfo`).
+- **Statistiques :** `swaninfo --stats` affiche des statistiques basées sur l'état IKE.
+
+## 1.12. sysdbg
+
+**Description :** Cette commande active des fonctions de débogage et génère des fichiers de logs compressés dans le répertoire `/dbg/`. Elle est souvent utilisée pour exécuter une liste de commandes de diagnostic en une seule fois.
+
+**Fonctionnement :**
+
+- **Usage simple :** `/usr/Firewall/sbin/sysdbg` crée une archive du contenu de débogage.
+- **Exécution de commandes :** `sysdbg -c "<commandes>"` exécute les commandes listées et logue le résultat.
