@@ -23,7 +23,7 @@ const filtered = fiches
 {filtered.map(f => (
   <LinkCard
     title={f.data.title}
-    href={`${base}${f.id}`}
+    href={`${base}${f.id.replace(/\.mdx?$/, '')}`}
     description={f.data.description}
   />
 ))}
