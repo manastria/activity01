@@ -5,6 +5,10 @@ set -euo pipefail
 SOURCE_BRANCH="dev"
 TARGET_BRANCH="main"
 
+# Répertoires de développement exclus de la publication
+# (.github est conservé pour la CI/CD GitHub Actions)
+EXCLUDE_DIRS=(".claude" ".vscode" "scripts")
+
 # Vérifications préalables
 CURRENT=$(git rev-parse --abbrev-ref HEAD)
 if [ "$CURRENT" != "$SOURCE_BRANCH" ]; then
@@ -36,6 +40,15 @@ git checkout "$TARGET_BRANCH"
 git pull origin "$TARGET_BRANCH" 2>/dev/null || true
 git rm -rf . --quiet
 git checkout "$SOURCE_BRANCH" -- .
+
+# Suppression des répertoires de développement
+for dir in "${EXCLUDE_DIRS[@]}"; do
+    if [ -d "$dir" ]; then
+        git rm -rf "$dir" --quiet
+        echo "🗑️  Exclu : $dir"
+    fi
+done
+
 git commit -m "📦 Publish: $MSG
 
 Source: $SOURCE_BRANCH@$SOURCE_SHA"
