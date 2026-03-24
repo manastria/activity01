@@ -1,0 +1,191 @@
+---
+title: "Configuration du routage inter-VLAN avec router-on-a-stick"
+description: "Fiche de révision BTS SIO — étapes et commandes pour configurer le routage inter-VLAN en utilisant une topologie router-on-a-stick avec sous-interfaces et trunk 802.1Q."
+topic: "vlan"
+section: "reseau"
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+import ImageFigureViewer from "@/components/ImageFigureViewer.astro";
+
+## Rappel du principe
+
+Le *router-on-a-stick* (routeur sur un bâton) permet d'assurer le routage inter-*VLAN* (*Virtual Local Area Network*) avec **un seul lien physique** entre le commutateur et le routeur. Ce lien est configuré en *trunk* côté commutateur ; côté routeur, on crée une **sous-interface** (*subinterface*) par *VLAN*, chacune portant l'encapsulation *802.1Q*.
+
+
+<ImageFigureViewer
+  src="/images/fiches/vlan-router-on-stick/routage-on-stick-schema.png"
+  alt="Topologie réseau router-on-a-stick : deux PC (VLAN 10 et 30) connectés au commutateur S1, et routeur R1 connecté au commutateur par un trunk."
+  scale={1}
+/>
+
+
+---
+
+## Table d'adressage de référence
+
+| Appareil | Interface   | Adresse IPv4  | Masque          | Passerelle par défaut |
+|----------|-------------|---------------|-----------------|-----------------------|
+| R1       | G0/0.10     | 172.17.10.1   | 255.255.255.0   | N/A                   |
+| R1       | G0/0.30     | 172.17.30.1   | 255.255.255.0   | N/A                   |
+| PC1      | Carte réseau| 172.17.10.10  | 255.255.255.0   | 172.17.10.1           |
+| PC2      | Carte réseau| 172.17.30.10  | 255.255.255.0   | 172.17.30.1           |
+
+---
+
+## Phase 1 — Création des VLAN sur le commutateur (S1)
+
+<Steps>
+
+1. **Créer les *VLAN*** 10 et 30.
+
+   ```cisco
+   S1# configure terminal
+   S1(config)# vlan 10
+   S1(config-vlan)# name VLAN10
+   S1(config-vlan)# exit
+   S1(config)# vlan 30
+   S1(config-vlan)# name VLAN30
+   S1(config-vlan)# exit
+   ```
+
+2. **Affecter les ports d'accès** aux *VLAN* correspondants.
+
+   ```cisco
+   ! PC1 → VLAN 10 sur F0/11
+   S1(config)# interface fastEthernet 0/11
+   S1(config-if)# switchport mode access
+   S1(config-if)# switchport access vlan 10
+   S1(config-if)# exit
+
+   ! PC2 → VLAN 30 sur F0/6
+   S1(config)# interface fastEthernet 0/6
+   S1(config-if)# switchport mode access
+   S1(config-if)# switchport access vlan 30
+   S1(config-if)# exit
+   ```
+
+3. **Vérifier** la configuration des *VLAN*.
+
+   ```cisco
+   S1# show vlan brief
+   ```
+
+</Steps>
+
+<details>
+<summary>Résultat attendu de <code>show vlan brief</code></summary>
+
+```
+VLAN  Name        Status    Ports
+----  ----------  --------  ----------------------------
+1     default     active    Fa0/1 … Fa0/5, Fa0/7 …
+10    VLAN0010    active    Fa0/11
+30    VLAN0030    active    Fa0/6
+```
+
+</details>
+
+---
+
+## Phase 2 — Configuration des sous-interfaces sur le routeur (R1)
+
+<Steps>
+
+1. **Créer la sous-interface** pour le *VLAN* 10.
+
+   ```cisco
+   R1(config)# interface gigabitEthernet 0/0.10
+   R1(config-subif)# encapsulation dot1Q 10
+   R1(config-subif)# ip address 172.17.10.1 255.255.255.0
+   R1(config-subif)# exit
+   ```
+
+2. **Créer la sous-interface** pour le *VLAN* 30.
+
+   ```cisco
+   R1(config)# interface gigabitEthernet 0/0.30
+   R1(config-subif)# encapsulation dot1Q 30
+   R1(config-subif)# ip address 172.17.30.1 255.255.255.0
+   R1(config-subif)# exit
+   ```
+
+3. **Activer l'interface physique** (les sous-interfaces restent *down* tant que G0/0 est désactivée).
+
+   ```cisco
+   R1(config)# interface gigabitEthernet 0/0
+   R1(config-if)# no shutdown
+   R1(config-if)# exit
+   ```
+
+4. **Vérifier** que les sous-interfaces sont bien actives.
+
+   ```cisco
+   R1# show ip interface brief
+   ```
+
+</Steps>
+
+:::caution
+Les sous-interfaces ne passent `up/up` qu'une fois l'interface physique parente activée avec `no shutdown`.
+:::
+
+---
+
+## Phase 3 — Configuration du trunk sur le commutateur (S1)
+
+<Steps>
+
+1. **Passer le port vers R1 en mode *trunk*.**
+
+   ```cisco
+   S1(config)# interface gigabitEthernet 0/1
+   S1(config-if)# switchport mode trunk
+   S1(config-if)# exit
+   ```
+
+2. **Vérifier** le *trunk*.
+
+   ```cisco
+   S1# show interfaces trunk
+   ```
+
+</Steps>
+
+:::tip
+La commande `show vlan` n'affiche **pas** les ports en mode *trunk* : c'est normal. Utiliser `show interfaces trunk` pour les identifier.
+:::
+
+---
+
+## Vérification finale
+
+<Steps>
+
+1. **Ping** de PC1 vers PC2 — doit réussir.
+
+2. En mode *Simulation* de Packet Tracer, observer le chemin :
+   - Requête *ARP* (*Address Resolution Protocol*) entre S1 et R1.
+   - Requête *ARP* entre R1 et S1 (côté PC2).
+   - Écho *ICMP* (*Internet Control Message Protocol*) acheminé par R1 vers PC2.
+
+</Steps>
+
+:::note
+Si le ping échoue encore après la configuration du *trunk*, vérifier que les sous-interfaces ont bien l'encapsulation `dot1Q` avec le bon numéro de *VLAN* et que la passerelle par défaut est correctement renseignée sur les PC.
+:::
+
+---
+
+## Récapitulatif des commandes clés
+
+| Action | Commande |
+|--------|----------|
+| Créer un *VLAN* | `vlan <id>` |
+| Port d'accès | `switchport mode access` + `switchport access vlan <id>` |
+| Port *trunk* | `switchport mode trunk` |
+| Sous-interface + encapsulation | `encapsulation dot1Q <id>` |
+| Activer une interface | `no shutdown` |
+| Vérifier les *VLAN* | `show vlan brief` |
+| Vérifier les *trunks* | `show interfaces trunk` |
+| Vérifier les interfaces IP | `show ip interface brief` |

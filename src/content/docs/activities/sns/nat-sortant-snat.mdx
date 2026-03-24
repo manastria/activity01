@@ -13,7 +13,7 @@ On parle également de *masquerading* ou de *NAPT* (*Network Address Port Transl
 
 ### Pourquoi le *SNAT* est-il indispensable ?
 
-Les adresses privées (définies par la *RFC 1918*) ne sont pas routables sur Internet. Sans traduction, les paquets émis depuis un réseau interne seraient tout simplement ignorés par les équipements du réseau public. Le *SNAT* résout ce problème en « masquant » l'adresse privée derrière l'adresse de l'interface de sortie du pare-feu.
+Les adresses privées (définies par la *RFC 1918*) ne sont pas routables sur Internet. Sans traduction, les paquets émis depuis un réseau interne seraient tout simplement ignorés par les équipements du réseau public. Le *SNAT* résout ce problème en « masquant » l'adresse privée derrière l'adresse de l'interface de sortie du pare-feu.
 
 ### Schéma logique
 
@@ -28,7 +28,7 @@ Concrètement, lorsqu'une machine interne (par exemple `10.0.0.2`) envoie un paq
 
 Sur un pare-feu Stormshield SNS, les règles de **filtrage** et de **NAT** sont regroupées au sein d'une même **politique de sécurité**. Il est possible de définir jusqu'à dix politiques, mais **une seule est active** à un instant donné.
 
-La règle de *NAT* dynamique (*NAPT*/*SNAT*) se crée à l'aide du bouton « Nouvelle règle » puis « Règle de partage d'adresse source (*masquerading*) ». Cette action ajoute automatiquement la plage de ports prédéfinie `ephemeral_fw` [20000–59999] dans le champ « port source » du trafic après traduction.
+La règle de *NAT* dynamique (*NAPT*/*SNAT*) se crée à l'aide du bouton « **Nouvelle règle** » puis « **Règle de partage d'adresse source (*masquerading*)** ». Cette action ajoute automatiquement la plage de ports prédéfinie `ephemeral_fw` [20000–59999] dans le champ « **port source** » du trafic après traduction.
 
 :::note
 Par défaut, les ports sont choisis **séquentiellement** dans cette plage. Une option permet d'activer un choix **aléatoire** du port source pour chaque nouvelle connexion, rendant la prédiction plus difficile pour un attaquant.
@@ -44,7 +44,7 @@ Par défaut, les ports sont choisis **séquentiellement** dans cette plage. Une 
 
 2. ### Créer la règle de *masquerading*
 
-   Cliquer sur **Nouvelle règle** → **Règle de partage d'adresse source (*masquerading*)**. Une règle désactivée apparaît avec les valeurs par défaut `Any` → `Any`. La section « Trafic après translation » définit d'ores et déjà la traduction du port source dans la plage `ephemeral_fw`.
+   Cliquer sur **Nouvelle règle** → **Règle de partage d'adresse source (*masquerading*)**. Une règle désactivée apparaît avec les valeurs par défaut `Any` → `Any`. La section « **Trafic après translation** » définit d'ores et déjà la traduction du port source dans la plage `ephemeral_fw`.
 
 3. ### Configurer le trafic original (avant traduction)
 
@@ -53,8 +53,8 @@ Par défaut, les ports sont choisis **séquentiellement** dans cette plage. Une 
    - **Source originale** : sélectionner `Network_internals` (objet qui regroupe l'ensemble des réseaux internes protégés par le pare-feu). Adapter cet objet si votre architecture ne contient qu'un sous-ensemble de réseaux.
    - **Destination originale** : sélectionner `Internet`.
 
-   :::danger[Ne jamais laisser « Any » en destination originale]
-   Si vous laissez `Any` en destination originale, les flux d'administration du pare-feu (en *SSH* et en *HTTPS*) subiront également la traduction *NAT* vers l'interface « out ». Le pare-feu interprétera alors ces flux comme une tentative d'intrusion et **les bloquera**, vous privant de l'accès à l'interface d'administration.
+   :::danger[Ne jamais laisser « Any » en destination originale]
+   Si vous laissez `Any` en destination originale, les flux d'administration du pare-feu (en *SSH* et en *HTTPS*) subiront également la traduction *NAT* vers l'interface « out ». Le pare-feu interprétera alors ces flux comme une tentative d'intrusion et **les bloquera**, vous privant de l'accès à l'interface d'administration.
    Utilisez systématiquement l'objet `Internet` qui désigne tous les réseaux **sauf** les réseaux internes du pare-feu.
    :::
 
@@ -66,7 +66,7 @@ Par défaut, les ports sont choisis **séquentiellement** dans cette plage. Une 
 
    - **Source translatée** : sélectionner `Firewall_out` (l'adresse IP de l'interface de sortie du pare-feu).
    - **Port source translaté** : laisser `ephemeral_fw`.
-   - Cocher l'option **« Choisir aléatoirement le port source translaté »**.
+   - Cocher l'option **« Choisir aléatoirement le port source translaté »**.
 
    :::tip[Pourquoi activer la sélection aléatoire du port ?]
    Avec un choix séquentiel, un attaquant peut deviner le prochain port utilisé et tenter de détourner une connexion. Le choix aléatoire rend cette prédiction beaucoup plus difficile. Ainsi, si le premier port attribué est 23 417, le suivant ne sera pas 23 418 mais un nombre tiré au hasard dans la plage `ephemeral_fw`. Cela ne rend pas les attaques impossibles, mais les complexifie significativement.
@@ -74,19 +74,19 @@ Par défaut, les ports sont choisis **séquentiellement** dans cette plage. Une 
 
 6. ### Configurer le protocole
 
-   Dans l'onglet **Protocole**, laisser l'option par défaut « Détection automatique du protocole ». Le pare-feu identifiera automatiquement le protocole applicatif (*HTTP*, *HTTPS*, *FTP*, etc.) utilisé par chaque connexion.
+   Dans l'onglet **Protocole**, laisser l'option par défaut « Détection automatique du protocole ». Le pare-feu identifiera automatiquement le protocole applicatif (*HTTP*, *HTTPS*, *FTP*, etc.) utilisé par chaque connexion.
 
 7. ### Activer le traçage
 
    Dans l'onglet **Options**, cocher **Tracer**. Cette option journalise le premier paquet correspondant à la règle de *NAT* dans le journal de connexions, ce qui est indispensable pour le diagnostic.
 
    :::note[Marqueurs de traduction dans les journaux]
-   Les entrées du journal de connexions liées au *NAT* sont identifiables grâce aux champs « Adresse source translatée » et « Port source translaté » dans l'interface web, ou par les mots-clés `modsrc` et `modsrcport` en ligne de commande.
+   Les entrées du journal de connexions liées au *NAT* sont identifiables grâce aux champs « Adresse source translatée » et « Port source translaté » dans l'interface web, ou par les mots-clés `modsrc` et `modsrcport` en ligne de commande.
    :::
 
 8. ### Ajouter un commentaire
 
-   Dans l'onglet **Général**, saisir un commentaire explicite, par exemple « *SNAT* – Sortie Internet pour les réseaux internes ». Cela facilite la relecture de la politique par un autre administrateur.
+   Dans l'onglet **Général**, saisir un commentaire explicite, par exemple « *SNAT* – Sortie Internet pour les réseaux internes ». Cela facilite la relecture de la politique par un autre administrateur.
 
 9. ### Activer la règle et appliquer la politique
 
@@ -94,7 +94,7 @@ Par défaut, les ports sont choisis **séquentiellement** dans cette plage. Une 
    - Cliquer sur **Appliquer** puis confirmer avec **Oui, activer la politique**.
 
    :::caution
-   Avant de lancer vos tests, pensez à **réinitialiser les statistiques des règles** (clic droit sur la règle → « Réinitialiser les statistiques ») afin de repartir de zéro et de faciliter l'interprétation des compteurs.
+   Avant de lancer vos tests, pensez à **réinitialiser les statistiques des règles** (clic droit sur la règle → « Réinitialiser les statistiques ») afin de repartir de zéro et de faciliter l'interprétation des compteurs.
    :::
 
 </Steps>
@@ -154,15 +154,15 @@ Une erreur courante consiste à créer une règle de filtrage avec `Firewall_out
 
 3. ### Activer le traçage
 
-   Dans l'onglet **Options** de la règle, cocher **Tracer** pour journaliser les flux autorisés. Cela permet de vérifier que la règle de filtrage est bien « matchée » par le trafic.
+   Dans l'onglet **Options** de la règle, cocher **Tracer** pour journaliser les flux autorisés. Cela permet de vérifier que la règle de filtrage est bien « matchée » par le trafic.
 
 4. ### Ajouter un commentaire
 
-   Dans l'onglet **Général**, saisir un commentaire explicite, par exemple « Filtrage sortant – Autorisation accès Internet pour les réseaux internes ».
+   Dans l'onglet **Général**, saisir un commentaire explicite, par exemple « Filtrage sortant – Autorisation accès Internet pour les réseaux internes ».
 
 5. ### Positionner correctement la règle
 
-   Vérifier que cette règle d'autorisation est placée **au-dessus** de toute règle de blocage générique (type « *Block all* »). Le pare-feu évalue les règles de haut en bas et s'arrête à la première correspondance.
+   Vérifier que cette règle d'autorisation est placée **au-dessus** de toute règle de blocage générique (type « *Block all* »). Le pare-feu évalue les règles de haut en bas et s'arrête à la première correspondance.
 
 6. ### Activer et appliquer
 
@@ -208,7 +208,7 @@ Si ces tests échouent, vérifiez en priorité que la machine interne possède b
 
 #### Journal de connexions
 
-Ouvrir le menu **Monitoring** → **Journal des connexions** et filtrer les résultats en recherchant les colonnes « Adresse source translatée » et « Port source translaté ». La présence de ces informations confirme que la traduction est effective.
+Ouvrir le menu **Monitoring** → **Journal des connexions** et filtrer les résultats en recherchant les colonnes « Adresse source translatée » et « Port source translaté ». La présence de ces informations confirme que la traduction est effective.
 
 #### Compteurs de règles
 
@@ -221,7 +221,7 @@ Dans la liste des règles *NAT*, vérifier que le compteur de la règle *SNAT* s
 - **Port source aléatoire** : toujours activer l'option de choix aléatoire du port dans `ephemeral_fw` pour limiter la prédictibilité.
 - **Traçage** : activer le traçage sur la règle *SNAT* pour disposer de journaux exploitables lors du diagnostic.
 - **Commentaire** : documenter chaque règle avec un commentaire clair et explicite.
-- **Ordre des règles** : placer les règles les plus spécifiques **au-dessus** des règles les plus générales. Une règle plus large située avant une règle spécifique peut « recouvrir » cette dernière et la rendre inopérante.
+- **Ordre des règles** : placer les règles les plus spécifiques **au-dessus** des règles les plus générales. Une règle plus large située avant une règle spécifique peut « recouvrir » cette dernière et la rendre inopérante.
 - **Filtrage associé** : vérifier qu'une règle de filtrage autorise bien le trafic sortant correspondant.
 - **Principe du moindre privilège** : ne translater et n'autoriser que les flux strictement nécessaires.
 :::
