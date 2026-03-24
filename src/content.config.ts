@@ -1,4 +1,5 @@
 import { defineCollection, z } from 'astro:content';
+import { docsLoader } from '@astrojs/starlight/loaders';
 import { docsSchema } from '@astrojs/starlight/schema';
 
 const docs = defineCollection({
@@ -10,8 +11,14 @@ const docs = defineCollection({
       level: z.string().optional(),        // e.g., "BTS SIO 1"
       tags: z.array(z.string()).optional(),// e.g., ["docker", "réseau"]
       status: z.enum(['draft', 'ready', 'review']).default('draft').optional(),
+      order: z.number().optional(),
     }),
   }),
 });
 
-export const collections = { docs };
+export const collections = {
+	docs: defineCollection({
+		loader: docsLoader(), // Indispensable en v6
+		schema: docsSchema(),
+	}),
+};
