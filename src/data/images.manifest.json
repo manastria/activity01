@@ -23,6 +23,18 @@
       "fallback": null
     }
   },
+  "/images/fiches/vlan-router-on-stick/routage-on-stick-schema.png": {
+    "full": {
+      "avif": "/images/fiches/vlan-router-on-stick/routage-on-stick-schema.avif",
+      "webp": "/images/fiches/vlan-router-on-stick/routage-on-stick-schema.webp",
+      "fallback": "/images/fiches/vlan-router-on-stick/routage-on-stick-schema.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/vlan-router-on-stick/routage-on-stick-schema.thumb.avif",
+      "webp": "/images/fiches/vlan-router-on-stick/routage-on-stick-schema.thumb.webp",
+      "fallback": null
+    }
+  },
   "/images/activities/sns/reset/20260207230513.png": {
     "full": {
       "avif": "/images/activities/sns/reset/20260207230513.avif",
