@@ -7,7 +7,7 @@
     "node": ">=18.20.8"
   },
   "scripts": {
-    "dev": "astro dev --host",
+    "dev": "astro dev --host --open",
     "build": "astro build",
     "preview": "astro preview",
     "deploy": "astro build && gh-pages -d dist",
