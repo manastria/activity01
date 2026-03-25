@@ -1,0 +1,449 @@
+---
+title: Partie 4 – Observer et diagnostiquer HAProxy
+description: "Découvrez comment lire les logs, utiliser la page de statistiques et diagnostiquer des pannes de routage ou de backend avec HAProxy."
+sidebar:
+  order: 2
+status: "draft"
+level: "BTS SIO 2"
+duration: "45 min"
+tags: ["haproxy", "tls", "sni", "bts-sio"]
+---
+
+> Dans cette partie, vous allez découvrir comment observer le fonctionnement d’un proxy inverse : savoir ce qu’il fait réellement, où passent les requêtes, et comment diagnostiquer une panne.
+> L’objectif est de comprendre que **HAProxy n’est pas une boîte noire** : il enregistre et expose tout ce qu’il fait.
+
+---
+
+## 1. Prérequis
+
+Avant de commencer cette activité, assurez-vous que les éléments suivants sont fonctionnels :
+
+* Le **frontend HTTP** et le **frontend HTTPS** de HAProxy.
+* Les deux backends `node1` et `node2` répondent correctement.
+* Le trafic passe par le pare-feu SNS (routage et NAT sont configurés).
+* Vous savez **rediriger les logs vers la console** (`journalctl -u haproxy`) et **tester avec `curl`**.
+
+---
+
+## 2. Objectifs de la partie
+
+À la fin de cette activité, vous saurez :
+
+1.  Lire et comprendre les **logs HTTP** produits par HAProxy.
+2.  Activer et consulter la **page de statistiques** de HAProxy.
+3.  Diagnostiquer un problème de routage ou de panne backend.
+4.  Utiliser des outils simples (`curl -v`, `grep`, `tcpdump`) pour suivre les requêtes.
+
+---
+
+## 3. Les logs HAProxy : voir les requêtes passer
+
+### 3.1. 1 Activer les logs HTTP
+
+Avant de pouvoir observer ce que fait HAProxy, il faut lui **indiquer où envoyer ses journaux**. Par défaut, HAProxy écrit dans le système de log standard de Linux (`rsyslog` ou `journald`). Nous allons activer ce mécanisme et préciser quels types d’événements enregistrer.
+
+Ouvrez le fichier de configuration principal :
+
+```shell
+sudo nano /etc/haproxy/haproxy.cfg
+````
+
+Repérez les blocs de configuration `global` et `defaults`.
+
+### 3.2. Bloc `global` : configuration générale du service
+
+```text
+global
+  log /dev/log local0 info
+  chroot /var/lib/haproxy
+  stats socket /run/haproxy/admin.sock mode 660 level admin
+  user haproxy
+  group haproxy
+  daemon
+```
+
+| Directive | Rôle |
+| :--- | :--- |
+| `log /dev/log local0 info` | Envoie les logs vers le démon **rsyslog** (via le socket `/dev/log`) en utilisant la **facilité** `local0` et le niveau `info`. |
+| `chroot /var/lib/haproxy` | Isole le processus dans ce dossier pour **limiter les dégâts** en cas de compromission. |
+| `stats socket` | Ouvre une **prise locale** (socket UNIX) pour les **commandes d’administration**. |
+| `user` / `group` | Indique quel **compte système** fait tourner HAProxy. |
+| `daemon` | Lance HAProxy en arrière-plan (mode service). |
+
+:::note
+Ce bloc concerne le comportement global du processus, pas la logique du proxy elle-même.
+:::
+
+### 3.3. Bloc `defaults` : comportement par défaut des proxys
+
+```text
+defaults
+  log     global
+  mode    http
+  option  httplog
+  timeout connect 5s
+  timeout client  30s
+  timeout server  30s
+```
+
+Ce bloc s’applique à **tous les frontends et backends**, sauf si vous le redéfinissez.
+
+| Directive | Rôle |
+| :--- | :--- |
+| `log global` | Réutilise les paramètres du bloc `global`. |
+| `mode http` | Indique que HAProxy travaille au **niveau HTTP** (et non TCP brut). |
+| `option httplog` | Demande un **format de log détaillé** (méthode, code retour, durée…). |
+| `timeout …` | Définit des **délais raisonnables** pour éviter qu’une requête ne bloque. |
+
+
+
+<details>
+<summary><h3> Synthèse : `global` vs `defaults` pour les logs</h3></summary>
+
+C'est important de comprendre la distinction entre les blocs `global` et `defaults` pour que la journalisation fonctionne correctement.
+
+* `global` : Ce bloc définit les **paramètres généraux du processus** HAProxy lui-même. C'est ici que vous indiquez à HAProxy **où envoyer les logs** qu'il génère. La directive `log /dev/log local0 info` établit ce canal de sortie, en pointant vers le système de logs du serveur (journald ou rsyslog). On peut le voir comme le **canal de communication**.
+
+* `defaults` : Ce bloc, quant à lui, définit le **comportement par défaut** de toutes les sections `frontend` et `backend` qui le suivent. La directive `log global` ordonne à ces sections de **réutiliser le canal de log** défini dans le bloc `global`. L'option `option httplog` est également ajoutée ici pour spécifier le **format détaillé** de ces logs, en y incluant des informations essentielles sur les requêtes HTTP. On peut le voir comme le **contenu de la communication**.
+
+En résumé, le bloc `global` ouvre la voie (`/dev/log`), et le bloc `defaults` envoie le contenu (`httplog`) par cette voie. Les deux sont nécessaires pour que les logs de requêtes soient correctement enregistrés.
+</details>
+
+
+:::note
+En résumé :
+
+  * `global` → comment HAProxy **fonctionne** (utilisateur, logs, sécurité).
+  * `defaults` → comment HAProxy **parle** (HTTP, timeouts, format des logs).
+    :::
+
+Enregistrez puis relancez HAProxy :
+
+```bash
+sudo systemctl restart haproxy
+```
+
+Vérifiez que le service est bien actif :
+
+```bash
+sudo systemctl status haproxy
+```
+
+### 3.4. Consulter les logs
+
+Sur **Debian 12**, le système de logs par défaut est **systemd-journald**.
+
+Avec la configuration précédente, HAProxy envoie déjà ses logs vers journald. Vous pouvez donc les lire directement avec `journalctl`.
+
+#### 3.4.1. Voir les logs HAProxy “en direct”
+
+```bash
+# Suivre les logs en temps réel
+sudo journalctl -u haproxy -f
+
+# (Astuce) Afficher aussi les 50 dernières lignes au démarrage du suivi
+sudo journalctl -u haproxy -n 50 -f
+```
+
+Dans un **autre terminal**, générez quelques requêtes pour voir les logs apparaître :
+
+```bash
+curl -I http://node1.example.test/
+curl -I http://node2.example.test/
+```
+
+#### 3.4.2. Rechercher dans une période
+
+```bash
+# Depuis 10 minutes
+sudo journalctl -u haproxy --since "10 min ago"
+
+# Entre deux horodatages
+sudo journalctl -u haproxy --since "2025-10-04 09:00" --until "2025-10-04 09:30"
+```
+
+#### 3.4.3. Aller directement à la fin du journal
+
+Lorsque vous cherchez les logs les plus récents, il peut être fastidieux de faire défiler le journal jusqu'à la fin. L'option `-e` (raccourci de `--pager-end`) permet d'afficher la sortie directement à la fin du journal.
+
+```bash
+# Affiche les logs HAProxy en partant de la fin
+sudo journalctl -u haproxy -e
+```
+
+
+#### 3.4.4. Si rien n’apparaît : checklist rapide
+
+:::caution
+Si les logs ne s'affichent pas :
+
+  * **Vérifiez votre configuration** dans `/etc/haproxy/haproxy.cfg`.
+      * `global` contient `log /dev/log local0 info`.
+      * `defaults` contient `log global` **et** `option httplog`.
+  * **Redémarrez le service** : `sudo systemctl restart haproxy`.
+  * **Confirmez qu'il est actif** : `systemctl is-active haproxy`.
+:::
+
+#### 3.4.5. Rendre les logs persistants (facultatif mais utile)
+
+Par défaut, `journald` ne conserve pas les logs après un redémarrage. Pour **les conserver après un reboot** :
+
+```bash
+sudo mkdir -p /var/log/journal
+sudo systemd-tmpfiles --create --prefix /var/log/journal
+sudo systemctl restart systemd-journald
+```
+
+Puis vérifiez l’espace utilisé par les logs :
+
+```bash
+sudo journalctl --disk-usage
+```
+
+-----
+
+### 3.5. (Option) Avoir un fichier `/var/log/haproxy.log`
+
+Si vous préférez un **fichier classique** en plus de `journald`, installez et configurez `rsyslog` :
+
+1.  Installez `rsyslog` :
+
+    ```bash
+    sudo apt-get update && sudo apt-get install -y rsyslog
+    sudo systemctl enable --now rsyslog
+    ```
+
+2.  Ajoutez une règle dédiée dans `/etc/rsyslog.d/49-haproxy.conf` :
+
+    ```text
+    if ($programname == 'haproxy') then /var/log/haproxy.log
+    & stop
+    ```
+
+3.  Redémarrez les services :
+
+    ```bash
+    sudo systemctl restart rsyslog
+    sudo systemctl restart haproxy
+    ```
+
+Vous pouvez maintenant suivre les logs **au choix** :
+
+  * `sudo journalctl -u haproxy -f` (journald),
+  * ou `sudo tail -f /var/log/haproxy.log` (rsyslog).
+
+:::tip
+Pourquoi deux méthodes ?
+
+  * `journald` est le standard Debian 12 : filtrage puissant, persistance configurable.
+  * `rsyslog` donne un **fichier** facile à partager/archiver.
+
+Pour ce TP, **`journald` suffit** ; le fichier est un **plus** si vous le souhaitez.
+:::
+
+-----
+
+## 4. Lire et comprendre les lignes de log
+
+Effectuez une requête depuis un client :
+
+```bash
+curl -I http://node1.example.test/
+```
+
+Une ligne de log typique ressemble à ceci :
+
+```text
+<134>Aug 5 10:42:33 haproxy[1234]: fe_http~ be_node1/node1 0/0/1/2/3 200 456 - - ---- 1/1/0/0/0 0/0 "GET / HTTP/1.1"
+```
+
+| Champ | Signification |
+| :--- | :--- |
+| `fe_http` | frontend qui a reçu la requête |
+| `be_node1/node1` | backend et serveur choisis |
+| `0/0/1/2/3` | temps en ms (accept/connect/server/response/total) |
+| `200` | code HTTP |
+| `456` | taille de la réponse |
+| `1/1/0/0/0` | nombre de connexions actives / tentatives / files |
+| `"GET / HTTP/1.1"` | requête HTTP |
+
+:::tip
+En observant les logs, vous pouvez savoir :
+
+  * Quel **site** a été demandé (`Host:`).
+  * Quel **serveur** a répondu.
+  * Combien de temps cela a pris.
+  * Si la requête a échoué ou non.
+    :::
+
+-----
+
+## 5. Activer la page de statistiques HAProxy
+
+Il est essentiel de pouvoir **voir en temps réel** ce que fait HAProxy. Le proxy peut afficher une **interface Web intégrée**, appelée *page de statistiques*.
+
+### 5.1. Ajouter la section « stats »
+
+Ouvrez votre fichier de configuration `/etc/haproxy/haproxy.cfg` et ajoutez cette section **à la fin du fichier** :
+
+```text
+listen stats
+  bind :8404
+  stats enable
+  stats uri /haproxy?stats
+  stats realm Haproxy\ Statistics
+  stats auth admin:admin
+  stats refresh 10s
+```
+
+### 5.2. Explication ligne par ligne
+
+| Directive | Rôle |
+| :--- | :--- |
+| `listen stats` | Crée une **nouvelle section indépendante**, comme un mini-serveur web interne à HAProxy. |
+| `bind :8404` | Écoute sur le **port 8404** de la VM. Vous y accéderez via `http://<IP_HAPROXY>:8404`. |
+| `stats enable` | Active l’interface de statistiques. |
+| `stats uri /haproxy?stats` | Définit l’**adresse (URL)** de la page. |
+| `stats realm Haproxy\\ Statistics` | Nom affiché dans la boîte d’authentification. |
+| `stats auth admin:admin` | Définit un **utilisateur/mot de passe** pour y accéder (`admin` / `admin`). |
+| `stats refresh 10s` | La page se met à jour **automatiquement toutes les 10 secondes**. |
+
+:::note
+Cette section ne remplace pas vos frontends/backends existants. Elle crée une **interface d’administration** sur un port à part.
+:::
+
+### 5.3. Redémarrer et tester
+
+Appliquez la nouvelle configuration :
+
+```bash
+sudo systemctl restart haproxy
+```
+
+Vérifiez que le service écoute bien sur le port 8404 :
+
+```shell
+sudo ss -lnt | grep 8404
+```
+
+Vous devriez voir une ligne similaire à :
+
+```text
+LISTEN 0 4096 0.0.0.0:8404 0.0.0.0:*
+```
+
+Testez l’accès à la page :
+
+```shell
+curl -I http://172.25.x.2:8404/haproxy?stats
+```
+
+Vous devriez obtenir une réponse `HTTP/1.1 401 Unauthorized`, ce qui est normal car la page est protégée par mot de passe.
+
+### 5.4. Accéder à la page de statistiques
+
+Ouvrez votre navigateur sur `http://172.25.x.2:8404/haproxy?stats` (login : `admin`, mot de passe : `admin`).
+
+Vous verrez un tableau listant vos **frontends** et **backends**.
+
+:::note
+
+  * **UP** : le serveur répond correctement.
+  * **DOWN** : HAProxy ne reçoit plus de réponse.
+  * **MAINT** : serveur désactivé manuellement.
+
+Les colonnes `Req/s` et `Conn/s` permettent de suivre le trafic en direct.
+:::
+
+:::caution
+
+  * La *page de statistiques* est une **interface native** d’HAProxy (aucun service web externe n’est requis).
+  * Son but est d'**observer le fonctionnement** du proxy en temps réel.
+  * Le port 8404 est réservé à cette console ; **ne l’exposez jamais sur Internet** sans une authentification forte.
+  * En production, on définit des **comptes non triviaux** et on limite l’accès à certaines IP.
+    :::
+
+-----
+
+## 6. Exercices de diagnostic
+
+### 6.1. Simuler une panne de backend
+
+Arrêtez `node2` :
+
+```bash
+docker stop node2
+```
+
+Refaites une requête :
+
+```shell
+curl -I http://node2.example.test/
+```
+
+➡️ Le proxy renvoie une erreur `503 Service Unavailable`. Dans la page de stats, `be_node2` passe en **DOWN**.
+
+Relancez ensuite le conteneur :
+
+```bash
+docker start node2
+```
+
+Quelques secondes plus tard, `be_node2` redevient **UP**.
+
+### 6.2. Observer la répartition des requêtes
+
+Vous pouvez aussi tester la **distribution** entre plusieurs serveurs.
+
+Modifiez temporairement le backend pour avoir deux serveurs :
+
+```text
+backend be_node1
+  balance roundrobin
+  server n1 10.10.0.101:80 check
+  server n1bis 10.10.0.102:80 check
+```
+
+Testez avec une commande répétée :
+
+```bash
+watch -n1 'curl -s http://node1.example.test/ | grep "Server"'
+```
+
+➡️ Vous devriez voir les réponses alterner entre `node1` et `node2`.
+
+-----
+
+## 7. Outils utiles pour aller plus loin
+
+| Outil | Commande | Utilité |
+| :--- | :--- | :--- |
+| `curl -v` | Affiche les en-têtes envoyés et reçus | Diagnostiquer un problème de Host, redirection ou TLS |
+| `ss -lnt` | Liste les ports écoutés | Vérifier que HAProxy écoute bien sur 80 et 443 |
+| `tcpdump -nni <if>` | Capture les paquets réseau | Voir si la requête sort et la réponse revient |
+| `journalctl -u haproxy` | Logs système HAProxy | Regarder les erreurs ou redémarrages |
+
+-----
+
+## 8. Synthèse
+
+:::caution
+
+  * HAProxy peut être observé **en direct** (page de stats) et **a posteriori** (logs).
+  * Lire un log permet de **comprendre la chaîne complète** d’une requête.
+  * L’observabilité est la première étape d’un **diagnostic efficace**.
+  * Un proxy bien configuré, c’est aussi un proxy **que l’on peut surveiller**.
+    :::
+
+-----
+
+## 9. Auto-évaluation
+
+Cochez les cases au fur et à mesure que vous validez les objectifs :
+
+  * [ ] Les logs HAProxy s’écrivent bien dans `/var/log/haproxy.log`.
+  * [ ] La page de stats `http://172.25.x.2:8404/haproxy?stats` est accessible.
+  * [ ] J’ai identifié les colonnes **UP/DOWN**, **Req/s**, **Conn/s**.
+  * [ ] J’ai observé dans les logs la bascule d’un backend en **DOWN**.
+  * [ ] Je comprends la signification des champs `fe_http`, `be_node1/node1`, `200`, `503`, etc.
+

@@ -1,0 +1,241 @@
+---
+title: Partie 5 — Équilibrage & haute disponibilité avec HAProxy
+description: Guide pratique pour équilibrer la charge et assurer la résilience de vos services avec HAProxy.
+sidebar:
+  order: 2
+status: "draft"
+level: "BTS SIO 2"
+duration: "45 min"
+tags: ["haproxy", "tls", "sni", "bts-sio"]
+---
+
+:::note
+Dans cette partie, vous allez apprendre à répartir les requêtes entre plusieurs serveurs, à survivre à une panne d’un backend, et à mettre un serveur en maintenance sans couper le service.
+
+L’objectif : transformer votre reverse-proxy en **point d’accès résilient**.
+:::
+
+## 1. Prérequis (rapide)
+
+* Partie 3 OK (HTTP/HTTPS fonctionnels, ACL par nom).
+* Partie 4 OK (logs lisibles, page de stats `:8404` accessible).
+* Les backends `node1 (10.0.0.101)` et `node2 (10.0.0.102)` répondent en HTTP (ou HTTPS si vous avez fait l’option TLS bout-en-bout).
+
+## 2. Objectifs de la partie
+
+À la fin, vous saurez :
+
+1.  Choisir un **algorithme d’équilibrage** (roundrobin, leastconn).
+2.  Utiliser les **health-checks** pour retirer automatiquement un serveur en panne.
+3.  **Mettre en maintenance** un backend proprement.
+4.  Régler des paramètres utiles : **poids (weight)**, **limites de connexions (maxconn)**, **slowstart**.
+5.  Tester et **valider** le comportement.
+
+## 3. Rappels – comment HAProxy choisit un serveur ?
+
+* Un **frontend** reçoit la requête, applique vos ACL (`Host`, etc.).
+* Un **backend** est alors choisi, et à l’intérieur de ce backend, HAProxy **sélectionne 1 serveur** selon un **algorithme** :
+    * `roundrobin` : alterne équitablement (simple, pédagogique).
+    * `leastconn` : choisit le serveur avec **le moins de connexions actives** (mieux sous charge irrégulière).
+* Si un serveur ne répond pas aux **health-checks** (`check`), il passe **DOWN** et **n’est plus utilisé** jusqu’à ce qu’il revienne **UP**.
+
+## 4. Mise en place — équilibrage simple (roundrobin)
+
+### 4.1. Configurer le backend
+
+Dans `/etc/haproxy/haproxy.cfg`, ajustez vos backends pour en déclarer **au moins deux serveurs** dans **le même backend**.
+
+Exemple : faire de `be_node1` un backend « à deux serveurs » (purement pédagogique) :
+
+```ini
+backend be_node1
+  balance roundrobin
+  option httpchk GET /                 # health-check HTTP basique
+  http-check expect rstatus 200        # on attend un 200
+  server n1 10.0.0.101:80 check inter 2s fall 2 rise 2
+  server n2 10.0.0.102:80 check inter 2s fall 2 rise 2
+````
+
+**Explication rapide :**
+
+<details>
+<summary>Qu’est-ce que l’algorithme Round Robin ?</summary>
+
+L’algorithme Round Robin est la méthode d’équilibrage de charge la plus simple. Il distribue les requêtes de manière séquentielle et équitable à chaque serveur disponible du pool, à tour de rôle. Par exemple, la première requête va au serveur 1, la deuxième au serveur 2, la troisième au serveur 1, et ainsi de suite. Ce système est idéal pour des serveurs ayant des capacités de traitement et des temps de réponse similaires.
+</details>
+
+  * `balance roundrobin` : alternance 1,2,1,2,…
+  * `option httpchk` : HAProxy « ping » l’URL `/` en HTTP.
+  * `http-check expect rstatus 200` : un serveur est sain s’il répond **200**.
+  * `check inter 2s fall 2 rise 2` : test de santé toutes **2 s** ; il faut **2 échecs** pour passer DOWN, **2 succès** pour remonter UP.
+
+:::tip
+Vous pouvez laisser `be_node2` « mono-serveur » pour comparer, ou le configurer de la même manière.
+:::
+
+Redémarrez :
+
+```bash
+sudo systemctl restart haproxy
+```
+
+### 4.2. Tester la répartition
+
+Lancez quelques requêtes successives vers le **site node1** (qui maintenant pointe vers 2 serveurs derrière le même backend) :
+
+```bash
+for i in {1..10}; do curl -sSL http://node1.example.test/ | grep -Eo "node[1|2]"; done
+```
+
+
+
+**Attendu** : vous devez voir alterner des réponses « node1 » et « node2 » (selon ce que vos pages affichent).
+
+## 5. Choisir un autre algorithme : `leastconn`
+
+Remplacez `roundrobin` par :
+
+```ini
+backend be_node1
+  balance leastconn
+  option httpchk GET /
+  http-check expect rstatus 200
+  server n1 10.0.0.101:80 check inter 2s fall 2 rise 2
+  server n2 10.0.0.102:80 check inter 2s fall 2 rise 2
+```
+
+<details>
+<summary>Qu’est-ce que l’algorithme Least Connection ?</summary>
+
+L’algorithme Least Connection (le moins de connexions) est une méthode plus dynamique. Au lieu d’alterner les requêtes, il dirige chaque nouvelle connexion vers le serveur qui a actuellement le plus petit nombre de connexions actives. Cet algorithme est plus efficace que le Round Robin lorsque les requêtes ont des temps de traitement très variables, car il évite de surcharger un serveur avec des requêtes longues pendant que d’autres sont inactives.
+</details>
+
+:::tip
+En cas de pics irréguliers, **le moins occupé** reçoit la prochaine requête. Pour « voir » la différence, simulez une requête longue sur un des serveurs (ex. ajoutez une route `/slow` qui dort 2 s) : HAProxy devrait privilégier l’autre serveur.
+:::
+
+[Créer de la lenteur sur les nodes](/s5)
+
+## 6. Gérer la panne : health-check & bascule automatique
+
+### 6.1. Simuler une panne
+
+Arrêtez le conteneur `node2` :
+
+```bash
+docker stop node2
+```
+
+Observez la page de stats (`:8404`) : le serveur `n2` passe rapidement en **DOWN**.
+
+Répétez quelques `curl` vers `node1.example.test/` : **toutes** les réponses viennent du serveur restant.
+
+Relancez ensuite :
+
+```bash
+docker start node2
+```
+
+Après quelques checks (selon `rise`), `n2` revient **UP** et le trafic **se redistribue**.
+
+
+<details>
+    <summary><h2>7. Mise en maintenance (gracieuse) d’un serveur</h2></summary>
+
+Plutôt que de « tuer » un conteneur, on peut **sortir un serveur du pool sans dropper** les connexions en cours.
+
+Deux façons :
+
+### 7.1. Via la page de stats
+
+  * Cliquez sur votre backend, passez `n2` en **MAINT**.
+  * Il n’accepte plus de **nouvelles** connexions, mais **finit** ce qu’il a commencé.
+
+### 7.2. Via la socket d’admin (CLI)
+
+Activez la socket (déjà vue en Partie 4) et utilisez `socat` :
+
+```bash
+echo "disable server be_node1/n2" | sudo socat stdio /run/haproxy/admin.sock
+echo "enable  server be_node1/n2" | sudo socat stdio /run/haproxy/admin.sock
+```
+
+:::caution
+Le mode **MAINT** est idéal pour déployer une mise à jour **sans coupure**.
+:::
+
+</details>
+
+## 8. Affiner : poids, limites, montée en charge
+
+### 8.1. Poids (répartition inégale)
+
+```ini
+backend be_node1
+  balance roundrobin
+  server n1 10.0.0.101:80 check weight 3    # 3 parts
+  server n2 10.0.0.102:80 check weight 1    # 1 part
+```
+
+**Effet** : sur 4 requêtes, \~3 iront à `n1`, \~1 à `n2`.
+
+### 8.2. Limiter les connexions (protéger les backends)
+
+```ini
+backend be_node1
+  balance leastconn
+  server n1 10.0.0.101:80 check maxconn 50
+  server n2 10.0.0.102:80 check maxconn 50
+```
+
+Au-delà de 50 connexions actives par serveur, les nouvelles requêtes **attendent** (elles ne sont pas perdues).
+
+### 8.3. Démarrage en douceur (slowstart)
+
+Utile quand un serveur **revient UP** (cache froid) :
+
+```ini
+server n2 10.0.0.102:80 check slowstart 10s
+```
+
+Pendant 10 s, HAProxy **augmente progressivement** la part de trafic vers `n2`.
+
+## 9. Tests & validations
+
+1.  **Répartition** :
+
+    ```bash
+    for i in {1..8}; do curl -s http://node1.example.test/ | grep -E "node1|node2"; done
+    ```
+
+    → alternance visible (ou pondérée avec `weight`).
+
+2.  **Panne** : `docker stop node2` → stats : **DOWN** ; les requêtes continuent (sur `n1`).
+    `docker start node2` → stats : **UP** ; reprise de la répartition.
+
+3.  **Maintenance** : `disable server be_node1/n2` → plus de nouvelles connexions ; `enable …` pour revenir.
+
+4.  **Logs** : `journalctl -u haproxy -f`
+    → Observez les champs **frontend/backend/serveur**, les **codes** (200/503), les **temps**.
+
+## 10. À retenir
+
+:::caution
+
+  * L’algorithme `roundrobin` est **simple** ; `leastconn` s’adapte mieux aux charges **inégales**.
+  * Les **health-checks** retirent automatiquement un serveur en panne et le remettent quand il revient.
+  * Le mode **MAINT** permet de **déployer** sans couper le service.
+  * Les paramètres **weight**, **maxconn**, **slowstart** vous donnent un **fin contrôle** de la répartition.
+:::
+
+## 11. Auto-évaluation
+
+:::caution
+
+  * [ ] J’ai vu l’**alternance** des réponses entre deux serveurs (ou pondération avec `weight`).
+  * [ ] J’ai simulé une **panne** : HAProxy a **continué** à répondre via l’autre serveur.
+  * [ ] J’ai mis un serveur en **MAINT**, puis ré-activé.
+  * [ ] Je comprends **quand** utiliser `roundrobin` vs `leastconn`.
+  * [ ] Je sais à quoi servent **`check`**, **`fall/rise`**, **`maxconn`**, **`slowstart`**.
+:::
+

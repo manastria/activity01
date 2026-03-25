@@ -1,0 +1,148 @@
+---
+title: Comprendre le réseau macvlan et pourquoi on a besoin d’un shim
+description: Explication du fonctionnement du driver réseau macvlan et de la nécessité d'une interface "shim" pour permettre la communication entre l'hôte et ses conteneurs.
+sidebar:
+  order: 8
+status: "draft"
+level: "BTS SIO 2"
+duration: "45 min"
+tags: ["haproxy", "tls", "sni", "bts-sio"]
+slug: s1
+---
+
+## 1. Le but du macvlan
+
+Le driver **macvlan** de Docker permet de donner à chaque conteneur une **adresse IP propre** sur le réseau physique. Cela donne l’illusion que chaque conteneur est une machine distincte, directement connectée à la carte réseau de l’hôte.
+
+:::tip
+**Exemple** :
+L’hôte `Backends` a une interface DMZ `eth0`.
+Docker y attache deux conteneurs :
+* `node1` → 10.0.0.101
+* `node2` → 10.0.0.102
+Ces deux adresses apparaissent sur le réseau DMZ, et le pare-feu ou HAProxy peuvent les contacter directement.
+:::
+
+C’est **idéal pour simuler plusieurs serveurs** sur un même réseau sans multiplier les VMs.
+
+---
+
+## 2. Ce qu’il faut comprendre : macvlan isole l’hôte
+
+Le `macvlan` agit au **niveau 2 (Ethernet)** : il crée de « fausses » cartes réseau virtuelles, chacune avec une **adresse MAC unique**. Le trafic des conteneurs est injecté **directement** sur le réseau, sans repasser par la pile réseau de l’hôte.
+
+Et c’est là le point clé : le noyau Linux ne fait pas reboucler le trafic destiné à une interface `macvlan` vers son interface parente.
+
+Autrement dit :
+* Si l’hôte essaie d’envoyer un paquet à 10.0.0.101,
+* le noyau considère que cette IP est sur la même interface (`eth0`),
+* il **envoie le paquet directement sur le câble virtuel**,
+* mais cette trame **n’est jamais réinjectée** vers les conteneurs `macvlan`.
+
+Cette limitation volontaire évite les boucles locales, mais a une conséquence pratique : l’hôte et ses conteneurs ne peuvent pas communiquer directement entre eux.
+
+---
+
+## 3. Résultat concret dans notre TP
+
+Sur la VM **Backends** :
+
+```bash
+curl [http://10.0.0.101](http://10.0.0.101)
+````
+
+➡️ Échoue
+
+Mais depuis **HAProxy** :
+
+```bash
+curl [http://10.0.0.101](http://10.0.0.101)
+```
+
+➡️ Fonctionne parfaitement
+
+C’est normal : HAProxy est une autre machine du réseau DMZ. Le noyau Linux, lui, bloque la communication locale entre l’hôte et ses propres `macvlan`.
+
+-----
+
+## 4. Le rôle du « shim »
+
+Un **shim** (mot anglais signifiant *cale* ou *intercalaire*) est un petit composant ajouté pour **faire le lien entre deux systèmes** qui ne communiquent pas naturellement.
+
+Ici, notre `shim` est une **interface macvlan locale** créée sur l’hôte.
+
+```bash
+sudo ip link add macvlan0 link eth0 type macvlan mode bridge
+sudo ip addr add 10.0.0.200/24 dev macvlan0
+sudo ip link set macvlan0 up
+```
+
+Avec cette interface :
+
+  * l’hôte se donne **une adresse IP sur le même réseau** que les conteneurs (10.0.0.200/24) ;
+  * cette interface `macvlan0` appartient **au même plan L2** que `node1` et `node2` ;
+  * le trafic peut désormais circuler directement entre eux.
+
+:::tip
+En d’autres termes : le `shim` sert de passerelle locale entre l’hôte et son propre réseau `macvlan`.
+:::
+
+-----
+
+## 5. Schéma simplifié
+
+### 5.1. Sans shim
+
+```text
+            eth0 (parent)
+                 |
+    ┌────────────┴─────────────┐
+    |                          |
+hôte 10.0.0.100       node1 10.0.0.101
+      X   (ne communiquent pas localement)
+```
+
+### 5.2. Avec shim
+
+```text
+            eth0 (parent)
+                 |
+    ┌────────────┴─────────────┐
+    |                          |
+hôte 10.0.0.200       node1 10.0.0.101
+      |                          |
+      ├────── macvlan0 ──────────┤
+      <────────> communication OK
+```
+
+-----
+
+## 6. Vérification
+
+```bash
+ip -br a
+```
+
+➡️ Doit afficher `macvlan0` UP avec `10.0.0.200/24`
+
+```bash
+ping -c 1 10.0.0.101
+curl [http://10.0.0.101](http://10.0.0.101)
+```
+
+Pour supprimer l’interface :
+
+```bash
+sudo ip link del macvlan0
+```
+
+-----
+
+## 7. À retenir
+
+| Concept | Explication |
+| :--- | :--- |
+| **macvlan** | Chaque conteneur possède une IP/MAC propre directement sur le réseau physique. |
+| **Isolement** | Le noyau Linux empêche les échanges locaux entre l’hôte et ses `macvlan`. |
+| **shim** | Interface `macvlan` supplémentaire créée sur l’hôte pour rétablir la communication. |
+| **Rôle pédagogique** | Comprendre la différence entre “être sur le même réseau” et “pouvoir communiquer localement”. |

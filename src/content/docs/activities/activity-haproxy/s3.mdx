@@ -1,0 +1,172 @@
+---
+title: SNS EVA Stormshield NAT entrant (DNAT)
+description: Un guide pas à pas pour configurer un pare-feu Stormshield Network Security (SNS) afin d'accéder à une machine interne en SSH depuis l'extérieur.
+sidebar:
+  order: 8
+status: "draft"
+tags: ["haproxy", "tls", "sni", "bts-sio"]
+slug: s3
+---
+
+:::tip
+Ce guide est un **pas-à-pas clair** pour mettre en place un **NAT entrant (DNAT/PAT)** sur le **Stormshield (SNS)** afin d’accéder en **SSH** à la VM **Backends** depuis le réseau labo.
+
+**Hypothèses du TP**
+* **Labo** : `172.25.x.0/16` (interface externe du SNS = `172.25.x.1`)
+* **Backends (VM)** : `10.0.0.100`/24 (interface interne du SNS - `sshd` actif sur port **22**)
+* **Objectif** : depuis le labo, joindre `ssh user@172.25.x.1 -p 2222` (ou 22 si vous préférez), et que ce soit **redirigé** vers `10.0.0.100:22`.
+:::
+
+---
+
+## 1. Bonnes pratiques avant de publier
+
+* **Une seule porte d’entrée** : exposez la **VM Backends** (`10.0.0.100`), pas les autres machines des réseaux internes.
+* **Limiter la source** : au minimum `172.25.x.0/24` (votre salle/votre sous-espace). Idéalement, **votre adresse IP**.
+* **SSH par clés** (pas de mot de passe) et éventuellement **`fail2ban`** (voir Partie 8).
+* **UFW sur Backends** : autorisez `tcp/22` **depuis le labo** seulement :
+
+```bash
+sudo ufw allow from 172.25.0.0/16 to any port 22 proto tcp
+````
+
+-----
+
+## 2. Principe du DNAT/PAT
+
+Depuis le labo, on vise **l’IP externe du SNS** (`172.25.x.1`) sur un **port public** (ex. `2222/tcp`).
+
+Le SNS **traduit** (DNAT) vers **`10.0.0.100:22`** sur l’interface DMZ et **autorise** le flux correspondant.
+
+```text
+Client labo --(tcp/2222)--> SNS [172.25.x.1] --DNAT--> Backends [10.0.0.100:22]
+```
+
+-----
+
+## 3. Configuration sur le Stormshield (interface Web)
+
+:::note
+Les libellés de menus peuvent varier légèrement selon la version, mais l’ordre des étapes reste le même.
+:::
+
+### 3.1. Créer les objets (propre et lisible)
+
+  * **Network Object** :
+      * `LAB_SUBNET` = `172.25.x.0/16`
+      * `BACKENDS_VM` = `10.0.0.100`
+  * **Services** :
+      * `SSH` = TCP/22 (le service par défaut existe)
+      * `SSH_PUBLIC` = TCP/**2222** (si vous choisissez de publier 2222 ; sinon publiez 22)
+
+### 3.2. Règle de **NAT (DNAT/PAT)**
+
+Menu **Policy ▸ NAT** (ou **Configuration ▸ Firewall/NAT**) ➜ **Add** :
+
+  * **Original source** : `LAB_SUBNET` (ou votre IP exacte)
+  * **Original destination** : `172.25.x.1` (IP externe du SNS)
+  * **Original service** : `SSH_PUBLIC` (TCP/2222) *(ou SSH si vous publiez 22)*
+  * **Translated destination** : `BACKENDS_VM` (`10.0.0.100`)
+  * **Translated service** : `SSH` (TCP/22)
+  * **In interface** : *externe/labo*
+  * **Out interface** : *interne/DMZ*
+  * **Log** : **Enable** (cochez le journal, utile pour diagnostiquer)
+
+:::tip
+Publier sur 2222 évite les collisions si le SNS écoute déjà en 22 ou si vous voulez distinguer clairement “public vs interne”.
+:::
+
+### 3.3. Règle de **filtrage** (policy)
+
+Menu **Policy ▸ Filtering** ➜ **Add** (placez la règle assez haut) :
+
+  * **From** : `LAB_SUBNET` (ou votre IP)
+  * **To** : `BACKENDS_VM` (10.0.0.100)
+  * **Service** : `SSH` (22/tcp)
+  * **Action** : **Allow**
+  * **Log** : **Enable**
+
+:::note
+Selon la version du SNS et l’ordre des politiques, le moteur peut implicitement autoriser après translation, mais créer la règle explicite est plus clair (et observable dans les logs).
+:::
+
+**Appliquez/Publiez** les changements.
+
+-----
+
+## 4. Tests rapides
+
+Depuis un poste **du labo** :
+
+```bash
+# Si vous avez publié 2222 côté SNS :
+ssh -p 2222 user@172.25.x.1
+
+# Si vous avez publié 22 (moins conseillé) :
+ssh user@172.25.x.1
+```
+
+Sur la VM **Backends**, surveillez `/var/log/auth.log` pendant la tentative :
+
+```bash
+sudo tail -f /var/log/auth.log
+```
+
+-----
+
+## 5. Dépannage (méthodique)
+
+1.  **Côté SNS : logs**
+      * Activez le **log** sur les deux règles (NAT et Filter).
+      * Regardez si la connexion est **matchée** et **traduite**.
+2.  **Capture réseau**
+      * Sur l’interface **DMZ** du SNS : voyez-vous partir un **SYN** vers `10.0.0.100:22` ?
+      * Sur **Backends** :
+    ```bash
+    sudo tcpdump -nni <if_dmz> tcp port 22
+    ```
+    → voyez-vous arriver la connexion ?
+3.  **UFW sur Backends**
+      * `sudo ufw status verbose` : la règle `allow from 172.25.0.0/16 to any port 22` est-elle bien présente ?
+      * Temporisez pour tester : `sudo ufw allow 22/tcp` (puis **resserrer**).
+4.  **`sshd`**
+      * `sudo systemctl status ssh` → est-il actif ?
+      * `ss -lnt | grep :22` → écoute-t-il bien sur `0.0.0.0:22` ?
+5.  **Ordre des règles SNS**
+      * Votre règle **Allow** ne doit pas être **après** un Deny plus générique.
+      * Le NAT doit s’appliquer sur la bonne **interface entrante**.
+6.  **Conflits de ports**
+      * Si le SNS utilise déjà 22 pour sa propre administration, préférez publier **2222**.
+
+-----
+
+## 6. Sécurité (rappels importants)
+
+  * **Limitez la source** (plutôt votre IP que tout `172.25.x.0/16`).
+  * **Clés SSH**, pas de mot de passe (`PasswordAuthentication no`).
+  * **`fail2ban`** côté Backends (voir Partie 8) si le service reste publié.
+  * **Désactivez la règle** en dehors de la séance/du TP.
+
+-----
+
+### 6.1. Variante : exposer un conteneur (déconseillé)
+
+Techniquement possible (DNAT vers `10.0.0.101:22`), mais :
+
+  * vos conteneurs **nginx** n’exécutent pas `sshd` ;
+  * multiplier les points d’accès **augmente la surface d’attaque**.
+
+:::caution
+**Recommandation** : un **seul SSH** sur la VM Backends, puis `docker exec` pour administrer.
+:::
+
+-----
+
+## 7. Checklist de validation
+
+  * [ ] DNAT `172.25.x.1:2222 → 10.0.0.100:22` (log ON)
+  * [ ] Filter **Allow** `LAB_SUBNET → 10.0.0.100:22` (log ON)
+  * [ ] UFW autorise `22/tcp` depuis le labo
+  * [ ] `sshd` UP, écoute `:22`
+  * [ ] Test `ssh -p 2222 user@172.25.x.1` OK
+

@@ -1,0 +1,126 @@
+---
+title: Diagnostic rapide d’un service sous Debian
+description: Fiche réflexe pour comprendre pourquoi un service ne démarre pas ou plante sur un serveur Debian.
+tags:
+  - debian
+  - systemd
+  - logs
+  - administration
+  - bts-sio
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Cette fiche aide à **comprendre pourquoi un service ne démarre pas ou plante**, en exploitant les journaux `systemd`.
+
+---
+
+## Vérifier l’état du service
+
+```bash
+systemctl status nginx
+````
+
+> 🔍 Affiche l’état, le PID, le code retour et les dernières lignes du journal.
+> C’est la commande la plus rapide pour repérer une erreur.
+
+---
+
+## Consulter les dernières lignes du journal
+
+```bash
+journalctl -u nginx -n 20
+```
+
+> 📄 Affiche les 20 dernières lignes du journal du service.
+> Très utile juste après un `systemctl restart`.
+
+---
+
+## Suivre les logs en direct
+
+```bash
+journalctl -u nginx -f
+```
+
+> 🩺 Affiche les logs en temps réel.
+> Dans une autre console, relance le service :
+>
+> ```bash
+> sudo systemctl restart nginx
+> ```
+
+---
+
+## Aller directement à la fin du journal
+
+```bash
+journalctl -u nginx -e
+```
+
+> 🔚 Permet de sauter directement à la fin du journal, comme `less +G`.
+
+---
+
+## Logs du dernier démarrage
+
+```bash
+journalctl -b -u nginx
+```
+
+> 🕐 Affiche les logs depuis le dernier redémarrage de la machine.
+> Pratique pour vérifier si le service a bien démarré au boot.
+
+---
+
+## Filtrer uniquement les erreurs
+
+```bash
+journalctl -u nginx -p err -n 20
+```
+
+> 🔴 N’affiche que les messages de priorité *error* (erreurs système, plantages…).
+
+---
+
+## Cas particuliers : service sans systemd
+
+```bash
+tail -n 20 /var/log/nginx/error.log
+tail -n 20 /var/log/syslog
+```
+
+> 🧾 Certains services écrivent encore dans des fichiers log classiques.
+
+---
+
+## 🧠 Astuce : créer un alias `debug`
+
+Ajoute dans ton fichier `~/.bashrc` :
+
+```bash
+alias debug='sudo journalctl -u'
+```
+
+Recharge ensuite ton shell :
+
+```bash
+source ~/.bashrc
+```
+
+Tu pourras alors taper :
+
+```bash
+debug nginx -n 20
+debug ssh -f
+```
+
+> ⚡ Idéal pour les TP : une commande courte et universelle.
+
+---
+
+<Aside type="tip" title="Conseil aux étudiants">
+Toujours vérifier **la dernière commande exécutée** (`systemctl restart …`) et **les journaux associés** avec `journalctl`.
+Ne pas se fier uniquement à `status` : les détails du plantage sont souvent quelques lignes plus bas.
+</Aside>
+```

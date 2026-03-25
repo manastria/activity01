@@ -1,0 +1,190 @@
+---
+title: Vérifier le réseau macvlan
+description: Guide de diagnostic pour vérifier le bon fonctionnement d'un réseau macvlan et de la communication entre l'hôte, les conteneurs et les autres machines du réseau.
+sidebar:
+  order: 8
+status: "draft"
+tags: ["haproxy", "tls", "sni", "bts-sio"]
+slug: s4
+---
+
+# Vérification rapide — macvlan OK ou KO ?
+
+## 0. Rappels du contexte attendu
+
+* **DMZ** : `10.0.0.0/24` ; passerelle DMZ (SNS) : `10.0.0.1`
+* **VM Backends** (hôte Docker) : `eth0` branchée sur le réseau interne **DMZ**, promiscuité **Allow All**
+* **Réseau Docker macvlan** : parent = **eth0**, subnet `10.0.0.0/24`, gateway `10.0.0.1`
+* **Conteneurs** : `node1=10.0.0.101`, `node2=10.0.0.102`
+
+:::caution
+Il est normal que **l’hôte** ne puisse **pas** joindre ses `macvlan` sans un [shim](s1).
+:::
+
+---
+
+## 1. Côté VirtualBox (souvent le coupable)
+
+Sur la VM **Backends** :
+* **Adaptateur DMZ** : **Réseau interne = DMZ**, **Promiscuité = Allow All**
+* **Pour info**, HaProxy/SNS : DMZ en réseau interne `DMZ` (promiscuité `Allow VMs` suffit)
+
+:::tip
+Si “Allow All” n’est pas actif côté Backends, les paquets SYN arrivent, mais pas les réponses (SYN/ACK).
+:::
+
+### 1.1. Promiscuité dans l’OS invité (pas seulement dans VirtualBox)
+
+Même si VirtualBox autorise la promiscuité, **le noyau de la VM** peut ne **pas** mettre l’interface en mode promisc.
+
+Vérifiez et forcez la promiscuité côté **Backends** :
+
+```bash
+# Vérifier si l'interface est en mode promisc
+ip link show eth0 | grep -o PROMISC || true
+
+# Forcer le mode promisc on
+sudo ip link set eth0 promisc on
+
+# Revérifier
+ip link show eth0 | grep -o PROMISC
+````
+
+:::tip
+**Attendu** : voir `PROMISC` dans le résultat. Beaucoup de `stacks macvlan` le font automatiquement, mais pas toujours selon les versions. Si après la mise en `PROMISC` **dans la VM** cela fonctionne, vous avez trouvé le levier manquant.
+:::
+
+-----
+
+## 2\. Réseau macvlan déclaré correctement ?
+
+Sur **Backends** :
+
+```bash
+docker network ls | grep macvlan
+docker network inspect macvlan_lan --format '{{json .}}' | jq .
+```
+
+À vérifier dans la sortie JSON :
+
+  * `"Driver": "macvlan"`
+  * `.Options.parent == "eth0"` (ou l’interface DMZ réelle)
+  * `.IPAM.Config[0].Subnet == "10.0.0.0/24"`
+  * `.IPAM.Config[0].Gateway == "10.0.0.1"`
+
+:::tip
+Si le parent est faux, recréez le réseau avec le bon parent (ex : `-o parent=eth0`).
+:::
+
+-----
+
+## 3\. IPs des conteneurs et écoute du service
+
+```bash
+# Afficher les informations de base des conteneurs
+docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Networks}}'
+
+# Inspecter les adresses IP
+docker inspect -f '{{.Name}} -> {{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' node1 node2
+
+# Vérifier la configuration réseau et l'écoute du service à l'intérieur de chaque conteneur
+docker exec -it node1 sh -c 'ip -br a; ip r; ss -lnt; curl -sI [http://127.0.0.1/](http://127.0.0.1/) | head -1'
+docker exec -it node2 sh -c 'ip -br a; ip r; ss -lnt; curl -sI [http://127.0.0.1/](http://127.0.0.1/) | head -1'
+```
+
+**Attendus :**
+
+  * IPs `10.0.0.101/24` et `10.0.0.102/24`
+  * Route par défaut via `10.0.0.1`
+  * `ss -lnt` montre `:80` en `LISTEN`
+  * `HTTP/1.1 200 OK` en local conteneur
+
+-----
+
+## 4\. Test depuis une autre machine de la DMZ (HaProxy ou SNS)
+
+Sur **HaProxy** (ou sur le SNS si vous avez un shell) :
+
+```bash
+curl -I [http://10.0.0.101/](http://10.0.0.101/)
+curl -I [http://10.0.0.102/](http://10.0.0.102/)
+```
+
+  * Si **OK** : la DMZ et le `macvlan` sont correctement configurés.
+  * Si **KO** : passez aux captures.
+
+-----
+
+## 5\. Voir passer les paquets (ARP/TCP)
+
+### 5.1. Sur HaProxy (interface DMZ) — remplacez `<if_dmz_haproxy>`
+
+```bash
+sudo tcpdump -nni <if_dmz_haproxy> 'host 10.0.0.101 and (arp or tcp port 80)'
+```
+
+Vous devez voir **`ARP who-has 10.0.0.101`** puis une **réponse**, puis des **SYN/SYN-ACK**.
+
+### 5.2. Sur Backends (parent macvlan = `eth0`)
+
+```bash
+sudo tcpdump -nni eth0 'host 10.0.0.101 or host 10.0.0.102'
+```
+
+  * Si vous voyez les **SYN** de HAProxy : cela signifie que les paquets arrivent jusqu’à l’hôte.
+  * Si **pas** de **SYN/ACK** en retour : vérifiez la **promiscuité** ou un blocage réseau intermédiaire.
+
+-----
+
+## 6\. Table ARP côté HaProxy
+
+```bash
+ip neigh | egrep '10\.0\.0\.10(1|2)'
+```
+
+Le résultat doit montrer des entrées `REACHABLE/STALE` avec **des adresses MAC distinctes** (le `macvlan` crée une MAC par conteneur).
+
+  * Pas d’ARP → parent faux, VLAN/DMZ incorrect, ou IPs erronées (`/16` vs `/24`).
+
+-----
+
+## 7\. Pièges classiques (checklist)
+
+  * [ ] Le **parent du `macvlan`** est incorrect → corrigez `o parent=eth0`
+  * [ ] Le **mode promiscuité sur la VM Backends** n'est pas `Allow All` → activez-le dans VirtualBox.
+  * [ ] Le **masque de sous-réseau** est incorrect (`/24` au lieu de `/16`).
+  * [ ] La **passerelle des conteneurs** n'est pas `10.0.0.1`.
+  * [ ] Une **IP est en double** (`101`/`102` déjà utilisée).
+  * [ ] Le **SNS** bloque le trafic (vérifiez la règle autorisant `HaProxy(172.25.x.2) → 10.0.0.101/102:80`).
+  * [ ] Le test depuis **Backends** sans shim **échoue** : c’est **normal**.
+  * [ ] **UFW** côté Backends (hôte) : il ne bloque pas le trafic vers les conteneurs `macvlan` car les paquets ne passent pas par lui.
+
+-----
+
+## 8\. Si l’étudiant doit tester “depuis l’hôte” (déconseillé)
+
+Activez **temporairement** le shim :
+
+```bash
+sudo ip link add macvlan0 link eth0 type macvlan mode bridge
+sudo ip addr add 10.0.0.200/24 dev macvlan0
+sudo ip link set macvlan0 up
+
+curl -I [http://10.0.0.101/](http://10.0.0.101/)
+curl -I [http://10.0.0.102/](http://10.0.0.102/)
+
+# Nettoyage
+sudo ip link del macvlan0
+```
+
+:::note
+Rappelez-vous que le shim ne sert que pour tester depuis l’hôte. La vraie validation se fait depuis HAProxy.
+:::
+
+-----
+
+## 9\. Verdict en une phrase
+
+  * **On voit les SYN + ARP OK** côté HAProxy **et** Backends → le `macvlan` est **bien configuré** (si l’application répond localement).
+  * **ARP manquant** ou **parent incorrect** → c’est le **câblage** (VirtualBox/parent/DMZ) qu'il faut corriger.
+  * **SYN sans SYN/ACK** → pensez à la **promiscuité `Allow All`** sur l’hôte Backends ou à un filtrage réseau intermédiaire.

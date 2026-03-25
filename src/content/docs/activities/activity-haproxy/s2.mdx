@@ -1,0 +1,70 @@
+---
+title: Détails de la réinitialisation du SNS
+description: Un guide pas à pas pour réinitialiser un pare-feu Stormshield Network Security (SNS) à sa configuration d'usine.
+sidebar:
+  order: 8
+status: "draft"
+tags: ["haproxy", "tls", "sni", "bts-sio"]
+slug: s2
+---
+
+:::note
+L'objectif est de réinitialiser le pare-feu à sa configuration d'usine afin de pouvoir le reconfigurer de zéro.
+:::
+
+## 1. Démarrage et connexion
+
+Au démarrage, le SNS est déjà pré-configuré. Ce guide vous montre comment le réinitialiser sur la configuration d’usine.
+
+[Image de l'écran de connexion du SNS]
+
+Les identifiants par défaut sont : `admin/admin`.
+
+Une fois identifié, un prompt attend une commande :
+
+[Image de l'interface en ligne de commande du SNS]
+
+## 2. Réinitialisation de la configuration
+
+La commande `defaultconfig –f –r –p –c -L` permet de supprimer toutes les données de la configuration et de redémarrer le pare-feu.
+
+```bash
+defaultconfig -f -r -p -c -L
+````
+
+[Image de la commande de réinitialisation en cours]
+
+## 3\. Configuration initiale
+
+Une fois le pare-feu redémarré, vous serez invité à configurer les paramètres de base.
+
+### 3.1. Clavier et mot de passe
+
+Il faudra d'abord configurer le clavier. Pour le français, choisissez le chiffre `4`.
+
+[Image de la configuration du clavier du SNS]
+
+Il faut ensuite choisir un mot de passe complexe (ex : `Netlab_123`).
+
+:::note
+Le mot de passe ne s’affiche pas à l’écran afin d’éviter le « shoulder surfing ».
+:::
+
+[Image de la saisie du mot de passe du SNS]
+
+### 3.2. Configuration des interfaces
+
+Configurez l'interface côté OUT :
+
+[Image de la configuration de l'interface OUT du SNS]
+
+Configurez l'interface côté IN :
+
+[Image de la configuration de l'interface IN du SNS]
+
+:::note
+La dernière question est très importante : elle demande si vous voulez configurer le pare-feu à partir du réseau de l'interface OUT (*Will you configure your virtual appliance through its first interface (out)*). En termes simples, cette question vous demande si vous souhaitez pouvoir administrer votre pare-feu depuis l'extérieur. En environnement de production, permettre cela signifierait que le pare-feu pourrait être géré depuis internet, créant ainsi une vulnérabilité de sécurité critique.
+
+Dans un contexte de laboratoire, répondre "oui" est généralement sans danger et vous évite de vous retrouver bloqué en cas d'erreur de configuration.
+:::
+[Image de la question de configuration de l'interface OUT]

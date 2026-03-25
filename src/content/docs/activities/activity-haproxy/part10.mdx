@@ -1,0 +1,257 @@
+---
+title: Partie 10 — Bonus – Full-TLS jusqu’aux backends
+description: Guide pratique pour mettre en place un chiffrement TLS de bout en bout, du client jusqu'aux serveurs web internes.
+sidebar:
+  order: 3
+status: "draft"
+level: "BTS SIO 2"
+duration: "45 min"
+tags: ["haproxy", "tls", "sni", "bts-sio"]
+---
+
+:::note
+Dans toutes les parties précédentes, c’est HAProxy qui “terminait” la connexion HTTPS. Le trafic entre **le client** et **HAProxy** était chiffré, mais la liaison entre **HAProxy** et les **serveurs backends** restait en HTTP clair.
+
+Dans cette partie bonus, vous allez mettre en place le **chiffrement complet**, de bout en bout : du navigateur du client jusqu’aux serveurs Docker `node1` et `node2`.
+:::
+
+## 1. Pourquoi chiffrer aussi la liaison interne ?
+
+En production, la réponse dépend de l’architecture :
+
+| Situation | Recommandation |
+| :--- | :--- |
+| Les backends sont dans le **même réseau local** (DMZ isolée, pare-feu fiable) | HTTP interne **suffit** : plus simple, plus performant. |
+| Les backends sont sur **d’autres serveurs physiques**, **autres sites**, ou **hébergés dans le cloud** | Full-TLS **recommandé** : protège les données sur le réseau. |
+| Données sensibles (santé, finance, RGPD, authentification) | Full-TLS **obligatoire**. |
+
+:::tip
+Le TLS interne n’est pas obligatoire dans un environnement de laboratoire, mais le comprendre est essentiel pour la cybersécurité et la conformité.
+:::
+
+---
+
+## 2. Principe du Full-TLS
+
+1.  Le client initie une connexion HTTPS vers HAProxy.
+2.  HAProxy déchiffre temporairement la requête pour appliquer ses ACL (`Host`, etc.).
+3.  HAProxy ouvre **une nouvelle connexion HTTPS** vers le backend.
+4.  Le backend (Nginx) présente **son propre certificat**, signé par **la même CA locale**.
+5.  HAProxy joue le rôle de **client TLS**, et valide (ou ignore) ce certificat selon la configuration.
+
+:::note
+On parle aussi de TLS passthrough ou de re-encryption, selon la façon dont le proxy gère le flux.
+:::
+
+---
+
+## 3. Générer les certificats backend
+
+Nous allons créer un certificat **par backend** (`node1` et `node2`) signé par votre **CA locale** créée dans la Partie 3.
+
+Sur la VM HaProxy (ou sur votre poste si vous avez la CA) :
+
+```bash
+cd ~/ca
+
+# node1
+openssl req -new -newkey rsa:2048 -nodes \
+  -keyout node1-backend.key \
+  -subj "/CN=node1-backend.example.test" \
+  -out node1-backend.csr
+
+echo "subjectAltName=DNS:node1-backend.example.test" > san-node1-backend.cnf
+
+openssl x509 -req -in node1-backend.csr \
+  -CA myCA.crt -CAkey myCA.key -CAcreateserial \
+  -out node1-backend.crt -days 365 -sha256 -extfile san-node1-backend.cnf
+
+# node2
+openssl req -new -newkey rsa:2048 -nodes \
+  -keyout node2-backend.key \
+  -subj "/CN=node2-backend.example.test" \
+  -out node2-backend.csr
+
+echo "subjectAltName=DNS:node2-backend.example.test" > san-node2-backend.cnf
+
+openssl x509 -req -in node2-backend.csr \
+  -CA myCA.crt -CAkey myCA.key -CAcreateserial \
+  -out node2-backend.crt -days 365 -sha256 -extfile san-node2-backend.cnf
+````
+
+:::note
+Vous obtenez 6 fichiers : deux `.key`, deux `.csr`, deux `.crt`.
+:::
+
+-----
+
+## 4\. Installer les certificats dans les backends (Docker)
+
+### 4.1. Copier les fichiers dans la VM *Backends*
+
+Créez un dossier partagé entre votre VM et Docker :
+
+```bash
+mkdir -p ~/docker_backends/certs
+cp ~/ca/myCA.crt ~/docker_backends/certs/
+cp ~/ca/node1-backend.* ~/docker_backends/certs/
+cp ~/ca/node2-backend.* ~/docker_backends/certs/
+```
+
+### 4.2. Modifier le `docker-compose.yml`
+
+```yaml
+services:
+  node1:
+    image: nginx:alpine
+    container_name: node1
+    volumes:
+      - ./html/node1:/usr/share/nginx/html:ro
+      - ./certs:/etc/nginx/certs:ro
+    networks:
+      macvlan_lan:
+        ipv4_address: 10.10.0.101
+
+  node2:
+    image: nginx:alpine
+    container_name: node2
+    volumes:
+      - ./html/node2:/usr/share/nginx/html:ro
+      - ./certs:/etc/nginx/certs:ro
+    networks:
+      macvlan_lan:
+        ipv4_address: 10.10.0.102
+```
+
+### 4.3. Ajouter la configuration HTTPS à Nginx
+
+Créez (ou montez) un fichier `/etc/nginx/conf.d/default.conf` dans chaque conteneur :
+
+```nginx
+server {
+  listen 443 ssl;
+  server_name node1-backend.example.test;
+
+  ssl_certificate      /etc/nginx/certs/node1-backend.crt;
+  ssl_certificate_key  /etc/nginx/certs/node1-backend.key;
+
+  ssl_client_certificate /etc/nginx/certs/myCA.crt;
+  ssl_verify_client off;
+
+  root /usr/share/nginx/html;
+  index index.html;
+}
+```
+
+Faites la même chose pour `node2` (en adaptant les noms).
+
+Puis redémarrez les conteneurs :
+
+```bash
+docker compose up -d
+```
+
+Testez directement depuis la VM backends :
+
+```bash
+curl -I --cacert ./certs/myCA.crt [https://10.10.0.101/](https://10.10.0.101/)
+```
+
+:::tip
+**Réponse attendue** : `HTTP/1.1 200 OK`
+:::
+
+-----
+
+## 5\. Adapter la configuration HAProxy
+
+Modifiez votre `haproxy.cfg` pour que les backends communiquent en HTTPS.
+
+```ini
+backend be_node1
+  server n1 10.10.0.101:443 ssl sni str(node1-backend.example.test) verify none check
+
+backend be_node2
+  server n2 10.10.0.102:443 ssl sni str(node2-backend.example.test) verify none check
+```
+
+### 5.1. Explications
+
+| Directive | Rôle |
+| :--- | :--- |
+| `ssl` | Active TLS pour la connexion vers le backend. |
+| `sni str(...)` | Indique le nom de domaine envoyé dans la négociation TLS. |
+| `verify none` | Ne vérifie pas le certificat du backend (pratique pour le TP). En production, on utiliserait `verify required` avec la CA. |
+| `check` | Continue d’effectuer un health-check HTTP classique sur le backend. |
+
+-----
+
+## 6\. Vérification complète
+
+### 6.1. Depuis HAProxy
+
+```bash
+curl -I --cacert ~/ca/myCA.crt [https://10.10.0.101/](https://10.10.0.101/)
+curl -I --cacert ~/ca/myCA.crt [https://10.10.0.102/](https://10.10.0.102/)
+```
+
+Les deux doivent renvoyer `200 OK`.
+
+### 6.2. Depuis le client
+
+```bash
+curl -I [https://node1.example.test/](https://node1.example.test/)
+```
+
+Le flux complet passe désormais :
+
+```text
+Client ──TLS──> HAProxy ──TLS──> Backend
+```
+
+### 6.3. Observer dans les logs
+
+Dans `journalctl -u haproxy -f`, les lignes de log contiennent désormais des connexions “SSL” vers les serveurs.
+
+-----
+
+## 7\. Comparaison : TLS “offload” vs “Full-TLS”
+
+| Critère | TLS terminé au proxy | Full-TLS (proxy + backend) |
+| :--- | :--- | :--- |
+| Chiffrement côté client | ✅ | ✅ |
+| Chiffrement entre proxy et backend | ❌ | ✅ |
+| Performance (CPU) | 💨 plus rapide | 🐢 plus de calculs |
+| Diagnostic (logs, debug) | facile (trafic visible) | plus complexe |
+| Sécurité (fuite réseau interne) | moyenne | forte |
+| Maintenance (certificats) | simple (1 seul cert) | plus lourde (1 par backend) |
+
+:::note
+**En pratique** : dans un **réseau interne maîtrisé**, on reste souvent sur le **TLS terminé au proxy**. Dans un environnement **multi-site** ou **cloud**, le **Full-TLS** devient indispensable.
+:::
+
+-----
+
+## 8\. À retenir
+
+:::caution
+
+  * Le **Full-TLS** chiffre **toute la chaîne** client → proxy → backend.
+  * Chaque backend doit posséder **son propre certificat**, signé par la même **CA locale**.
+  * HAProxy joue le rôle de **client TLS** face aux serveurs internes.
+  * Cela augmente la **sécurité**, mais aussi la **complexité** (plus de certificats à gérer).
+  * Le choix dépend du **niveau de confiance du réseau** et du **besoin de confidentialité**.
+    :::
+
+-----
+
+## 9\. Auto-évaluation
+
+:::caution
+
+  * [ ] Les backends `node1` et `node2` répondent en HTTPS (testés depuis HAProxy).
+  * [ ] HAProxy est configuré avec `ssl` et `sni` vers les backends.
+  * [ ] `curl` depuis le client fonctionne sans `-k`.
+  * [ ] Je comprends la différence entre **TLS offload** et **Full-TLS**.
+  * [ ] Je sais dans quel cas chaque approche est la plus adaptée.
+:::

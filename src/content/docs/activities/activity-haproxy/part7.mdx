@@ -1,0 +1,185 @@
+---
+title: "Partie 7 — Persistance de session (Sticky Sessions)"
+description: "Comment configurer HAProxy pour lier un client à un serveur backend spécifique et maintenir la persistance de session."
+sidebar:
+  order: 2
+status: "draft"
+level: "BTS SIO 2"
+duration: "45 min"
+tags: ["haproxy", "tls", "sni", "bts-sio"]
+---
+
+:::note
+Dans la partie 5, vous avez vu comment HAProxy répartit les requêtes entre plusieurs serveurs backend selon un algorithme comme `roundrobin` ou `leastconn`.
+
+Dans certains cas, on veut **que le même client soit toujours renvoyé vers le même serveur**. C’est ce qu’on appelle la **persistance de session**, ou *sticky sessions*.
+:::
+
+## 1. Pourquoi garder la même session ?
+
+Prenons un exemple concret : vous visitez un site d’e-commerce. Lorsque vous ajoutez un article au panier, cette information est stockée **en mémoire sur un serveur web**. Si votre prochaine requête tombe sur un autre serveur, le panier **semble vide**.
+
+Deux solutions existent :
+
+| Stratégie                                           | Principe                                                   | Inconvénient                      |
+| :-------------------------------------------------- | :--------------------------------------------------------- | :-------------------------------- |
+| **Session partagée** (Redis, base de données, etc.) | Les serveurs partagent la session dans un stockage commun. | Plus complexe à mettre en place.  |
+| **Sticky sessions**                                 | Le client est toujours renvoyé vers **le même serveur**.   | Risque de déséquilibre de charge. |
+
+Dans un TP comme le nôtre, nous allons mettre en place la **deuxième** approche, plus simple à observer et très formatrice.
+
+## 2. Principe de fonctionnement
+
+1.  Le client envoie sa première requête.
+2.  HAProxy choisit un serveur selon la politique de répartition (`roundrobin`, `leastconn`, etc.).
+3.  HAProxy ajoute dans la réponse HTTP un **cookie spécial** (ex. `SRV=n1`).
+4.  Le navigateur du client renvoie ensuite ce cookie à chaque requête suivante.
+5.  HAProxy lit ce cookie et sait que ce client doit être renvoyé vers le même serveur.
+
+Ce cookie est **géré automatiquement** par HAProxy. Aucun code n’est à ajouter côté serveur web.
+
+## 3. Configuration dans HAProxy
+
+Modifiez votre backend (par exemple `be_node1`) :
+
+```ini
+backend be_node1
+  balance roundrobin
+  cookie SRV insert indirect nocache secure httponly maxidle 30m maxlife 8h
+  server n1 10.10.0.101:80 check cookie n1
+  server n2 10.10.0.102:80 check cookie n2
+````
+
+### 3.1. Explications
+
+| Ligne                   | Rôle                                                                      |
+| :---------------------- | :------------------------------------------------------------------------ |
+| `cookie SRV …`          | Définit le **nom du cookie** (`SRV`) et sa politique de gestion.          |
+| `insert`                | HAProxy ajoute le cookie dans la réponse.                                 |
+| `indirect`              | Le cookie n’est **pas transmis** aux serveurs backends.                   |
+| `nocache`               | Évite qu’un proxy ou navigateur mette en cache la réponse avec ce cookie. |
+| `secure httponly`       | Protège le cookie (non accessible depuis JavaScript).                     |
+| `maxidle 30m`           | Si le cookie n’est pas utilisé pendant 30 min, il expire.                 |
+| `maxlife 8h`            | Durée de vie maximale avant renouvellement automatique.                   |
+| `server n1 … cookie n1` | Associe l’étiquette `n1` au serveur 10.10.0.101.                          |
+| `server n2 … cookie n2` | Associe `n2` à 10.10.0.102.                                               |
+
+-----
+
+## 4. Tests de validation
+
+### 4.1. Première requête : pose du cookie
+
+```bash
+curl -I [https://node1.example.test/](https://node1.example.test/)
+```
+
+La réponse doit contenir un en-tête :
+
+```http
+Set-Cookie: SRV=n1; secure; HttpOnly
+```
+
+### 4.2. Vérifier la persistance
+
+1.  Enregistrez le cookie localement avec `curl` :
+
+    ```bash
+    curl -c /tmp/cookies.txt -b /tmp/cookies.txt -s [https://node1.example.test/](https://node1.example.test/) | grep -E "node1|node2"
+    ```
+
+2.  Répétez plusieurs fois :
+
+    ```bash
+    for i in {1..6}; do curl -s -b /tmp/cookies.txt [https://node1.example.test/](https://node1.example.test/) | grep -E "node1|node2"; done
+    ```
+
+    **Résultat attendu** : toutes les réponses proviennent **du même serveur** (`node1` ou `node2`).
+
+3.  Supprimez le cookie (simulateur de “nouveau client”) :
+
+    ```bash
+    rm /tmp/cookies.txt
+    ```
+
+    puis refaites le test : le serveur peut changer.
+
+-----
+
+## 5. Cas de panne
+
+Simulez une panne d’un des serveurs :
+
+```bash
+docker stop node2
+```
+
+Le cookie `SRV=n2` devient alors inutilisable. HAProxy le détecte et redirige automatiquement le client vers un autre serveur, en posant **un nouveau cookie**.
+
+:::tip
+Ce comportement garantit la continuité du service même en cas de panne d’un backend.
+:::
+
+-----
+
+## 6. Variante avancée : persistance sur un cookie applicatif
+
+Si votre application pose déjà un cookie de session (par exemple `SESSIONID`), vous pouvez dire à HAProxy :
+
+"Fais la persistance en fonction de ce cookie existant."
+
+```ini
+backend be_app
+  stick-table type string len 64 size 100k expire 30m
+  stick on req.cook(SESSIONID)
+  server n1 10.10.0.101:80 check
+  server n2 10.10.0.102:80 check
+```
+
+Ici, HAProxy **ne crée pas** son propre cookie : il observe celui déjà envoyé par l’application. Cette méthode est plus réaliste, mais nécessite une application web qui gère des sessions.
+
+-----
+
+## 7. Limitations et bonnes pratiques
+
+| Problème potentiel         | Explication                                             | Solution                                                   |
+| :------------------------- | :------------------------------------------------------ | :--------------------------------------------------------- |
+| **Déséquilibre**           | Certains clients restent sur le même serveur longtemps. | Réinitialiser les cookies régulièrement (`maxlife`).       |
+| **Serveur en maintenance** | Les clients persistants doivent changer de backend.     | HAProxy régénère automatiquement un nouveau cookie.        |
+| **Chiffrement HTTPS**      | Si le cookie est géré par le proxy, pas d’impact.       | Toujours placer le cookie côté HAProxy (pas côté backend). |
+| **Caches externes**        | Le cookie peut fausser les réponses partagées.          | `nocache` empêche la mise en cache.                        |
+
+-----
+
+## 8. Tests finaux
+
+1.  Ouvrez le navigateur → `https://node1.example.test/`. Regardez dans les cookies du site : `SRV=n1` ou `SRV=n2`.
+2.  Actualisez plusieurs fois → le même serveur répond.
+3.  Supprimez le cookie → un autre serveur est choisi.
+4.  Arrêtez un backend → HAProxy régénère un nouveau cookie automatiquement.
+
+-----
+
+## 9. À retenir
+
+:::caution
+
+  * Les **sticky sessions** servent à **lier un client à un serveur précis**.
+  * HAProxy gère cela **sans intervention du serveur web**.
+  * Le cookie `SRV` est ajouté et lu **par le proxy**, pas par l’application.
+  * En cas de panne, le proxy réattribue automatiquement un serveur et pose un nouveau cookie.
+  * Ce mécanisme facilite la gestion des sessions, mais peut déséquilibrer la charge si les sessions durent trop longtemps.
+:::
+
+-----
+
+## 10. Auto-évaluation
+
+:::caution
+
+  * [ ] Je comprends le principe du cookie “SRV” ajouté par HAProxy.
+  * [ ] J’ai vu apparaître `Set-Cookie: SRV=...` dans une réponse HTTP.
+  * [ ] Mes requêtes successives aboutissent toujours au même serveur backend.
+  * [ ] Si un serveur tombe, le cookie change et le service reste disponible.
+  * [ ] Je sais que ce mécanisme ne remplace pas une **session partagée** (Redis, DB…).
+:::

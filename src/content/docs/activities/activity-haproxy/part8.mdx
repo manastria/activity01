@@ -1,0 +1,239 @@
+---
+title: "Partie 8 — Sécuriser l’OS (pare-feu UFW & durcissement léger)"
+description: "Mise en place d'un pare-feu et de bonnes pratiques de sécurisation sur la VM HAProxy."
+sidebar:
+  order: 2
+status: "draft"
+level: "BTS SIO 2"
+duration: "45 min"
+tags: ["haproxy", "tls", "sni", "bts-sio"]
+---
+
+:::note
+L’objectif de cette partie est de fermer toutes les portes inutiles, de n’ouvrir que ce que nécessite votre HAProxy, et d’ajouter quelques bonnes pratiques OS sans complexité.
+:::
+
+## 1. Prérequis
+
+Avant de commencer :
+* Debian 12 à jour sur la VM **HaProxy**.
+* IPs et interfaces déjà configurées (parties précédentes).
+* Vous connaissez les **ports** nécessaires :
+    * **22/tcp** (SSH administrateur)
+    * **80/tcp** (HTTP → redirection)
+    * **443/tcp** (HTTPS)
+    * **8404/tcp** (page de stats HAProxy, **depuis le Labo uniquement**)
+
+:::tip
+Réseaux de référence du TP : Labo = 172.25.0.0/16, DMZ backends = 10.10.0.0/24.
+:::
+
+---
+
+## 2. Installer & activer UFW
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ufw
+````
+
+### 2.1. Définir la politique par défaut
+
+```bash
+# Bloquer tout ce qui arrive par défaut
+sudo ufw default deny incoming
+# Autoriser tout ce qui sort par défaut (simplifie le TP)
+sudo ufw default allow outgoing
+```
+
+:::note
+L’idée est de partir d’un état « fermé » et d’ouvrir ce qui est utile. La sortie `full-allow` est suffisante pour ce TP (mises à jour, `apt`, etc.). En production, on pourrait restreindre les sorties (voir section 6.3).
+:::
+
+-----
+
+## 3. Ouvrir proprement les services utiles
+
+### 3.1. SSH (22/tcp)
+
+Option A (simple) — autoriser tout le Labo :
+
+```bash
+sudo ufw allow from 172.25.0.0/16 to any port 22 proto tcp
+```
+
+:::tip
+Si vous administrez depuis un poste unique, préférez n’autoriser que son IP.
+:::
+
+### 3.2. HTTP/HTTPS (80/443)
+
+```bash
+sudo ufw allow from 172.25.0.0/16 to any port 80 proto tcp
+sudo ufw allow from 172.25.0.0/16 to any port 443 proto tcp
+```
+
+### 3.3. Page de statistiques (8404) **restreinte**
+
+```bash
+sudo ufw allow from 172.25.0.0/16 to any port 8404 proto tcp
+```
+
+:::note
+Ne pas exposer cette page de statistiques à tout le monde.
+:::
+
+### 3.4. (Option) Pinger la VM (ICMP)
+
+UFW ne gère pas ICMP par des règles « allow » classiques. Pour un TP, on peut laisser le ping par défaut (autorisé). Si vous voulez le bloquer, il faudrait le faire avec `nftables` (en bonus).
+
+-----
+
+## 4. Activer UFW en sécurité
+
+Avant d’activer, **vérifiez** que vous avez bien autorisé **votre** accès SSH (sinon vous risquez de vous couper l’accès 😅).
+
+```bash
+# Relire les règles
+sudo ufw status verbose
+
+# Activer
+sudo ufw enable
+
+# Voir la numérotation pratique
+sudo ufw status numbered
+```
+
+Test rapide depuis un poste du Labo :
+
+  * `curl -I http://IP_HAPROXY/` → **OK**
+  * `curl -I https://IP_HAPROXY/` → **OK**
+  * `curl -I http://IP_HAPROXY:8404/haproxy?stats` → **401** (puis OK avec login)
+  * Depuis une IP hors labo, l’accès doit être **refusé**.
+
+-----
+
+## 5. Journalisation et contrôle
+
+### 5.1. Activer un niveau de logs raisonnable
+
+```bash
+sudo ufw logging low
+```
+
+Consulter les logs :
+
+```bash
+sudo journalctl -u ufw -f
+```
+
+### 5.2. Bloquer temporairement (test)
+
+```bash
+# Bloquer les requêtes HTTP
+sudo ufw deny from 172.25.0.0/16 to any port 80
+
+# Testez que HTTP ne passe plus, puis remettez :
+sudo ufw delete deny from 172.25.0.0/16 to any port 80
+```
+
+-----
+
+## 6. Durcissement léger (sans complexité)
+
+### 6.1. SSH un peu plus strict
+
+Éditez `/etc/ssh/sshd_config` :
+
+```
+PermitRootLogin no
+PasswordAuthentication no
+```
+
+Puis :
+
+```bash
+sudo systemctl reload ssh
+```
+
+:::tip
+Utilisez des clés SSH (pas de mot de passe). Assurez-vous d’avoir déjà votre clé autorisée dans `~/.ssh/authorized_keys` avant de couper l’authentification par mot de passe.
+:::
+
+### 6.2. Mises à jour de sécurité automatiques
+
+```bash
+sudo apt-get install -y unattended-upgrades
+sudo dpkg-reconfigure -plow unattended-upgrades
+```
+
+### 6.3. (Option) Restreindre **les sorties** du proxy
+
+Si vous voulez être plus strict : n’autoriser en sortie que ce qui sert au TP (backends DMZ + DNS/NTP/Apt). Exemple minimal :
+
+```bash
+sudo ufw default deny outgoing
+
+# DNS vers le pare-feu/resolveur du Labo (adapter IP)
+sudo ufw allow out to 172.25.254.254 port 53 proto udp
+sudo ufw allow out to 172.25.254.254 port 53 proto tcp
+# HTTP/HTTPS vers dépôts Debian (si besoin d’apt depuis HaProxy)
+sudo ufw allow out to any port 80 proto tcp
+sudo ufw allow out to any port 443 proto tcp
+# Vers backends DMZ (HTTP ou HTTPS selon votre choix)
+sudo ufw allow out to 10.10.0.0/24 port 80 proto tcp
+sudo ufw allow out to 10.10.0.0/24 port 443 proto tcp
+```
+
+:::tip
+Cette configuration est plus sûre, mais aussi plus facile à casser. Pour ce TP, `allow outgoing` suffit.
+:::
+
+### 6.4. (Option) Fail2ban (protection SSH)
+
+```bash
+sudo apt-get install -y fail2ban
+sudo systemctl enable --now fail2ban
+```
+
+:::note
+Par défaut, il protège déjà SSH. Il est utile en démo d’une « attaque brute-force ».
+:::
+
+-----
+
+## 7. Dépannage rapide
+
+  * **« Je me suis coupé l’accès SSH »**
+      * Console VirtualBox → `sudo ufw disable` → corrigez les règles → `sudo ufw enable`.
+  * **« Le site HTTPS ne répond plus »**
+      * `sudo ufw status` : le port 443 est-il autorisé depuis votre réseau ?
+      * `ss -lntp | grep :443` : HAProxy écoute-t-il bien ?
+      * `journalctl -u ufw -f` / `journalctl -u haproxy -f` : des logs bloquants ?
+  * **« Stats 8404 inaccessibles »**
+      * Vérifiez la **source IP** (hors 172.25.0.0/16 → refus normal).
+      * Autorisez **temporairement** toute source pour tester (puis revenez en arrière).
+
+-----
+
+## 8. Validation
+
+1.  `sudo ufw status verbose` montre :
+      * `deny (incoming)`, `allow (outgoing)`
+      * les règles `22`, `80`, `443`, `8404` **depuis 172.25.0.0/16**.
+2.  `curl -I` depuis le Labo → **OK** ; hors Labo → **REFUS**.
+3.  SSH reste **accessible** depuis votre poste.
+4.  Les logs UFW remontent dans `journalctl`.
+
+-----
+
+## 9. À retenir
+
+:::caution
+
+  * **UFW** est la voie simple pour **sécuriser rapidement** une VM Debian (politiques par défaut, règles claires, logs).
+  * N’ouvrez **que** ce qui est nécessaire (22, 80, 443, 8404 depuis le Labo).
+  * Un **durcissement léger** (SSH par clé, MAJ auto) apporte beaucoup pour peu d’effort.
+  * Pour aller plus loin : passer à **`nftables` natif** (mêmes concepts, syntaxe plus fine).
+:::
+
