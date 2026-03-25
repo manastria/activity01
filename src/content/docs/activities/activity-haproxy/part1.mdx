@@ -1,7 +1,6 @@
 ---
-title: "Partie 1 - Preparer l'infrastructure reseau"
-description: "Mise en place de l'infrastructure de virtualisation et validation de la connectivite reseau entre le labo, SNS et la DMZ"
-status: "draft"
+title: "Partie 1 – Préparer l'infrastructure réseau"
+description: "Mise en place de l'infrastructure de virtualisation et validation de la connectivité réseau entre le labo, sns et la DMZ"
 sidebar:
   order: 2
 ---
@@ -13,13 +12,13 @@ import { Aside, Steps } from '@astrojs/starlight/components';
 <Aside type="note">
 **Objectif** : Mettre en place l'infrastructure réseau et valider la connectivité.
 
-**Scope de cette partie** : VirtualBox, VMs, réseaux virtuels, adressage IP, pare-feu SNS, routage.
-**Hors scope** : Configuration d'HAProxy, installation de Docker, déploiement de conteneurs.
+**Scope de cette partie** : VirtualBox, VMs, réseaux virtuels, adressage IP, pare-feu sns, routage.
+**Hors scope** : Configuration d'haproxy, installation de Docker, déploiement de conteneurs.
 
 À la fin de cette partie :
-- ✅ Les trois VMs (SNS, haproxy, backends) sont câblées et adressées
-- ✅ Connectivité validée entre Labo ↔ SNS ↔ DMZ
-- ❌ HAProxy n'est pas encore configuré
+- ✅ Les trois VMs (sns, haproxy, backends) sont câblées et adressées
+- ✅ Connectivité validée entre Labo ↔ sns ↔ DMZ
+- ❌ haproxy n'est pas encore configuré
 - ❌ Docker n'est pas encore installé
 </Aside>
 
@@ -31,7 +30,7 @@ Avant de commencer, vérifiez que vous disposez de :
 
 - **VirtualBox** (dernière version installée).
 - Les fichiers d'appliance :
-   - pour le pare-feu Stormshield SNS EVA1
+   - pour le pare-feu Stormshield sns EVA1
    - Un serveur Debian utilisé dans les activités pratiques habituelles.
 - Votre numéro d'étudiant **x**, utilisé pour les adresses IP du réseau labo : `172.25.x.0/16`.
 
@@ -51,24 +50,24 @@ L'environnement virtuel comportera **trois machines** :
 
 | Machine               | Rôle                                                    | Réseaux connectés | Adresse(s)                               |
 | --------------------- | ------------------------------------------------------- | ----------------- | ---------------------------------------- |
-| **SNS (pare-feu)**    | Assure la séparation et le NAT entre le labo et la DMZ  | Labo + DMZ        | `172.25.x.1` (labo)  /  `10.10.0.1` (DMZ) |
+| **sns (pare-feu)**    | Assure la séparation et le NAT entre le labo et la DMZ  | Labo + DMZ        | `172.25.x.1` (labo)  /  `10.10.0.1` (DMZ) |
 | **haproxy (Debian)**  | Proxy inverse côté labo, accès aux backends dans la DMZ | Labo + DMZ        | `172.25.x.2` (labo)  /  `10.10.0.2` (DMZ) |
 | **backends (Debian)** | Hôte Docker pour les serveurs web `node1` et `node2`    | DMZ uniquement    | `10.10.0.100`                             |
 
 <Aside type="note">
-**Pourquoi avoir à la fois HAProxy et un pare-feu SNS ?**
+**Pourquoi avoir à la fois haproxy et un pare-feu sns ?**
 
 Les deux équipements remplissent des rôles différents et complémentaires :
 
-- **HAProxy** est un *reverse proxy* : il reçoit les requêtes HTTP/HTTPS des clients et les redistribue vers les bons serveurs web. Il n'expose que les ports 80 et 443 ; les backends restent invisibles depuis le réseau labo.
-- **SNS** est le pare-feu/routeur de la DMZ : il permet aux serveurs de la DMZ d'accéder à Internet pour les mises à jour (NAT sortant), et autorise l'administration SSH des VMs depuis le labo, ce que HAProxy ne gère pas.
+- **haproxy** est un *reverse proxy* : il reçoit les requêtes HTTP/HTTPS des clients et les redistribue vers les bons serveurs web. Il n'expose que les ports 80 et 443 ; les backends restent invisibles depuis le réseau labo.
+- **sns** est le pare-feu/routeur de la DMZ : il permet aux serveurs de la DMZ d'accéder à Internet pour les mises à jour (NAT sortant), et autorise l'administration SSH des VMs depuis le labo, ce que haproxy ne gère pas.
 </Aside>
 
 ## Réseaux utilisés
 
 | Zone                | Rôle                                                                   | Plage IP                                      |
 | ------------------- | ---------------------------------------------------------------------- | --------------------------------------------- |
-| **Labo / Frontend** | Simule Internet (réseau externe non maîtrisé) : poste étudiant → HAProxy | `172.25.0.0/16` (sous-espace `172.25.x.0/16`) |
+| **Labo / Frontend** | Simule Internet (réseau externe non maîtrisé) : poste étudiant → haproxy | `172.25.0.0/16` (sous-espace `172.25.x.0/16`) |
 | **DMZ / backends**  | Serveurs web internes protégés, jamais exposés directement             | `10.10.0.0/24`                                 |
 
 <Aside type="tip">
@@ -78,18 +77,18 @@ Dans ce TP, le réseau Labo joue le rôle d'**Internet** : il représente un ré
 <Aside type="caution">
 Les backends ne seront jamais exposés directement au réseau labo (simultation d'internet).
 
-Seul **HAProxy** sera exposé (ports 80 et 443).
+Seul **haproxy** sera exposé (ports 80 et 443).
 </Aside>
 
 ---
 
 # 3. Importer les appliances VirtualBox
 
-## a) Importer le pare-feu SNS
+## a) Importer le pare-feu sns
 
 1. Ouvrez **VirtualBox** → **Fichier ▸ Importer un appareil virtuel**.
 2. Sélectionnez le fichier `.ova`.
-3. Avant de valider l'import, renommez la VM en `SNS` dans le champ « Nom ».
+3. Avant de valider l'import, renommez la VM en `sns` dans le champ « Nom ».
 
 ---
 
@@ -122,7 +121,7 @@ Ne déplacez pas les VMs sur une autre machine après importation.
 
 | Adaptateur | Mode                       | Rôle                | Options                          |
 | ---------- | -------------------------- | ------------------- | -------------------------------- |
-| 1          | **Réseau interne : `vboxnet_dmz`** | Vers haproxy et SNS | Mode promiscuité : « Allow All » |
+| 1          | **Réseau interne : `vboxnet_dmz`** | Vers haproxy et sns | Mode promiscuité : « Allow All » |
 
 Pour permettre au réseau Docker (macvlan) de fonctionner correctement, l'interface réseau de la VM **backends** doit être **configurée en mode promiscuité**.
 
@@ -136,7 +135,7 @@ Pour permettre au réseau Docker (macvlan) de fonctionner correctement, l'interf
 
 ---
 
-## c) VM **SNS**
+## c) VM **sns**
 
 | Adaptateur | Mode                       | Rôle                                                                                  |
 | ---------- | -------------------------- | ------------------------------------------------------------------------------------- |
@@ -153,9 +152,9 @@ Pour permettre au réseau Docker (macvlan) de fonctionner correctement, l'interf
 | Zone (réseau) | Machine                   | Adresse                |
 | ------------- | ------------------------- | ---------------------- |
 | Labo          | Passerelle labo (gateway) | `172.25.254.254`       |
-| Labo          | SNS (ext.)                | `172.25.x.1`           |
+| Labo          | sns (ext.)                | `172.25.x.1`           |
 | Labo          | haproxy (ext.)            | `172.25.x.2`           |
-| DMZ           | SNS (int.)                | `10.10.0.1`             |
+| DMZ           | sns (int.)                | `10.10.0.1`             |
 | DMZ           | haproxy (int.)            | `10.10.0.2`             |
 | DMZ           | backends                  | `10.10.0.100`           |
 | (plus tard)   | Conteneurs : node1/node2  | `10.10.0.101` et `.102` |
@@ -209,11 +208,11 @@ Vous devez voir une **route par défaut** vers `172.25.254.254` et une **route d
 
 ---
 
-## c) Configurer le pare-feu **SNS**
+## c) Configurer le pare-feu **sns**
 
 
 
-### Étape 1 — Adressage des interfaces (depuis l'interface Web SNS)
+### Étape 1 — Adressage des interfaces (depuis l'interface Web sns)
 
 1. **Configurer l'interface DMZ** : `10.10.0.1/24`.
 2. **Configurer l'interface Labo** : `172.25.x.1/16` avec passerelle par défaut `172.25.254.254`.
@@ -234,13 +233,13 @@ Attendu : OK
 Objectif : les machines de la DMZ (backends, puis conteneurs) pourront **résoudre** les noms sans sortir en direct.
 
 1. **DNS proxy** : **activer**.
-2. **Forwarders** du SNS :
+2. **Forwarders** du sns :
    - recommandé : **DNS du labo** `172.25.254.15` (ou les serveurs indiqués par l'enseignant) ;
    - à défaut (si autorisé) : récursifs publics (ex. **1.1.1.1**, **8.8.8.8**).
-3. **ACL DNS** : autoriser **DMZ → SNS (port 53/udp, 53/tcp)**.
+3. **ACL DNS** : autoriser **DMZ → sns (port 53/udp, 53/tcp)**.
 
 <Aside type="tip">
-Une fiche dédiée détaille pas à pas la configuration du proxy cache DNS sur SNS : [Configuration du Proxy Cache DNS](activities/sns/proxy-dns).
+Une fiche dédiée détaille pas à pas la configuration du proxy cache DNS sur sns : [Configuration du Proxy Cache DNS](activities/sns/proxy-dns).
 </Aside>
 
 **Mini-test**
@@ -259,7 +258,7 @@ Attendu : une ou plusieurs **adresses IP**.
 
 ### Étape 3 — Activer le **NAT sortant (SNAT)** DMZ → Labo/Internet
 
-But : permettre aux hôtes DMZ d'accéder à Internet (`apt`/`docker pull`) **via l'IP labo du SNS**.
+But : permettre aux hôtes DMZ d'accéder à Internet (`apt`/`docker pull`) **via l'IP labo du sns**.
 
 1. Créer une règle **SNAT/Masquerade** :
    - **From** : DMZ `10.10.0.0/24`
@@ -268,7 +267,7 @@ But : permettre aux hôtes DMZ d'accéder à Internet (`apt`/`docker pull`) **vi
 2. **Filtrage** (si nécessaire selon ta politique) : autoriser **DMZ → Any** en sortie (temporaire).
 
 <Aside type="tip">
-Une fiche dédiée détaille pas à pas la configuration du NAT sortant sur SNS : [NAT sortant (SNAT) sur Stormshield SNS](activities/sns/nat-sortant-snat).
+Une fiche dédiée détaille pas à pas la configuration du NAT sortant sur sns : [NAT sortant (SNAT) sur Stormshield sns](activities/sns/nat-sortant-snat).
 </Aside>
 
 **Mini-test**
@@ -320,7 +319,7 @@ Chaque test valide une couche différente du réseau : adressage, routage, DNS, 
 
 ---
 
-- ✅ **Check A — Communication de base : haproxy ↔ SNS**
+- ✅ **Check A — Communication de base : haproxy ↔ sns**
 
    ```bash
    # Depuis haproxy
@@ -337,11 +336,11 @@ Chaque test valide une couche différente du réseau : adressage, routage, DNS, 
    Ces deux tests garantissent que :
 
    1. le **routage est correct** sur haproxy ;
-   2. le **câblage VirtualBox** entre haproxy et SNS est fonctionnel sur les deux interfaces.
+   2. le **câblage VirtualBox** entre haproxy et sns est fonctionnel sur les deux interfaces.
 
    🚫 Si un de ces pings échoue, inutile d'aller plus loin : la machine n'est pas correctement connectée à l'une des deux zones (Labo ou DMZ).
 
-- ✅ **Check B — Résolution de noms depuis la DMZ (backends → DNS proxy du SNS)**
+- ✅ **Check B — Résolution de noms depuis la DMZ (backends → DNS proxy du sns)**
 
    ```bash
    # Depuis backends
@@ -349,13 +348,13 @@ Chaque test valide une couche différente du réseau : adressage, routage, DNS, 
    ```
 
    💡 **Ce qu'on teste**
-   Ce test interroge le **serveur DNS configuré sur backends**, qui est ici le **DNS proxy du SNS** (`10.10.0.1`).
+   Ce test interroge le **serveur DNS configuré sur backends**, qui est ici le **DNS proxy du sns** (`10.10.0.1`).
    La commande `getent` permet de vérifier si le système peut traduire un **nom de domaine** en **adresse IP**.
 
    🧠 **Pourquoi c'est important**
 
    - Confirme que la **résolution DNS** fonctionne entre la DMZ et le pare-feu.
-   - Valide la configuration du **DNS proxy sur le SNS**.
+   - Valide la configuration du **DNS proxy sur le sns**.
    - Si ce test échoue, les conteneurs ne pourront pas récupérer d'images Docker.
 
    <Aside type="tip">
@@ -372,7 +371,7 @@ Chaque test valide une couche différente du réseau : adressage, routage, DNS, 
    💡 **Ce qu'on teste**
 
    - La commande envoie une requête HTTP légère (`I` = HEAD) vers un site externe.
-   - Le pare-feu SNS doit **traduire** l'adresse privée `10.10.0.100` en adresse publique du labo.
+   - Le pare-feu sns doit **traduire** l'adresse privée `10.10.0.100` en adresse publique du labo.
    - Le résultat attendu est une **réponse "HTTP/1.1 200 OK"**.
 
    🧠 **Pourquoi c'est important**
@@ -385,7 +384,7 @@ Chaque test valide une couche différente du réseau : adressage, routage, DNS, 
    <Aside type="tip">
    En un seul test, vous validez toute la chaîne :
 
-   backends → SNS (DNS + NAT) → Internet.
+   backends → sns (DNS + NAT) → Internet.
    </Aside>
 
 ### 🚦 Interprétation des résultats
@@ -393,8 +392,8 @@ Chaque test valide une couche différente du réseau : adressage, routage, DNS, 
 | Résultat                      | Interprétation                                                           |
 | ----------------------------- | ------------------------------------------------------------------------ |
 | ✅ Tous les tests réussissent | Votre infrastructure réseau est **correcte** → passez à la **Partie 2**. |
-| ❌ Échec du Check A           | Problème de **liaison ou d'adressage** entre haproxy et SNS.             |
-| ❌ Échec du Check B           | Le **DNS proxy du SNS** n'est pas configuré ou bloqué.                   |
+| ❌ Échec du Check A           | Problème de **liaison ou d'adressage** entre haproxy et sns.             |
+| ❌ Échec du Check B           | Le **DNS proxy du sns** n'est pas configuré ou bloqué.                   |
 | ❌ Échec du Check C           | Le **NAT sortant** n'est pas actif ou bloqué.                            |
 
 ---
@@ -412,7 +411,7 @@ En cas d'échec, consultez la section **Dépannage** correspondante.
 
 # 7. Ce que vous ne faites pas encore
 
-- Pas d'installation ni configuration d'HAProxy.
+- Pas d'installation ni configuration d'haproxy.
 - Pas de TLS ni de certificats.
 - Pas de Docker ni de conteneurs.
 - Pas de publication DMZ → Labo.
@@ -422,7 +421,7 @@ En cas d'échec, consultez la section **Dépannage** correspondante.
 <Aside type="tip">
 L'objectif de cette partie est uniquement de préparer le chemin réseau fonctionnel :
 
-`Labo ↔ SNS ↔ DMZ`, avec `haproxy` capable de communiquer sur les deux zones.
+`Labo ↔ sns ↔ DMZ`, avec `haproxy` capable de communiquer sur les deux zones.
 </Aside>
 
 # 8. Dépannage rapide
@@ -431,13 +430,13 @@ L'objectif de cette partie est uniquement de préparer le chemin réseau fonctio
 | ------------------------------------ | --------------------------------- | ------------------------------- |
 | Pas d'IP en mode Bridge              | Mauvaise carte physique           | Adapter 1 → carte réseau réelle |
 | DMZ inaccessible                     | Mauvais réseau interne            | Adapter 2/3 reliés à `DMZ`      |
-| Pas d'accès Internet depuis backends | NAT sortant non activé sur SNS    | Revoir assistant ou règles NAT  |
+| Pas d'accès Internet depuis backends | NAT sortant non activé sur sns    | Revoir assistant ou règles NAT  |
 | Deux routes par défaut sur haproxy   | Mauvais paramètre `never-default` | Vérifier config DMZ             |
 
 ---
 
 ### ✅ Fin de la Partie 1
 
-Vous avez maintenant un **socle réseau fonctionnel** pour accueillir HAProxy et les backends Docker.
+Vous avez maintenant un **socle réseau fonctionnel** pour accueillir haproxy et les backends Docker.
 
 Conservez vos VMs éteintes jusqu'à la [Partie 2](activities/activity-haproxy/part2).
