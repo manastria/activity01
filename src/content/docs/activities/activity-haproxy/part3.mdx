@@ -677,8 +677,8 @@ La commande doit **échouer** car le certificat n'est plus valide pour ce nom.
 
 -----
 
-<details class="foldable">
-<summary><h2>9. Dépannage express</h2></summary>
+<details>
+<summary>9. Dépannage express</summary>
 
   - **Alertes TLS** : N'ignorez pas. Assurez-vous que votre **CA est installée** sur le poste et que le **fichier PEM est complet** (`certificat + clé + CA`).
   - **HTTP OK / HTTPS KO** : Vérifiez la directive `bind :443 ssl crt ...`, les **droits d'accès** (`chmod 640`), et la validité des **SAN**.

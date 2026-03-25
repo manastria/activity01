@@ -12,8 +12,17 @@ export default defineConfig({
         { label: "Accueil", link: "/" },
         {
           label: "CRASH Test",
-          collapsed: false,
-          autogenerate: { directory: "activities/crashtest", collapsed: false },
+          collapsed: true,
+          autogenerate: {
+            directory: "activities/crashtest",
+            collapsed: false },
+        },
+        {
+          label: "HaProxy",
+          collapsed: true,
+          autogenerate: {
+            directory: "activities/activity-haproxy",
+            collapsed: false },
         },
         // Ajout manuel de la catégorie SNS
         {
