@@ -28,6 +28,11 @@ npm run images:all            # Run organize + build (recommended after writing)
 npm run images:watch          # Watch and rebuild on changes
 npm run images:migrate        # Convert ![](img.png) to ImageFigure components
 npm run images:migrate:viewer # Convert to ImageFigureViewer components
+
+# Diagrams (draw.io)
+npm run diagram:new -- <mdx-file> <name>   # Create .drawio + export SVG
+npm run diagram:export -- <mdx-file>       # Re-export SVGs for one MDX file
+npm run diagram:export                     # Re-export all diagrams
 ```
 
 ## Architecture
@@ -35,6 +40,7 @@ npm run images:migrate:viewer # Convert to ImageFigureViewer components
 ### Content Model
 
 Activities live in `src/content/docs/activities/{activitySlug}/`. Content schema (`src/content/config.ts`) extends Starlight with custom fields:
+
 - `duration`, `level`, `tags`, `status` (draft|ready|review)
 
 ### Image Pipeline
@@ -70,7 +76,7 @@ GitHub Pages via `.github/workflows/deploy-gh-pages.yml` on push to `main` branc
 ## Key Files
 
 | File | Purpose |
-|------|---------|
+| ---- | ------- |
 | `astro.config.mjs` | Starlight theme, sidebar, base URL |
 | `src/content/config.ts` | Zod schema for activity metadata |
 | `src/utils/images.ts` | Shared image utilities (withBase, loadManifest) |
@@ -79,6 +85,7 @@ GitHub Pages via `.github/workflows/deploy-gh-pages.yml` on push to `main` branc
 | `tools/migrate_markdown_images.py` | Convert Markdown images to Astro components |
 | `scripts/new-activity.mjs` | Activity scaffolding CLI |
 | `src/components/Quiz.astro` | Self-contained interactive QCM widget |
+| `tools/diagram.mjs` | draw.io creation + SVG export (see `docs/drawio.md`) |
 
 ## Quiz Component
 

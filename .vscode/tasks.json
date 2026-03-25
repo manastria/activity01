@@ -2,7 +2,45 @@
     // See https://go.microsoft.com/fwlink/?LinkId=733558
     // for the documentation about the tasks.json format
     "version": "2.0.0",
+    "inputs": [
+        {
+            "id": "diagramName",
+            "type": "promptString",
+            "description": "Nom du diagramme (ex: topologie)"
+        }
+    ],
     "tasks": [
+        {
+            "label": "Diagram: nouveau diagramme pour ce fichier",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "run", "diagram:new", "--",
+                "${relativeFile}",
+                "${input:diagramName}"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Diagram: ré-exporter pour ce fichier",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "run", "diagram:export", "--",
+                "${relativeFile}"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
         {
             "label": "Appliquer la correction typo",
             "type": "shell",

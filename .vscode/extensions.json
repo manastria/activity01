@@ -8,6 +8,7 @@
         "mushan.vscode-paste-image",
         "yzhang.markdown-all-in-one",
         "darkriszty.markdown-table-prettify",
-        "takumii.markdowntable"
+        "takumii.markdowntable",
+        "hediet.vscode-drawio"
     ]
 }
