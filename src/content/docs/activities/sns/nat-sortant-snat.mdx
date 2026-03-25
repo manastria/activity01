@@ -40,61 +40,69 @@ Par défaut, les ports sont choisis **séquentiellement** dans cette plage. Une 
 
 1. ### Accéder à la politique de sécurité
 
-   Ouvrir l'interface web d'administration du SNS puis naviguer vers **Configuration** → **Politique de sécurité**. Sélectionner la politique active (ou celle que vous souhaitez modifier) et cliquer sur l'onglet **NAT**.
+   Ouvrir l'interface web d'administration du SNS puis naviguer vers **Configuration** → **Politique de sécurité**.
+
+   Sélectionner la politique active (ou celle que vous souhaitez modifier) et cliquer sur l'onglet **NAT**.
 
 2. ### Créer la règle de *masquerading*
 
-   Cliquer sur **Nouvelle règle** → **Règle de partage d'adresse source (*masquerading*)**. Une règle désactivée apparaît avec les valeurs par défaut `Any` → `Any`. La section « **Trafic après translation** » définit d'ores et déjà la traduction du port source dans la plage `ephemeral_fw`.
+   Cliquer sur **Nouvelle règle** → **Règle de partage d'adresse source (*masquerading*)**.
+
+   Une règle désactivée apparaît avec les valeurs par défaut `Any` → `Any`. La section « **Trafic après translation** » définit d'ores et déjà la traduction du port source dans la plage `ephemeral_fw`.
 
 3. ### Configurer le trafic original (avant traduction)
 
    Double-cliquer sur la règle pour ouvrir la fenêtre d'édition, puis configurer les champs suivants.
 
-   - **Source originale** : sélectionner `Network_internals` (objet qui regroupe l'ensemble des réseaux internes protégés par le pare-feu). Adapter cet objet si votre architecture ne contient qu'un sous-ensemble de réseaux.
-   - **Destination originale** : sélectionner `Internet`.
+   - Onglet **Source originale** :
+      - **Machines sources** : sélectionner `Network_internals` (objet qui regroupe l'ensemble des réseaux internes protégés par le pare-feu). Adapter cet objet si votre architecture ne contient qu'un sous-ensemble de réseaux.
 
-   :::danger[Ne jamais laisser « Any » en destination originale]
-   Si vous laissez `Any` en destination originale, les flux d'administration du pare-feu (en *SSH* et en *HTTPS*) subiront également la traduction *NAT* vers l'interface « out ». Le pare-feu interprétera alors ces flux comme une tentative d'intrusion et **les bloquera**, vous privant de l'accès à l'interface d'administration.
-   Utilisez systématiquement l'objet `Internet` qui désigne tous les réseaux **sauf** les réseaux internes du pare-feu.
-   :::
+   - Onglet **Destination originale** :
+      - sélectionner `Internet`.
 
-4. ### Restreindre l'interface de sortie (recommandé)
+      :::danger[Ne jamais laisser « Any » en destination originale]
+      Si vous laissez `Any` en destination originale, les flux d'administration du pare-feu (en *SSH* et en *HTTPS*) subiront également la traduction *NAT* vers l'interface « out ». Le pare-feu interprétera alors ces flux comme une tentative d'intrusion et **les bloquera**, vous privant de l'accès à l'interface d'administration.
+      Utilisez systématiquement l'objet `Internet` qui désigne tous les réseaux **sauf** les réseaux internes du pare-feu.
+      :::
 
-   Dans l'onglet **Configuration avancée** de la règle, sélectionner `out` dans le champ **Interface de sortie**. Cela restreint la règle de traduction au seul trafic sortant par l'interface *WAN* et évite tout effet de bord sur d'autres interfaces.
+      **Restreindre l'interface de sortie (recommandé)**
 
-5. ### Configurer le trafic après traduction
+      - Dans l'onglet **Configuration avancée** de la règle, sélectionner `out` dans le champ **Interface de sortie**. Cela restreint la règle de traduction au seul trafic sortant par l'interface *WAN* et évite tout effet de bord sur d'autres interfaces.
 
-   - **Source translatée** : sélectionner `Firewall_out` (l'adresse IP de l'interface de sortie du pare-feu).
-   - **Port source translaté** : laisser `ephemeral_fw`.
-   - Cocher l'option **« Choisir aléatoirement le port source translaté »**.
+4. ### Configurer le trafic après traduction
 
-   :::tip[Pourquoi activer la sélection aléatoire du port ?]
-   Avec un choix séquentiel, un attaquant peut deviner le prochain port utilisé et tenter de détourner une connexion. Le choix aléatoire rend cette prédiction beaucoup plus difficile. Ainsi, si le premier port attribué est 23 417, le suivant ne sera pas 23 418 mais un nombre tiré au hasard dans la plage `ephemeral_fw`. Cela ne rend pas les attaques impossibles, mais les complexifie significativement.
-   :::
+   - Onglet **Source translatée** :
+      - Dans **Machine source translatée** : sélectionner `Firewall_out` (l'adresse IP de l'interface de sortie du pare-feu).
+      - Dans **Port source translaté** : laisser `ephemeral_fw`.
+      - Cocher l'option **« Choisir aléatoirement le port source translaté »**.
 
-6. ### Configurer le protocole
+      :::tip[Pourquoi activer la sélection aléatoire du port ?]
+      Avec un choix séquentiel, un attaquant peut deviner le prochain port utilisé et tenter de détourner une connexion. Le choix aléatoire rend cette prédiction beaucoup plus difficile. Ainsi, si le premier port attribué est 23 417, le suivant ne sera pas 23 418 mais un nombre tiré au hasard dans la plage `ephemeral_fw`. Cela ne rend pas les attaques impossibles, mais les complexifie significativement.
+      :::
+
+5. ### Configurer le protocole
 
    Dans l'onglet **Protocole**, laisser l'option par défaut « Détection automatique du protocole ». Le pare-feu identifiera automatiquement le protocole applicatif (*HTTP*, *HTTPS*, *FTP*, etc.) utilisé par chaque connexion.
 
-7. ### Activer le traçage
+6. ### Activer le traçage
 
-   Dans l'onglet **Options**, cocher **Tracer**. Cette option journalise le premier paquet correspondant à la règle de *NAT* dans le journal de connexions, ce qui est indispensable pour le diagnostic.
+   Dans l'onglet **Options**, dans la liste déroulante **Niveau de trace** choisir **Tracer**. Cette option journalise le premier paquet correspondant à la règle de *NAT* dans le journal de connexions, ce qui est indispensable pour le diagnostic.
 
    :::note[Marqueurs de traduction dans les journaux]
    Les entrées du journal de connexions liées au *NAT* sont identifiables grâce aux champs « Adresse source translatée » et « Port source translaté » dans l'interface web, ou par les mots-clés `modsrc` et `modsrcport` en ligne de commande.
    :::
 
-8. ### Ajouter un commentaire
+7. ### Ajouter un commentaire
 
    Dans l'onglet **Général**, saisir un commentaire explicite, par exemple « *SNAT* – Sortie Internet pour les réseaux internes ». Cela facilite la relecture de la politique par un autre administrateur.
 
-9. ### Activer la règle et appliquer la politique
+8. ### Activer la règle et appliquer la politique
 
    - Mettre l'état de la règle sur **On**.
    - Cliquer sur **Appliquer** puis confirmer avec **Oui, activer la politique**.
 
    :::caution
-   Avant de lancer vos tests, pensez à **réinitialiser les statistiques des règles** (clic droit sur la règle → « Réinitialiser les statistiques ») afin de repartir de zéro et de faciliter l'interprétation des compteurs.
+   Avant de lancer vos tests, pensez à **réinitialiser les statistiques des règles** (menu hamburger → réinitialiser les statistiques des règles) afin de repartir de zéro et de faciliter l'interprétation des compteurs.
    :::
 
 </Steps>

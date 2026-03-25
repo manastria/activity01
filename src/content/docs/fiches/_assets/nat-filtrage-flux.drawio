@@ -1,0 +1,57 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.6.1 Chrome/142.0.7444.265 Electron/39.8.0 Safari/537.36" version="29.6.1">
+  <diagram id="nat-filtrage-flux" name="Flux NAT-Filtrage">
+    <mxGraphModel dx="983" dy="596" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="titre" parent="1" style="text;html=1;fontSize=16;fontStyle=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontFamily=Source Sans 3;" value="Flux d&#39;un paquet : Client interne → Internet" vertex="1">
+          <mxGeometry height="40" width="500" x="250" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="paquet-init" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;arcSize=20;fontSize=12;align=center;fontFamily=Source Sans 3;" value="&lt;b&gt;Paquet émis par le client interne&lt;/b&gt;&lt;br&gt;Source : 10.0.0.2&lt;br&gt;Destination : 93.184.216.34" vertex="1">
+          <mxGeometry height="70" width="340" x="310" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow1" edge="1" parent="1" source="paquet-init" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" target="filtrage">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="filtrage" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;align=center;verticalAlign=middle;fontFamily=Source Sans 3;" value="&lt;b&gt;① FILTRAGE&lt;/b&gt;&lt;br&gt;&lt;i&gt;Évalué sur les adresses originales&lt;/i&gt;&lt;br&gt;&lt;br&gt;Source = 10.0.0.2&lt;br&gt;Destination = 93.184.216.34" vertex="1">
+          <mxGeometry height="100" width="340" x="310" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow2" edge="1" parent="1" source="filtrage" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" target="nat">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="nat" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;align=center;verticalAlign=middle;fontFamily=Source Sans 3;" value="&lt;b&gt;② NAT (SNAT)&lt;/b&gt;&lt;br&gt;&lt;br&gt;Source translatée :&lt;br&gt;&lt;b&gt;172.25.x.1&lt;/b&gt; (Firewall_out)" vertex="1">
+          <mxGeometry height="90" width="340" x="310" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow3" edge="1" parent="1" source="nat" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" target="paquet-out">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="paquet-out" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;arcSize=20;fontSize=12;align=center;fontFamily=Source Sans 3;" value="&lt;b&gt;Paquet envoyé sur Internet&lt;/b&gt;&lt;br&gt;Source : 172.25.x.1&lt;br&gt;Destination : 93.184.216.34" vertex="1">
+          <mxGeometry height="70" width="340" x="310" y="480" as="geometry" />
+        </mxCell>
+        <mxCell id="internet" parent="1" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14;fontStyle=1;align=center;verticalAlign=middle;fontFamily=Source Sans 3;" value="Internet" vertex="1">
+          <mxGeometry height="100" width="200" x="380" y="590" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow4" edge="1" parent="1" source="paquet-out" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;dashed=1;" target="internet">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="note-ordre" parent="1" style="shape=callout;whiteSpace=wrap;html=1;perimeter=calloutPerimeter;size=20;position=0.5;position2=0;base=20;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;align=center;fontColor=#333333;fontFamily=Source Sans 3;" value="Le filtrage s&#39;applique &lt;b&gt;AVANT&lt;/b&gt;&lt;br&gt;la translation d&#39;adresse" vertex="1">
+          <mxGeometry height="70" width="200" x="720" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-note" edge="1" parent="1" source="note-ordre" style="edgeStyle=none;dashed=1;strokeColor=#999999;strokeWidth=1;" target="filtrage">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-pc" edge="1" parent="1" source="-AyLeL6TD40Rs_0UPYR8-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=1;strokeColor=#666666;dashed=1;" target="paquet-init">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="170" y="117.51724137931035" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="-AyLeL6TD40Rs_0UPYR8-1" parent="1" style="verticalLabelPosition=bottom;sketch=0;aspect=fixed;html=1;verticalAlign=top;strokeColor=none;align=center;outlineConnect=0;shape=mxgraph.citrix.desktop;" value="" vertex="1">
+          <mxGeometry height="98" width="89" x="80" y="66" as="geometry" />
+        </mxCell>
+        <mxCell id="-AyLeL6TD40Rs_0UPYR8-2" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Source Sans 3;" value="&lt;span style=&quot;color: rgb(51, 51, 51); font-size: 10px; text-wrap-mode: nowrap;&quot;&gt;Client&lt;/span&gt;&lt;br style=&quot;color: rgb(51, 51, 51); font-size: 10px; text-wrap-mode: nowrap;&quot;&gt;&lt;span style=&quot;color: rgb(51, 51, 51); font-size: 10px; text-wrap-mode: nowrap;&quot;&gt;10.0.0.2&lt;/span&gt;" vertex="1">
+          <mxGeometry height="30" width="60" x="94.5" y="180" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,205 @@
+---
+title: Configurer le proxy HTTP manuellement dans Firefox
+description: Guide pour paramétrer un proxy HTTP manuel dans Firefox avec exclusion des plages d'adresses IP privées et des domaines locaux.
+filename: firefox-proxy-http-manuel
+topic: firefox
+section: systeme
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+# Configurer le proxy manuellement dans Firefox
+
+Par défaut, Firefox utilise les paramètres proxy du système d'exploitation.
+Dans un environnement de laboratoire ou de production isolé, il est parfois
+nécessaire de lui indiquer explicitement l'adresse du proxy à utiliser, ainsi
+que les destinations à joindre directement sans passer par ce proxy.
+
+<Aside type="note">
+Cette procédure est valable pour **Firefox ESR** (*Extended Support Release*)
+comme pour les versions standard, sur Windows, macOS et Linux.
+</Aside>
+
+---
+
+## Informations du proxy
+
+| Paramètre          | Valeur                    |
+|--------------------|---------------------------|
+| Adresse *HTTP*     | `172.16.0.1`              |
+| Port               | `3128`                    |
+| Exclusions         | Adresses IP privées + `.local` + `.edgand.fr` |
+
+---
+
+## Étapes de configuration
+
+<Steps>
+
+1. ### Ouvrir les préférences réseau de Firefox
+
+   Dans la barre d'adresse, saisissez :
+
+   ```
+   about:preferences#general
+   ```
+
+   Appuyez sur **Entrée**. Faites défiler la page jusqu'en bas jusqu'à la
+   section « Paramètres réseau », puis cliquez sur le bouton
+   **« Paramètres… »**.
+
+   <Aside type="tip">
+   Vous pouvez également y accéder via le menu **☰ → Paramètres →
+   Général → (bas de page) Paramètres réseau → Paramètres…**
+   </Aside>
+
+2. ### Sélectionner la configuration manuelle du proxy
+
+   Dans la fenêtre « Paramètres de connexion », cochez l'option :
+
+   > **« Configuration manuelle du proxy »**
+
+   <Aside type="caution">
+   Ne sélectionnez pas « Utiliser les paramètres proxy du système » ni
+   « Détecter automatiquement les paramètres du proxy » : ces modes
+   ignorent la saisie manuelle.
+   </Aside>
+
+3. ### Saisir l'adresse et le port du proxy HTTP
+
+   Dans le champ **« Proxy HTTP »**, entrez :
+
+   ```
+   172.16.0.1
+   ```
+
+   Dans le champ **« Port »** situé juste à droite, entrez :
+
+   ```
+   3128
+   ```
+
+4. ### Propager le proxy à tous les protocoles (optionnel)
+
+   Cochez la case **« Utiliser également ce proxy pour HTTPS »** afin que
+   le trafic *HTTPS* (*HyperText Transfer Protocol Secure*) et *FTP*
+   (*File Transfer Protocol*) transite également par `172.16.0.1:3128`.
+
+   <Aside type="note">
+   Dans la plupart des environnements scolaires ou d'entreprise, un seul
+   proxy intercepte tous les protocoles. Si votre infrastructure dispose
+   de proxies distincts par protocole, renseignez chaque champ séparément
+   et ne cochez pas cette case.
+   </Aside>
+
+5. ### Configurer les exceptions (*No Proxy*)
+
+   Le champ **« Pas de proxy pour »** liste les destinations jointes
+   directement, sans passer par le proxy. Copiez-collez la valeur
+   suivante dans ce champ :
+
+   ```
+   localhost, 127.0.0.1, ::1, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, .local, .edgand.fr
+   ```
+
+   <details>
+   <summary>Détail de chaque entrée d'exclusion</summary>
+
+   | Entrée               | Portée couverte                                                    |
+   |----------------------|--------------------------------------------------------------------|
+   | `localhost`          | Nom symbolique de la machine locale                                |
+   | `127.0.0.1`          | Adresse de *loopback* (*IPv4*)                                     |
+   | `::1`                | Adresse de *loopback* (*IPv6*)                                     |
+   | `10.0.0.0/8`         | Plage privée de classe A (*RFC 1918*)                              |
+   | `172.16.0.0/12`      | Plage privée de classe B — inclut `172.16.0.1` (le proxy lui-même)|
+   | `192.168.0.0/16`     | Plage privée de classe C (*RFC 1918*)                              |
+   | `.local`             | Domaines *mDNS* (*Multicast DNS*) / *zeroconf* locaux             |
+   | `.edgand.fr`         | Domaine interne de l'établissement                                 |
+
+   </details>
+
+   <Aside type="caution">
+   Firefox utilise le **point initial** (`.local`, `.edgand.fr`) pour
+   exclure un domaine **et tous ses sous-domaines**. Sans ce point, seul
+   le domaine exact serait exclu.
+   </Aside>
+
+   <Aside type="tip">
+   Les notations *CIDR* (*Classless Inter-Domain Routing*) comme
+   `172.16.0.0/12` sont prises en charge nativement depuis Firefox 93.
+   Sur des versions antérieures, il faut lister les plages adresse par
+   adresse ou utiliser le caractère joker `*` (ex. `172.16.*.*`).
+   </Aside>
+
+6. ### Valider et tester depuis Firefox
+
+   Cliquez sur **« OK »** pour fermer la fenêtre « Paramètres de
+   connexion », puis sur **« OK »** (ou **« Fermer »**) pour fermer
+   les Préférences.
+
+   #### Tester le transit par le proxy
+
+   Ouvrez un site externe, par exemple `https://example.com`, et
+   vérifiez qu'il s'affiche normalement. Ouvrez ensuite les outils de
+   développement avec **F12**, rendez-vous dans l'onglet **« Réseau »**,
+   puis rechargez la page (**Ctrl+R**). Cliquez sur la requête principale
+   et inspectez l'onglet **« En-têtes »** :
+
+   - La présence d'un en-tête de réponse `Via:` ou `X-Cache:` confirme
+     que la requête a bien transité par le proxy `172.16.0.1:3128`.
+   - Si la page se charge mais qu'aucun de ces en-têtes n'apparaît,
+     le proxy est transparent ou ne les injecte pas — ce n'est pas
+     nécessairement une erreur.
+
+   <Aside type="tip">
+   Si le site externe ne répond pas du tout, c'est souvent le signe que
+   le proxy est inaccessible. Vérifiez que vous êtes bien sur le bon
+   réseau et que l'adresse `172.16.0.1` est joignable (essayez
+   `http://172.16.0.1:3128` directement dans la barre d'adresse :
+   une page d'erreur du proxy est une réponse positive).
+   </Aside>
+
+   #### Tester les exclusions
+
+   Ouvrez une ressource interne sur `.edgand.fr` ou une adresse
+   `192.168.x.x`. Dans l'onglet **« Réseau »** des outils de
+   développement, la requête doit aboutir directement, sans en-tête
+   `Via:` ni délai lié au proxy.
+
+   <Aside type="caution">
+   Si une ressource exclue ne répond pas, vérifiez que son adresse
+   correspond bien à l'une des plages ou aux domaines listés dans
+   le champ « Pas de proxy pour ». Une faute de frappe dans
+   `.edgand.fr` ou l'absence du point initial sont les erreurs
+   les plus fréquentes.
+   </Aside>
+
+</Steps>
+
+---
+
+## Récapitulatif des paramètres
+
+```
+Proxy HTTP  : 172.16.0.1
+Port        : 3128
+Utiliser aussi pour HTTPS : oui (recommandé)
+
+Pas de proxy pour :
+localhost, 127.0.0.1, ::1, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, .local, .edgand.fr
+```
+
+---
+
+## Réinitialiser la configuration proxy
+
+Pour revenir au comportement par défaut, rouvrez **Paramètres réseau →
+Paramètres…** et sélectionnez **« Pas de proxy »** ou **« Utiliser les
+paramètres proxy du système »**, puis cliquez sur **« OK »**.
+
+<Aside type="danger">
+Si Firefox est déployé via une **politique d'entreprise** (*GPO* —
+*Group Policy Object* — ou fichier `policies.json`), les champs proxy
+peuvent être verrouillés et non modifiables par l'utilisateur. Dans ce
+cas, rapprochez-vous de l'administrateur réseau.
+</Aside>

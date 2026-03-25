@@ -1,0 +1,234 @@
+---
+title: Formater une clé USB en exFAT via ligne de commande
+description: Guide pas à pas pour identifier une clé USB et la formater au format exFAT sous Debian ou Ubuntu à partir de la ligne de commande.
+filename: linux-formater-usb-exfat-cli
+topic: linux
+section: systeme
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+# Formater une clé USB en *exFAT* sous Debian/Ubuntu
+
+Le format *exFAT* (*Extended File Allocation Table*) est particulièrement
+adapté aux supports amovibles : il est reconnu nativement par Windows, macOS
+et Linux, et il ne souffre pas de la limite de 4 Go par fichier imposée par
+le *FAT32* (*File Allocation Table 32*).
+
+<Aside type="danger">
+Toute opération de formatage **détruit irrémédiablement** les données
+présentes sur la partition ciblée. Vérifiez deux fois le nom du périphérique
+avant de valider chaque commande.
+</Aside>
+
+---
+
+## Prérequis
+
+- Un système Debian ou Ubuntu à jour.
+- Les droits *superuser* (`sudo`) ou un accès *root*.
+- Le paquet `exfatprogs` (ou `exfat-utils` sur les distributions plus
+  anciennes) installé.
+
+<details>
+<summary>Installer les outils exFAT</summary>
+
+```bash
+sudo apt update
+sudo apt install exfatprogs
+```
+
+Sur les versions antérieures à Ubuntu 22.04 / Debian 11, le paquet
+s'appelait `exfat-utils` :
+
+```bash
+sudo apt install exfat-utils exfat-fuse
+```
+
+</details>
+
+---
+
+## Étapes de formatage
+
+<Steps>
+
+1. ### Identifier la clé USB avec `lsblk`
+
+   Branchez la clé USB, puis listez les périphériques de type bloc :
+
+   ```bash
+   lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,MODEL
+   ```
+
+   Exemple de sortie typique :
+
+   ```
+   NAME   SIZE TYPE FSTYPE  MOUNTPOINT  MODEL
+   sda    500G disk
+   ├─sda1 499G part ext4    /
+   └─sda2   1G part swap    [SWAP]
+   sdb     16G disk
+   └─sdb1  16G part vfat               SanDisk Ultra
+   ```
+
+   La clé USB correspond ici à **`sdb`** (et sa partition à `sdb1`).
+
+   <Aside type="tip">
+   Si `lsblk` ne suffit pas, la commande `lsusb` liste les périphériques
+   USB reconnus par le noyau. La commande `sudo fdisk -l` affiche quant à
+   elle des informations détaillées sur chaque disque et partition.
+   </Aside>
+
+   <Aside type="caution">
+   Notez soigneusement le nom du périphérique (ex. `/dev/sdb`). Ne confondez
+   **pas** le disque système (souvent `/dev/sda`) avec la clé USB.
+   </Aside>
+
+2. ### Démonter la clé USB si elle est montée
+
+   Si la colonne `MOUNTPOINT` indique un chemin (ex. `/media/user/CLESDB`),
+   démontez la partition avant de continuer :
+
+   ```bash
+   sudo umount /dev/sdb1
+   ```
+
+   Si plusieurs partitions sont montées (ex. `sdb1`, `sdb2`), répétez la
+   commande pour chacune d'elles.
+
+   <Aside type="note">
+   Si `umount` retourne l'erreur « *target is busy* », identifiez le
+   processus qui utilise le point de montage avec `lsof +D /media/…` puis
+   fermez-le avant de réessayer.
+   </Aside>
+
+3. ### Supprimer la table de partitions existante (optionnel mais recommandé)
+
+   Pour repartir d'une table de partitions propre, utilisez `wipefs` afin
+   d'effacer les signatures existantes :
+
+   ```bash
+   sudo wipefs -a /dev/sdb
+   ```
+
+   <details>
+   <summary>Recréer une table de partitions avec fdisk</summary>
+
+   Si vous souhaitez recréer explicitement une table *MBR* (*Master Boot
+   Record*) avec une seule partition couvrant tout l'espace :
+
+   ```bash
+   sudo fdisk /dev/sdb
+   ```
+
+   Dans l'invite interactive de `fdisk` :
+
+   ```
+   Command (m for help): o      ← nouvelle table MBR
+   Command (m for help): n      ← nouvelle partition
+   Partition type: p (primary)
+   Partition number: 1
+   First sector: [Entrée]       ← valeur par défaut
+   Last sector:  [Entrée]       ← valeur par défaut (tout l'espace)
+   Command (m for help): w      ← écrire et quitter
+   ```
+
+   Vous obtenez ainsi `/dev/sdb1` prête à être formatée.
+
+   </details>
+
+4. ### Formater la partition en exFAT
+
+   Appliquez le système de fichiers *exFAT* sur la partition cible (ici
+   `/dev/sdb1`) en lui donnant un label reconnaissable :
+
+   ```bash
+   sudo mkfs.exfat -n "MA_CLE" /dev/sdb1
+   ```
+
+   | Option | Description |
+   |--------|-------------|
+   | `-n`   | Définit le label (nom) du volume (max. 15 caractères) |
+
+   <Aside type="tip">
+   Pour formater le disque entier sans table de partitions (cas rare, pour
+   certains appareils embarqués) : `sudo mkfs.exfat -n "MA_CLE" /dev/sdb`.
+   </Aside>
+
+5. ### Vérifier le formatage
+
+   Contrôlez que le système de fichiers a bien été créé :
+
+   ```bash
+   lsblk -o NAME,SIZE,FSTYPE,LABEL /dev/sdb
+   ```
+
+   La sortie attendue ressemble à :
+
+   ```
+   NAME   SIZE FSTYPE LABEL
+   sdb     16G
+   └─sdb1  16G exfat  MA_CLE
+   ```
+
+   Vous pouvez également inspecter le système de fichiers avec `fsck.exfat`
+   (*File System Check*) :
+
+   ```bash
+   sudo fsck.exfat /dev/sdb1
+   ```
+
+6. ### Monter la clé USB et tester
+
+   Montez manuellement la partition pour vérifier l'accès en lecture/écriture :
+
+   ```bash
+   sudo mkdir -p /mnt/cle
+   sudo mount /dev/sdb1 /mnt/cle
+   ```
+
+   Créez un fichier test, puis démontez :
+
+   ```bash
+   echo "test exfat ok" | sudo tee /mnt/cle/test.txt
+   sudo umount /mnt/cle
+   ```
+
+   <Aside type="note">
+   Sur un bureau (GNOME, KDE…), retirez et rebranchez la clé : le
+   gestionnaire de fichiers la monte automatiquement et affiche le label
+   « MA_CLE ».
+   </Aside>
+
+</Steps>
+
+---
+
+## Récapitulatif des commandes
+
+```bash
+# 1. Identifier la clé
+lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,MODEL
+
+# 2. Démonter la partition
+sudo umount /dev/sdb1
+
+# 3. Effacer les signatures existantes
+sudo wipefs -a /dev/sdb
+
+# 4. Formater en exFAT
+sudo mkfs.exfat -n "MA_CLE" /dev/sdb1
+
+# 5. Vérifier
+lsblk -o NAME,SIZE,FSTYPE,LABEL /dev/sdb
+```
+
+---
+
+## Références
+
+- Page de manuel : `man mkfs.exfat`
+- Page de manuel : `man lsblk`
+- Page de manuel : `man wipefs`
+- [Documentation Ubuntu — exFAT](https://help.ubuntu.com/community/ExFAT)
