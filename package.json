@@ -7,7 +7,8 @@
     "node": ">=18.20.8"
   },
   "scripts": {
-    "dev": "astro dev --host --open",
+    "dev": "astro dev --host",
+    "open": "astro dev --host --open",
     "build": "astro build",
     "preview": "astro preview",
     "deploy": "astro build && gh-pages -d dist",
@@ -18,7 +19,9 @@
     "images:all": "npm run images:organize && npm run images:build",
     "images:watch": "node tools/build-images.mjs --watch",
     "images:migrate": "python tools/migrate_markdown_images.py --write",
-    "images:migrate:viewer": "python tools/migrate_markdown_images.py --viewer --write"
+    "images:migrate:viewer": "python tools/migrate_markdown_images.py --viewer --write",
+    "diagram:new": "node tools/diagram.mjs new",
+    "diagram:export": "node tools/diagram.mjs export"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.38.2",

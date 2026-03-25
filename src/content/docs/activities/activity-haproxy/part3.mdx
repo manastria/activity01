@@ -1,0 +1,699 @@
+---
+title: "Partie 3 – Configuration HAProxy (TLS frontal + SNI, certificats wildcard vs dédiés)"
+description: "Mise en place d'un frontal HAProxy en HTTP puis en HTTPS pour sécuriser les services."
+sidebar:
+  order: 2
+level: "BTS SIO 2"
+duration: "45 min"
+tags: ["haproxy", "tls", "sni", "bts-sio"]
+---
+
+import { Aside, Tabs, TabItem, Steps } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+**Je n’ai pas encore relu cette fiche.** Considérez-la comme un brouillon.
+</Aside>
+
+<Aside type="note" title="Introduction">
+Dans cette partie, vous allez mettre en place un **frontal HAProxy** d'abord en HTTP, puis en HTTPS. Vous comparerez un **certificat wildcard** (un seul cert pour plusieurs noms) et **des certificats dédiés** (un par nom).
+
+Chaque étape suit un modèle simple : **pourquoi → comment → test → à retenir**.
+</Aside>
+
+---
+
+## 1. Prérequis techniques
+
+Pour démarrer cette activité, les prérequis des **Parties 1 et 2** doivent être validés.
+
+-   **Routage SNS (pare-feu)** : Le routage entre le **Labo ↔ DMZ** est opérationnel. Le **NAT sortant** est activé côté DMZ et le DNS est fonctionnel.
+-   **VM HaProxy** : Dispose de 2 interfaces (Labo + DMZ) avec des IPs correctes et peut joindre la DMZ.
+-   **VM Backends** : Docker est installé avec un réseau **macvlan**. Les deux conteneurs **`node1` (10.0.0.101)** et **`node2` (10.0.0.102)** sont en cours d'exécution et accessibles depuis la VM HaProxy.
+
+<Aside type="tip" title="Utilisation de cURL">
+Sur Windows, lancez `curl` depuis **Git Bash** pour éviter les alias qui peuvent perturber les exemples.
+</Aside>
+
+---
+
+## 2. Objectifs d'apprentissage
+
+À la fin de cette partie, vous serez capable de :
+-   Mettre en place un **frontend HTTP** pour valider le routage par **nom d'hôte**.
+-   Activer **TLS** avec un **certificat wildcard**, en comprenant comment tout nouveau sous-domaine fonctionne sans configuration supplémentaire.
+-   Remplacer le certificat wildcard par **deux certificats dédiés** pour comprendre la différence concrète entre les deux approches.
+-   Comprendre le principe du **SNI** (*Server Name Indication*) : le client annonce le nom du serveur durant le handshake TLS, permettant à HAProxy de servir le bon certificat sur le **même port 443**.
+
+---
+
+## 3. À propos des commandes multilignes (`\`)
+
+Plusieurs commandes de ce TP (notamment celles avec `openssl`) sont **trop longues** pour tenir sur une seule ligne. Elles utilisent le caractère `\` à la fin d’une ligne pour indiquer que la commande **continue sur la ligne suivante**.
+
+<Tabs>
+<TabItem label="Exemple de commande multiligne">
+
+```bash
+openssl req -x509 -new -nodes -sha256 -days 3650 \
+  -key myCA.key \
+  -subj "/C=FR/O=TP-HAProxy/OU=Student-CA/CN=My Student Lab CA" \
+  -out myCA.crt
+````
+
+</TabItem>
+<TabItem label="Si cela ne fonctionne pas">
+
+Sur certains claviers ou terminaux, le `\` peut être mal interprété. Dans ce cas, **transformez la commande en une seule ligne** :
+
+```bash
+openssl req -x509 -new -nodes -sha256 -days 3650 -key myCA.key -subj "/C=FR/O=TP-HAProxy/OU=Student-CA/CN=My Student Lab CA" -out myCA.crt
+```
+
+<Aside type="tip" title="Astuce rapide">
+Copiez la commande complète dans un éditeur de texte, puis supprimez les retours à la ligne. Vérifiez qu'il ne reste **aucun `\`** et qu'il n'y a **qu'un seul espace** entre chaque option.
+</Aside>
+
+</TabItem>
+</Tabs>
+
+-----
+
+## 4. Préparer votre Autorité de Certification (CA)
+
+### 4.1. Créer la CA (sur la VM HaProxy)
+
+Pour simuler une autorité de certification (CA), vous allez générer une clé privée et un certificat auto-signé.
+
+#### 4.1.1. Étape 4.1.1 : Créer l'arborescence des fichiers
+
+<Aside type="note" title="Pourquoi ?">
+Nous créons un répertoire dédié (`ca`) pour isoler les fichiers de l'autorité de certification. C'est une bonne pratique de sécurité et d'organisation.
+</Aside>
+
+```bash
+mkdir -p ~/ca
+cd ~/ca
+```
+
+<details>
+<summary>**Explication :**</summary>
+
+  - `mkdir -p ~/ca` crée le dossier `ca` dans votre dossier personnel (`~`). L'option `-p` s'assure que le dossier est créé même si le parent (`~`) n'existe pas.
+  - `cd ~/ca` vous déplace dans ce nouveau répertoire. Toutes les commandes suivantes seront exécutées depuis cet emplacement.
+</details>
+-----
+
+### 4.2. Étape 4.1.2 : Générer la clé privée de la CA
+
+<Aside type="note" title="Pourquoi ?">
+Une autorité de certification (CA) a besoin d'une **clé privée** pour signer les certificats des serveurs. Cette clé est le fondement de la confiance. **Gardez-la secrète \!**
+</Aside>
+
+```bash
+openssl genrsa -out myCA.key 4096
+```
+
+<details>
+<summary>**Explication :**</summary>
+
+  - `openssl genrsa` génère une **clé privée** au format RSA.
+  - `-out myCA.key` enregistre la clé dans un fichier nommé `myCA.key`.
+  - `4096` définit la taille de la clé en bits. Une taille de **4096 bits** est plus sécurisée que la taille par défaut (2048) et est recommandée pour ce type de clé.
+</details>
+-----
+
+### 4.3. Étape 4.1.3 : Générer le certificat de la CA
+
+<Aside type="note" title="Pourquoi ?">
+Pour que votre navigateur reconnaisse la validité des certificats de vos sites, il doit d'abord faire confiance à la **CA** qui les a signés. Ce certificat, `myCA.crt`, est la "carte d'identité" de votre CA.
+</Aside>
+
+```bash
+openssl req -x509 -new -nodes -sha256 -days 3650 \
+  -key myCA.key \
+  -subj "/C=FR/O=TP-HAProxy/OU=Student-CA/CN=My Student Lab CA" \
+  -out myCA.crt
+```
+
+<details>
+<summary>**Explication :**</summary>
+
+  - `openssl req -x509` crée un certificat **auto-signé** (`-x509`).
+  - `-new` indique de créer une nouvelle demande de signature.
+  - `-nodes` désactive le chiffrement de la clé privée, évitant ainsi d'avoir à saisir un mot de passe à chaque utilisation.
+  - `-sha256` spécifie l'algorithme de hachage utilisé.
+  - `-days 3650` définit la durée de validité du certificat à **10 ans** (365 jours \* 10).
+  - `-key myCA.key` associe ce certificat à la clé privée créée précédemment.
+  - `-subj` permet de renseigner les informations d'identité du certificat (Pays, Organisation, Unité, Nom Commun). Le `CN` (Common Name) est le nom unique de la CA.
+  - `-out myCA.crt` enregistre le certificat dans le fichier `myCA.crt`.
+</details>
+
+### 4.4. Installer le certificat `myCA.crt` sur votre poste
+
+Pour que votre navigateur reconnaisse les certificats signés par votre CA, vous devez l'installer dans le magasin de certificats de votre système.
+
+  - **Windows** : double-clic sur le fichier `myCA.crt` → *Ordinateur local* → **Autorités de certification racines de confiance**.
+  - **macOS** : Trousseaux d'accès → *Système* → importer le fichier → « Toujours approuver ».
+  - **Linux** :
+    ```bash
+    sudo cp myCA.crt /usr/local/share/ca-certificates/
+    sudo update-ca-certificates
+    ```
+
+### 4.5. Vérifier la CA sur la VM HaProxy
+
+```bash
+ls -lh ~/ca/myCA.crt ~/ca/myCA.key
+openssl x509 -in ~/ca/myCA.crt -noout -subject -issuer -enddate
+```
+
+**Comprendre les résultats :**
+
+  - La première commande vérifie l'existence des fichiers de la clé privée (`myCA.key`) et du certificat public (`myCA.crt`).
+  - La seconde commande affiche les métadonnées du certificat. Le `subject` et l'`issuer` sont identiques, ce qui confirme que c'est un **certificat auto-signé**.
+
+✅ Si ces deux vérifications sont correctes, votre CA est fonctionnelle.
+
+-----
+
+## 5. 5\. Installer et tester HAProxy
+
+```bash
+sudo apt update
+sudo apt install -y haproxy
+```
+
+**Vérifiez l'installation :**
+
+```bash
+haproxy -v
+```
+
+Le programme doit afficher la version installée. Si `command not found` s'affiche, l'installation a échoué.
+
+-----
+
+## 6. 6\. Phase A — Frontend HTTP : premiers tests de routage
+
+<Aside type="note" title="Objectif">
+Vérifiez que HAProxy est capable de **recevoir des requêtes HTTP** et de les **rediriger vers le bon serveur backend** (`node1` ou `node2`).
+</Aside>
+
+### 6.1. Comprendre le rôle de HAProxy
+
+HAProxy est un **reverse proxy** qui agit comme un intermédiaire entre le client et les serveurs web (*backends*).
+
+| Élément | Rôle |
+| :--- | :--- |
+| **Frontend** | Le **point d'entrée** qui écoute sur un port (ex: 80 ou 443). |
+| **Backend** | Le **groupe de serveurs** vers lequel le trafic est redirigé. |
+| **ACL** (*Access Control List*) | Permet à HAProxy de prendre des décisions de routage dynamiques (ex: en fonction du nom d'hôte). |
+
+### 6.2. Configuration principale
+
+Le fichier de configuration principal est `/etc/haproxy/haproxy.cfg`. Faites-en d'abord une sauvegarde.
+
+```bash
+sudo cp /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.bak
+```
+
+Ensuite, remplacez le contenu par la configuration minimale ci-dessous :
+
+```bash
+sudo nano /etc/haproxy/haproxy.cfg
+```
+
+```ini
+# Configuration de base (timeouts et logs)
+defaults
+  mode http
+  option httplog
+  timeout connect 5s
+  timeout client 30s
+  timeout server 30s
+
+# FRONTEND : point d'entrée des requêtes
+frontend fe_http
+  bind :80
+  # Règles selon le nom demandé dans l'en-tête "Host"
+  acl host_node1 hdr(host) -i node1.example.test
+  acl host_node2 hdr(host) -i node2.example.test
+
+  # Sélection du backend correspondant
+  use_backend be_node1 if host_node1
+  use_backend be_node2 if host_node2
+
+  # Filet de sécurité
+  default_backend be_node1
+
+# BACKENDS : serveurs internes (dans la DMZ)
+backend be_node1
+  server n1 10.0.0.101:80 check
+
+backend be_node2
+  server n2 10.0.0.102:80 check
+```
+
+### 6.3. Démarrer HAProxy
+
+**1. Valider la syntaxe :**
+
+```bash
+sudo haproxy -c -f /etc/haproxy/haproxy.cfg
+```
+
+Vous devez voir `Configuration file is valid`.
+
+**2. Démarrer le service :**
+
+```bash
+sudo systemctl restart haproxy
+sudo systemctl status haproxy
+```
+
+L'état doit être `active (running)`.
+
+### 6.4. Tester le routage HTTP
+
+<Tabs>
+<TabItem label="Cas 1 — Sans DNS (recommandé)">
+
+Ici, on simule le nom du site avec l'en-tête `Host:` de `curl`.
+
+```bash
+curl -H "Host: node1.example.test" http://172.25.X.2/
+curl -H "Host: node2.example.test" http://172.25.X.2/
+```
+
+</TabItem>
+<TabItem label="Cas 2 — Avec résolution DNS locale">
+
+Si vous avez déjà ajouté les noms dans votre fichier `/etc/hosts` ou votre DNS :
+
+```
+# /etc/hosts
+172.25.X.2  node1.example.test
+172.25.X.2  node2.example.test
+```
+
+Alors vous pouvez tester directement :
+
+```bash
+curl http://node1.example.test
+curl http://node2.example.test
+```
+
+</TabItem>
+</Tabs>
+
+### 6.5. Comprendre les résultats
+
+Si la configuration est correcte, vous devez voir **deux contenus différents**, car chaque conteneur (`node1`/`node2`) affiche une page unique.
+
+  - **Si vous voyez toujours la même page :** il y a une erreur dans la configuration des ACLs ou du fichier `haproxy.cfg`.
+  - **Si aucune réponse :** vérifiez si le service HAProxy est bien actif (`sudo systemctl status haproxy`) et si les backends sont accessibles.
+
+<Aside type="tip" title="Lien avec le SNI">
+En HTTP, le nom (`Host:`) est envoyé **après la connexion TCP**. En HTTPS, ce même nom doit être annoncé plus tôt, durant le handshake TLS. C'est le rôle du **SNI**, que vous testerez dans la phase suivante.
+</Aside>
+
+### 6.6. ✅ Validation avant de poursuivre
+
+Vérifiez que les points suivants sont validés avant de passer à la phase B.
+
+
+  - [ ] `curl -H "Host: node1.example.test" http://172.25.X.2` renvoie un contenu valide.
+  - [ ] `curl -H "Host: node2.example.test" http://172.25.X.2` renvoie un contenu différent.
+  - [ ] `sudo haproxy -c -f /etc/haproxy/haproxy.cfg` renvoie `Configuration file is valid`.
+
+-----
+
+## 7. 7\. Phase B — TLS avec **certificat wildcard**
+
+<Aside type="note" title="Objectif">
+Émettre et configurer un certificat wildcard (`*.example.test`) sur HAProxy pour sécuriser plusieurs sous-domaines avec un seul certificat.
+</Aside>
+
+### 7.1. Qu'est-ce qu'un certificat wildcard ?
+
+Un **certificat wildcard** est un certificat TLS/SSL qui couvre **plusieurs sous-domaines** d'un même domaine principal en utilisant un astérisque (`*.example.test`).
+
+| Avantages | Inconvénients |
+| :--- | :--- |
+| ✅ **Simplicité** : Un seul certificat à gérer. | ❌ **Sécurité** : Si la clé fuit, tous les sous-domaines sont compromis. |
+| ✅ **Flexibilité** : Ajout instantané de nouveaux sous-domaines. | ❌ **Granularité limitée** : On ne peut pas révoquer un seul sous-domaine. |
+
+### 7.2. Émettre le certificat wildcard
+
+Le processus se déroule en trois étapes :
+
+1.  **Générer** la clé privée et la demande de signature (CSR).
+2.  **Définir** les extensions SAN.
+3.  **Signer** le tout avec votre CA.
+
+<Steps>
+
+1. Générer la clé et la CSR
+
+    ```bash
+    cd ~/ca
+
+    openssl req -new -newkey rsa:2048 -nodes \
+    -keyout wildcard-example-test.key \
+    -subj "/CN=*.example.test" \
+    -out wildcard-example-test.csr
+    ```
+
+2. Créer le fichier d’extensions SAN
+
+    <Aside type="note" title="Le rôle des SAN">
+    Les navigateurs modernes ne vérifient plus le *Common Name* (CN), mais uniquement la liste de **SAN** (*Subject Alternative Name*). Un certificat sans SAN ne fonctionnera pas correctement.
+    </Aside>
+
+    ```bash
+    cat > san-wildcard.cnf <<'EOF'
+    subjectAltName=DNS:*.example.test,DNS:example.test
+    EOF
+    ```
+
+3. Signer la demande avec la CA
+
+    ```bash
+    openssl x509 -req -in wildcard-example-test.csr \
+    -CA myCA.crt -CAkey myCA.key -CAcreateserial \
+    -out wildcard-example-test.crt -days 365 -sha256 \
+    -extfile san-wildcard.cnf
+    ```
+</Steps>
+
+✅ Vous devriez maintenant avoir les fichiers `wildcard-example-test.key` et `wildcard-example-test.crt`.
+
+### 7.3. Étape 7.3 : Préparer le fichier PEM pour HAProxy
+
+HAProxy attend un fichier unique au format **PEM** (*Privacy Enhanced Mail*) qui regroupe le **certificat public**, la **clé privée** et le **certificat de la CA**.
+
+#### 7.3.1. Créer le répertoire de destination
+
+<Aside type="note" title="Pourquoi ?">
+Pour une bonne organisation et pour respecter les standards des services système, nous allons stocker les certificats d'HAProxy dans un répertoire dédié, sécurisé et bien connu : `/etc/haproxy/certs`.
+</Aside>
+
+```bash
+sudo mkdir -p /etc/haproxy/certs
+```
+
+<details>
+<summary>**Explication :**</summary>
+
+  - `sudo mkdir -p` crée le répertoire `/etc/haproxy/certs` avec des privilèges d'administrateur.
+  - L'option `-p` est utilisée pour créer les répertoires parents s'ils n'existent pas déjà.
+</details>
+
+#### 7.3.2. Assembler le certificat en un fichier PEM
+
+<Aside type="note" title="Pourquoi ?">
+HAProxy a besoin d'un seul fichier qui contient tout pour un certificat donné : le certificat (`.crt`), la clé privée (`.key`) et le certificat de la CA (`myCA.crt`) pour la chaîne de confiance.
+</Aside>
+
+```bash
+cat wildcard-example-test.crt wildcard-example-test.key myCA.crt \
+  | sudo tee /etc/haproxy/certs/wildcard-example-test.pem >/dev/null
+```
+
+<details>
+<summary>**Explication :**</summary>
+
+  - `cat` concatène (combine) le contenu des trois fichiers (`.crt`, `.key`, `myCA.crt`) dans l'ordre requis.
+  - Le caractère `|` (pipe) envoie la sortie de la commande `cat` en entrée de la commande `sudo tee`.
+  - `tee` écrit le flux d'entrée dans un fichier, ici `/etc/haproxy/certs/wildcard-example-test.pem`, avec des privilèges `sudo`.
+  - `>/dev/null` permet de supprimer la sortie standard de la commande `tee` qui, sinon, afficherait le contenu du fichier dans le terminal.
+</details>
+
+#### 7.3.3. Ajuster les droits d'accès
+
+<Aside type="note" title="Pourquoi ?">
+Le fichier PEM contient la **clé privée**, qui doit être protégée. Nous ajustons les permissions pour que seul l'utilisateur et le groupe `haproxy` puissent y accéder.
+</Aside>
+
+```bash
+sudo chown haproxy:haproxy /etc/haproxy/certs/wildcard-example-test.pem
+sudo chmod 640 /etc/haproxy/certs/wildcard-example-test.pem
+```
+
+<details>
+<summary>**Explication :**</summary>
+
+  - `chown haproxy:haproxy` change le propriétaire et le groupe du fichier en `haproxy`. Cela est nécessaire pour que le service HAProxy puisse lire le fichier.
+  - `chmod 640` définit les permissions :
+      - Le **propriétaire** (`haproxy`) peut lire et écrire (6).
+      - Le **groupe** (`haproxy`) peut seulement lire (4).
+      - Les **autres** utilisateurs n'ont aucune permission (0).
+</details>
+
+### 7.4. Activer HTTPS dans HAProxy
+
+<Aside type="note" title="Du HTTP au HTTPS">
+Maintenant que votre certificat est prêt, vous allez modifier la configuration d'HAProxy pour passer du protocole **HTTP** au protocole **HTTPS**. HAProxy agira comme un **terminateur TLS** : il va déchiffrer les communications des clients (en HTTPS) avant de les rediriger en interne vers les backends (qui, eux, resteront en HTTP).
+
+Vous allez aussi mettre en place une redirection automatique pour que toute tentative de connexion en HTTP soit automatiquement transformée en une connexion sécurisée en HTTPS.
+
+</Aside>
+
+-----
+
+
+Modifiez le fichier `/etc/haproxy/haproxy.cfg` avec le nouveau frontend :
+
+```ini
+frontend fe_https
+  # Redirection HTTP -> HTTPS
+  bind :80
+  http-request redirect scheme https unless { ssl_fc }
+
+  # Frontend HTTPS avec le certificat wildcard
+  bind :443 ssl crt /etc/haproxy/certs/wildcard-example-test.pem
+
+  # Règles et backends restent identiques
+  acl host_node1 hdr(host) -i node1.example.test
+  acl host_node2 hdr(host) -i node2.example.test
+  use_backend be_node1 if host_node1
+  use_backend be_node2 if host_node2
+  default_backend be_node1
+
+# Les BACKENDS restent inchangés
+backend be_node1
+  server n1 10.0.0.101:80 check
+
+backend be_node2
+  server n2 10.0.0.102:80 check
+```
+
+**Vérifiez la syntaxe et redémarrez le service :**
+
+```bash
+sudo haproxy -c -f /etc/haproxy/haproxy.cfg
+sudo systemctl restart haproxy
+sudo systemctl status haproxy
+```
+
+### 7.5. Tester en ligne de commande et navigateur
+
+<Aside type="note" title="L'importance de la vérification">
+Une configuration, aussi simple soit-elle, doit toujours être testée. Dans cette section, vous allez vérifier si HAProxy sert bien le certificat que vous venez de générer. Vous utiliserez d'abord des outils en ligne de commande comme `openssl` et `curl` pour valider les aspects techniques, puis vous testerez le tout avec un navigateur pour vous assurer que l'expérience utilisateur est correcte (le fameux cadenas !).
+</Aside>
+
+
+#### 7.5.1. Inspecter le certificat avec `openssl`
+
+Cette commande permet de vérifier le certificat servi par HAProxy en incluant le SNI.
+
+```bash
+openssl s_client -connect 172.25.X.2:443 -servername node1.example.test < /dev/null \
+ | openssl x509 -noout -subject -issuer
+# Attendu : subject=CN=*.example.test | issuer=My Student Lab CA
+```
+
+#### 7.5.2. Tester un nouveau sous-domaine
+
+Ajoutez une entrée à votre fichier `/etc/hosts` pour simuler le routage DNS, puis testez-le avec `curl`.
+
+<Aside type="tip" title="Comprendre --resolve">
+En HTTPS, le **SNI** doit correspondre au nom demandé. L'option `--resolve` de `curl` simule une entrée DNS temporaire, ce qui garantit que le SNI et le `Host` sont cohérents.
+</Aside>
+
+```bash
+# Ajout au fichier hosts pour le test
+echo "172.25.X.2  newsite.example.test" | sudo tee -a /etc/hosts
+# Test du nouveau sous-domaine avec curl
+curl -I https://newsite.example.test
+# Attendu : 200/301/302 SANS erreur de certificat (pas de -k)
+```
+
+#### 7.5.3. Tester avec votre navigateur
+
+1.  Ajoutez les entrées DNS dans le fichier `/etc/hosts` de votre **poste hôte** (et non la VM) :
+    ```
+    172.25.X.2  node1.example.test
+    172.25.X.2  node2.example.test
+    172.25.X.2  newsite.example.test
+    ```
+2.  Accédez à [**https://node1.example.test/**](https://www.google.com/search?q=https://node1.example.test/), [**https://node2.example.test/**](https://www.google.com/search?q=https://node2.example.test/) et [**https://newsite.example.test/**](https://www.google.com/search?q=https://newsite.example.test/).
+3.  Vérifiez que le cadenas est **fermé** et qu'aucune alerte de sécurité n'apparaît.
+
+### 7.6. ✅ Validation
+
+  - [ ] `openssl s_client` renvoie **`CN=*.example.test`** et `Issuer=My Student Lab CA`.
+  - [ ] `curl` sur un nouveau sous-domaine (`newsite.example.test`) fonctionne **sans erreur de certificat**.
+  - [ ] Le navigateur affiche un **cadenas vert**, et le certificat présente un **Subject CN=\*.example.test** et un **SAN** correct.
+
+-----
+
+## 8. Phase C — TLS avec **certificats dédiés**
+
+<Aside type="note" title="Objectif">
+Comprendre la logique du SNI en remplaçant le certificat wildcard par **deux certificats indépendants** (un pour `node1` et un pour `node2`).
+</Aside>
+
+### 8.1. Générer les certificats dédiés
+
+Pour chaque site, vous allez suivre les trois étapes habituelles : clé privée, CSR, puis signature.
+
+<Steps>
+1. Créer les clés et les CSRs
+
+    ```bash
+    cd ~/ca
+    # node1
+    openssl req -new -newkey rsa:2048 -nodes \
+    -keyout node1.key \
+    -subj "/CN=node1.example.test" \
+    -out node1.csr
+
+    # node2
+    openssl req -new -newkey rsa:2048 -nodes \
+    -keyout node2.key \
+    -subj "/CN=node2.example.test" \
+    -out node2.csr
+    ```
+
+2. Ajouter les extensions SAN
+
+    ```bash
+    echo "subjectAltName=DNS:node1.example.test" > san-node1.cnf
+    echo "subjectAltName=DNS:node2.example.test" > san-node2.cnf
+    ```
+
+3. Signer les CSRs avec la CA
+
+    ```bash
+    # node1
+    openssl x509 -req -in node1.csr -CA myCA.crt -CAkey myCA.key -CAcreateserial \
+    -out node1.crt -days 365 -sha256 -extfile san-node1.cnf
+
+    # node2
+    openssl x509 -req -in node2.csr -CA myCA.crt -CAkey myCA.key -CAcreateserial \
+    -out node2.crt -days 365 -sha256 -extfile san-node2.cnf
+    ```
+</Steps>
+
+✅ Vous devriez maintenant avoir deux paires de fichiers : `node1.key`/`node1.crt` et `node2.key`/`node2.crt`.
+
+### 8.2. Préparer les fichiers PEM et configurer HAProxy
+
+Supprimez l'ancien certificat et créez les deux nouveaux fichiers PEM pour HAProxy.
+
+```bash
+# Supprimer les anciens certificats
+rm /etc/haproxy/certs/*
+
+# Créer les nouveaux PEM
+cat node1.crt node1.key myCA.crt | sudo tee /etc/haproxy/certs/node1.pem >/dev/null
+cat node2.crt node2.key myCA.crt | sudo tee /etc/haproxy/certs/node2.pem >/dev/null
+
+sudo chown haproxy:haproxy /etc/haproxy/certs/*.pem
+sudo chmod 640 /etc/haproxy/certs/*.pem
+```
+
+Modifiez le fichier `haproxy.cfg` en listant les deux certificats dédiés dans la directive `bind`.
+
+```ini
+frontend fe_https
+  bind :80
+  http-request redirect scheme https unless { ssl_fc }
+
+  # Liste des certificats dédiés
+  bind :443 ssl crt /etc/haproxy/certs/node1.pem crt /etc/haproxy/certs/node2.pem
+
+  acl host_node1 hdr(host) -i node1.example.test
+  acl host_node2 hdr(host) -i node2.example.test
+  use_backend be_node1 if host_node1
+  use_backend be_node2 if host_node2
+  default_backend be_node1
+
+# Backends inchangés
+backend be_node1
+  server n1 10.0.0.101:80 check
+backend be_node2
+  server n2 10.0.0.102:80 check
+```
+
+### 8.3. Tester et comprendre
+
+#### 8.3.1. Test avec `openssl`
+
+Vérifiez que HAProxy sert le bon certificat pour chaque nom de domaine.
+
+```bash
+openssl s_client -connect 172.25.X.2:443 -servername node1.example.test < /dev/null \
+ | openssl x509 -noout -subject -issuer
+# Attendu : subject=CN=node1.example.test
+# Attendu : issuer=My Student Lab CA
+```
+
+Répétez la commande pour `node2.example.test` pour vérifier son propre certificat.
+
+#### 8.3.2. Test d'un nom non couvert
+
+Vérifiez maintenant qu'un sous-domaine non listé provoque une erreur.
+
+```bash
+curl --resolve newsite.example.test:443:172.25.X.2 https://newsite.example.test
+```
+
+La commande doit **échouer** car le certificat n'est plus valide pour ce nom.
+
+#### 8.3.3. Test avec votre navigateur
+
+  - Ajoutez les entrées pour `node1` et `node2` dans `/etc/hosts` de votre poste.
+  - Accédez à [**https://node1.example.test/**](https://www.google.com/search?q=https://node1.example.test/) et [**https://node2.example.test/**](https://www.google.com/search?q=https://node2.example.test/).
+  - Vérifiez que le **cadenas est vert** et que le certificat correspond bien au site affiché.
+
+### 8.4. Comparaison finale : Wildcard vs Multi-certs
+
+| Wildcard (`*.example.test`) | Multi-certs (`node1.example.test`, `node2.example.test`) |
+| :--- | :--- |
+| ✅ Simple à gérer (1 seul fichier) | 🔒 Plus sûr (compartimentation) |
+| ⚠️ Si la clé fuit, tous les sous-domaines sont compromis | ⚠️ Plus de certificats à maintenir |
+| 🌐 Les nouveaux sous-domaines fonctionnent automatiquement | 🚫 Un nouveau nom nécessite un nouveau certificat |
+| 💡 Idéal pour les labs et les environnements de dev | 💼 Recommandé en production |
+
+-----
+
+<details>
+<summary>9. Dépannage express</summary>
+
+  - **Alertes TLS** : N'ignorez pas. Assurez-vous que votre **CA est installée** sur le poste et que le **fichier PEM est complet** (`certificat + clé + CA`).
+  - **HTTP OK / HTTPS KO** : Vérifiez la directive `bind :443 ssl crt ...`, les **droits d'accès** (`chmod 640`), et la validité des **SAN**.
+  - **`curl` Windows** : Utilisez **Git Bash** et préférez `--resolve` pour les tests en HTTPS.
+
+</details>
+
+-----
+
+## 9. Auto-évaluation
+
+  - [ ] **Pass A** : Contenus différents en HTTP selon l'en-tête `Host`.
+  - [ ] **Pass B** : Certificat `CN=*.example.test` et le site `newsite.example.test` **fonctionne**.
+  - [ ] **Pass C** : Certificats dédiés (`CN=node1.example.test` et `CN=node2.example.test`), et le site `newsite.example.test` **échoue**.
+
+✅ Si vous avez validé les trois sections, vous avez acquis une solide compréhension du routage HAProxy et du rôle du SNI.

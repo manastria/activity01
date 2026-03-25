@@ -1,0 +1,86 @@
+---
+title: "Configuration du Proxy Cache DNS"
+description: "Guide pour configurer le service de proxy cache DNS sur un pare-feu Stormshield SNS, y compris les serveurs amont et le mode transparent."
+---
+
+import { Card, Steps, Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+<Card title="🎯 Objectif">
+Configurer le pare-feu Stormshield SNS pour qu'il agisse comme un serveur DNS cache pour les clients du réseau local. Cela permet d'optimiser et de contrôler les requêtes de résolution de noms de domaine.
+</Card>
+
+## Comprendre le Proxy DNS
+
+Le service de **Proxy Cache DNS** sur un pare-feu SNS intercepte les requêtes DNS des clients du réseau. Il répond directement si la résolution est dans son cache, sinon, il transmet la requête à des serveurs DNS externes, dits « amont ».
+
+**Principaux avantages :**
+* **Performance :** Accélère la résolution de noms pour les domaines fréquemment consultés.
+* **Contrôle :** Permet de centraliser les flux DNS et d'appliquer des politiques de sécurité.
+* **Simplification :** Les clients n'ont besoin de connaître que l'adresse du pare-feu pour leurs requêtes DNS.
+
+---
+
+## 1. Configurer les Serveurs DNS Amont
+
+Les **serveurs DNS amont** sont les serveurs DNS publics (comme ceux de Google, Cloudflare, de votre FAI, de votre salle de formation) que le pare-feu consultera pour résoudre les noms de domaine qu'il ne connaît pas. C'est une étape essentielle car le proxy a besoin d'une source fiable pour obtenir les informations.
+
+<Steps>
+1.  **Accéder aux Paramètres Réseau**
+    Rendez-vous dans le menu `Configuration > Système > Configuration`.
+
+2.  **Ouvrir l'onglet Paramètres Réseaux**
+    Sélectionnez l'onglet `PARAMÈTRES RÉSEAUX`.
+
+3.  **Ajouter les Serveurs DNS**
+    Dans la section **Résolution DNS**, vous verrez la `LISTE DES SERVEURS DNS UTILISÉS PAR LE FIREWALL`.
+    * Cliquez sur `+ Ajouter` pour insérer un nouveau serveur DNS.
+    * Vous pouvez utiliser des serveurs connus comme `1.1.1.1` (Cloudflare) ou `8.8.8.8` (Google).
+
+    <Aside type="tip">
+    Il est recommandé de configurer au moins deux serveurs DNS amont pour des raisons de redondance.
+    </Aside>
+
+4.  **Appliquer la Configuration**
+    Cliquez sur le bouton **`Appliquer`** pour sauvegarder les modifications. Le pare-feu sait maintenant qui contacter pour résoudre les noms de domaine.
+</Steps>
+
+---
+
+## 2. Activer le Proxy Cache DNS (Mode Transparent)
+
+Le **mode transparent** signifie que vous n'avez pas besoin de modifier la configuration DNS sur chaque poste client pour qu'ils utilisent le proxy. Le pare-feu intercepte automatiquement les requêtes DNS (généralement sur le port 53) qui traversent ses interfaces et y répond, sans que le client ne s'en aperçoive.
+
+<Steps>
+1.  **Accéder au Menu du Proxy DNS**
+    Rendez-vous dans `Configuration > Réseau > Proxy cache DNS`.
+
+2.  **Activer le Service**
+    Cliquez sur le bouton `OFF` pour le faire passer à **`ON`**. Le service est maintenant actif et prêt à intercepter les requêtes.
+
+3.  **Autoriser les Clients à Utiliser le Cache**
+    Le proxy n'accepte pas les requêtes de n'importe qui. Vous devez explicitement définir quelles machines ou réseaux sont autorisés à l'utiliser.
+    * Dans la section `LISTE DES CLIENTS AUTORISÉS À UTILISER LE CACHE DNS`, cliquez sur **`+ Ajouter`**.
+    * Sélectionnez l'objet réseau correspondant aux machines qui feront des requêtes. Par exemple, pour autoriser un serveur DNS interne de la DMZ, vous pouvez ajouter l'objet `srv_dns_priv`. Pour autoriser tout un réseau, vous pouvez sélectionner un objet comme `Network_in`.
+
+4.  **Appliquer et Sauvegarder**
+    Cliquez sur **`Appliquer`** pour sauvegarder la liste des clients autorisés.
+</Steps>
+
+## ✅ Résumé du Fonctionnement Transparent
+
+<Tabs>
+<TabItem label="Étape 1 : Le Client">
+Un poste client (ex: 192.168.1.100) configuré pour utiliser un DNS externe (ex: 8.8.8.8) envoie une requête pour `www.google.com`.
+</TabItem>
+<TabItem label="Étape 2 : Le Pare-feu">
+Le pare-feu voit passer cette requête DNS (port 53). Comme son proxy DNS est en mode transparent, il l'intercepte.
+</TabItem>
+<TabItem label="Étape 3 : La Réponse">
+- **Si l'adresse est en cache :** Le pare-feu répond immédiatement au client.
+- **Si l'adresse n'est pas en cache :** Le pare-feu envoie la requête à ses propres serveurs DNS amont (ex: 1.1.1.1), reçoit la réponse, la met en cache, et la transmet au client.
+</TabItem>
+</Tabs>
+
+<Aside type="tip" title="Succès" icon="approve-check">
+**Résultat :** Le client reçoit sa réponse DNS sans jamais savoir que c'est le pare-feu qui a traité sa demande à la place du serveur DNS qu'il visait initialement.
+</Aside>

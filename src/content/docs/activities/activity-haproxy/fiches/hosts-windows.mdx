@@ -1,0 +1,151 @@
+---
+title: Modifier le fichier hosts sous Windows
+description: Un guide pratique pour associer un nom de domaine à une adresse IP en local sur votre poste.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## 1. À quoi sert le fichier hosts ?
+
+Le fichier `hosts` permet de résoudre un nom de domaine (par exemple, `app.test`) en une adresse IP spécifique (comme `10.0.0.5`) directement sur votre machine, **avant même d'interroger un serveur DNS**.
+
+C'est extrêmement utile pour :
+- **Tester en local** un site web ou un certificat TLS/HTTPS avec un vrai nom de domaine sans avoir à configurer un serveur DNS.
+- **Rediriger temporairement** un nom de domaine vers un environnement de test (VM, conteneur, serveur de développement, etc.).
+
+<Aside type="note" title="Emplacement">
+Sous Windows, le fichier se trouve ici :
+`C:\Windows\System32\drivers\etc\hosts`
+Il n'a aucune extension.
+</Aside>
+
+## 2. Méthode simple (Notepad++)
+
+Cette méthode fonctionne sur tous les postes, même si vous n'avez pas les droits d'installation.
+
+### Pré-requis
+- Droits **Administrateur** (UAC) sur le poste.
+- **Notepad++** installé.
+
+### Étapes
+1.  Lancez Notepad++ en tant qu'Administrateur.
+    * Recherchez “Notepad++” dans le menu Démarrer.
+    * Faites un clic droit et choisissez **Exécuter en tant qu’administrateur**.
+2.  Ouvrez le fichier `hosts`.
+    * Allez dans `Fichier > Ouvrir...` et naviguez vers `C:\Windows\System32\drivers\etc\`.
+    * En bas à droite, changez le filtre de "Fichiers texte" à **"Tous les fichiers (\*.\*)"** pour voir et sélectionner le fichier `hosts` (qui n'a pas d'extension).
+3.  Ajoutez votre ligne de redirection.
+    * Le format est simple : `IP` suivi d'espaces ou de tabulations, puis du `nom_de_domaine`.
+    * Ajoutez une ligne à la fin du fichier, par exemple :
+    ```
+    # Projet SIO – redirection locale pour test du certificat
+    10.0.0.5    app.test
+    ```
+4.  Enregistrez le fichier avec `Ctrl+S`.
+5.  Videz le cache DNS pour appliquer les modifications immédiatement. Ouvrez une invite de commande et tapez :
+    ```bash
+    ipconfig /flushdns
+    ```
+
+<Aside type="tip" title="Bonne pratique">
+Utilisez un TLD (Top-Level Domain) réservé comme **`.test`** (RFC 2606) pour éviter tout conflit avec de vrais noms de domaine sur Internet.
+</Aside>
+
+---
+
+## 3. Méthode rapide (Outils spécialisés)
+
+Ces outils offrent une interface graphique et des fonctionnalités avancées pour gérer plusieurs entrées.
+
+### Option A - Microsoft PowerToys - Hosts File Editor (recommandé)
+- **Installation** (Windows 10/11) :
+  ```bash
+  winget install --id Microsoft.PowerToys -e
+  ```
+
+  - **Utilisation :**
+      - Ouvrez PowerToys en tant qu'Administrateur et activez le module **"Hosts File Editor"**.
+      - Cliquez sur **"Add"** et remplissez les champs :
+          - **Hostname :** `app.test`
+          - **IP address :** `10.0.0.5`
+          - **Comment :** `Test certificat projet X`
+      - Les modifications sont sauvegardées automatiquement. Vous pouvez activer/désactiver une entrée en un seul clic.
+
+### Option B - SwitchHosts\! (alternative portable)
+
+  - C'est une application dédiée à la gestion de profils de fichiers `hosts`. C'est l'idéal pour basculer rapidement entre différents environnements de travail.
+  - Créez un profil pour votre projet, ajoutez votre redirection et activez-le au besoin.
+
+
+<Aside type="caution" title="Note importante">
+L'installation de ces outils peut être restreinte sur les postes en salle de cours. Dans ce cas, la méthode **Notepad++** est votre meilleure option.
+</Aside>
+
+-----
+
+## 4. Validation (Tests & Vérifications)
+
+Toujours vérifier que votre redirection fonctionne comme prévu.
+
+### 4.1. Vérifier la résolution du nom
+
+  - Videz d'abord le cache DNS : `ipconfig /flushdns`
+  - Utilisez `nslookup` pour vérifier si le nom est bien résolu :
+    ```bash
+    nslookup app.test
+    ```
+    Le résultat attendu est l'adresse IP `10.0.0.5`.
+  - Ou, en PowerShell, utilisez une commande plus moderne :
+    ```powershell
+    Resolve-DnsName app.test
+    ```
+
+### 4.2. Vérifier la connectivité et le port
+
+  - Testez la connexion à la machine et au port (ex. 80 pour HTTP, 443 pour HTTPS) :
+    ```powershell
+    Test-NetConnection app.test -Port 80
+    Test-NetConnection app.test -Port 443
+    ```
+    Si la connexion est réussie, `TcpTestSucceeded` doit être `True`.
+
+### 4.3. Tester l'URL dans le navigateur
+
+  - Accédez à l'URL : `http://app.test` ou `https://app.test`.
+  - Si vous testez un certificat, assurez-vous que le nom de domaine de l'URL (`app.test`) correspond exactement au **CN (Common Name)** ou au **SAN (Subject Alternative Name)** du certificat.
+
+-----
+
+## 5. Dépannage (Checklist & Solutions)
+
+Un problème ? Pas de panique, suivez cette checklist.
+
+### Checklist de diagnostic rapide
+
+  - **Droits** : Avez-vous bien ouvert l'éditeur en **Administrateur** ?
+  - **Syntaxe** : Le format est-il correct ? (`IP` `nom`, séparés par des espaces ou tabulations).
+  - **Cache DNS** : Avez-vous bien exécuté `ipconfig /flushdns` après la modification ?
+  - **Proxy** : Le navigateur utilise-t-il un proxy ? Le fichier `hosts` est ignoré si le navigateur passe par un proxy. Désactivez-le temporairement pour le domaine testé.
+  - **Antivirus/EDR** : Certains logiciels de sécurité protègent le fichier `hosts`. Vous devrez peut-être le mettre en exclusion.
+  - **Fichier en lecture seule** : Vérifiez les propriétés du fichier (`Clic droit > Propriétés`).
+
+-----
+
+## 6. Bonnes pratiques
+
+  - **Commenter vos entrées** pour vous y retrouver plus tard.
+    ```
+    # TP Réseau - Semaine 45 - VM Debian
+    172.25.10.20   intranet.test
+    ```
+  - **Supprimez ou désactivez** les entrées obsolètes pour éviter toute confusion.
+  - Utilisez toujours des noms en `.test` pour vos expérimentations.
+
+-----
+
+## 7. Revenir en arrière
+
+1.  Ouvrez le fichier `hosts` en **Administrateur**.
+2.  Supprimez la ligne que vous avez ajoutée.
+3.  Sauvegardez le fichier.
+4.  N'oubliez pas de vider le cache DNS : `ipconfig /flushdns`

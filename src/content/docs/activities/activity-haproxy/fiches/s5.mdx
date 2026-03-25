@@ -1,0 +1,174 @@
+---
+title: Créer de la lenteur sur les nodes
+description: Comment simuler des serveurs lents pour tester les algorithmes d'équilibrage de charge de HAProxy.
+sidebar:
+  order: 8
+status: "draft"
+level: "BTS SIO 2"
+duration: "45 min"
+tags: ["haproxy", "tls", "sni", "bts-sio"]
+slug: s5
+---
+
+:::note
+Sans PHP (ni app côté serveur), le plus simple pour créer une **route “lente”** est… de **rendre le serveur lent au niveau réseau** plutôt que d’écrire un handler applicatif.
+
+Voici deux approches pédagogiques. La **A** est la plus simple et ne change rien à Nginx ; la **B** montre un vrai endpoint `/slow` mais demande un petit “sidecar”.
+:::
+
+## 1. Recommandé — Simuler la lenteur avec `tc netem` (niveau réseau)
+
+Idée : on ajoute une **latence artificielle** sur **node2** (par ex. +2 s). Ça rend toutes ses réponses plus lentes, ce qui suffit pour comparer `roundrobin` vs `leastconn`.
+
+### 1.1. Donner le droit de modifier le réseau au conteneur
+
+Dans votre `docker-compose.yml`, **ajoutez** la capacité `NET_ADMIN` **uniquement à node2** :
+
+```yaml
+services:
+  node1:
+    image: nginx:alpine
+    container_name: node1
+    networks:
+      macvlan_lan:
+        ipv4_address: 10.10.0.101
+    # (volumes/html etc. inchangés)
+
+  node2:
+    image: nginx:alpine
+    container_name: node2
+    cap_add:
+      - NET_ADMIN             # <— nécessaire pour tc netem
+    networks:
+      macvlan_lan:
+        ipv4_address: 10.10.0.102
+    # (volumes/html etc. inchangés)
+````
+
+Puis relancez :
+
+```bash
+docker compose up -d
+```
+
+### 1.2. Injecter la latence dans node2
+
+```bash
+# Ajouter 2000 ms de délai sur TOUT le trafic de node2
+docker exec -it node2 sh -c 'tc qdisc add dev eth0 root netem delay 2000ms'
+
+# Vérifier
+docker exec -it node2 sh -c 'tc qdisc show dev eth0'
+```
+
+:::tip
+Pour supprimer la latence, utilisez la commande suivante :
+
+```bash
+docker exec -it node2 sh -c 'tc qdisc del dev eth0 root'
+```
+
+:::
+
+### 1.3. Tester et comparer
+
+Sur votre client (ou sur HAProxy) :
+
+```bash
+# Mesurer la durée de réponse (format court)
+curl -o /dev/null -s -w "node1: %{time_total}s\n" [http://node1.example.test/](http://node1.example.test/)
+curl -o /dev/null -s -w "node2: %{time_total}s\n" [http://node2.example.test/](http://node2.example.test/)
+```
+
+Puis bombardez le **même site** que HAProxy équilibre (ex. `node1.example.test` si vous avez mis node1/node2 dans le même backend) :
+
+```bash
+for i in {1..10}; do curl -s -o /dev/null -w "%{remote_ip} %{time_total}\n" [http://node1.example.test/](http://node1.example.test/); done
+```
+
+  * Avec `balance roundrobin` : alternance, mais on **ressent** les réponses plus lentes quand ça tombe sur node2.
+  * Avec `balance leastconn` : HAProxy **évite** progressivement node2 (le plus occupé) → meilleure réactivité.
+
+-----
+
+## 2. Option “vrai endpoint” — `/slow` via un **sidecar** HTTP lent
+
+Idée : on ajoute un **petit service** qui **retarde** ses réponses, et on fait **proxy\_pass** dans Nginx pour `/slow`. Ça crée **une route lente ciblée** (le reste du site reste rapide).
+
+### 2.1. Ajouter un petit serveur “echo” avec délai
+
+Utilisons `ghcr.io/ealen/echo-server` (il peut retarder la réponse via la variable `DELAY`).
+
+Créez un **réseau bridge** interne en plus du macvlan (un conteneur peut être dans 2 réseaux) :
+
+```bash
+docker network create app_net
+```
+
+Modifiez `docker-compose.yml` :
+
+```yaml
+services:
+  node1:
+    image: nginx:alpine
+    container_name: node1
+    networks:
+      macvlan_lan:
+        ipv4_address: 10.10.0.101
+      app_net: {}              # <— 2e réseau interne
+
+  slow1:
+    image: ghcr.io/ealen/echo-server:latest
+    container_name: slow1
+    environment:
+      - DELAY=2                 # <— 2 secondes de délai
+    networks:
+      app_net:
+        aliases: [slow]          # nom DNS interne: slow
+
+networks:
+  macvlan_lan:
+    external: true
+  app_net:
+    external: true
+```
+
+### 2.2. Configurer Nginx (dans `node1`) pour `/slow`
+
+Montez une conf nginx (volume) ou éditez celle existante et ajoutez :
+
+```nginx
+# Dans server { ... } de node1
+location /slow {
+    proxy_pass http://slow:80;   # "slow" est résolu via le réseau app_net
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+}
+```
+
+Rechargez node1 :
+
+```bash
+docker exec node1 nginx -s reload
+```
+
+### 2.3. Tester
+
+```bash
+time curl -s -o /dev/null [http://node1.example.test/slow](http://node1.example.test/slow)
+# ~2 secondes
+```
+
+:::tip
+Vous pouvez faire la même chose pour `node2` (slow2, DELAY différent) si vous voulez créer **deux profils** de lenteur.
+
+  * **Avantage** : `/slow` ne ralentit pas les autres URLs.
+  * **Inconvénient** : un peu plus de câblage (2 réseaux, sidecar).
+    :::
+
+-----
+
+## 3. Que choisir pour le TP ?
+
+  * **A) `tc netem`** : **rapide à mettre en place**, aucun changement Nginx, démontre bien `leastconn` vs `roundrobin`.
+  * **B) Sidecar `/slow`** : plus “propre applicativement”, montre le **proxy\_pass** et les **réseaux multiples** Docker, utile si vous voulez créer **différentes routes** avec différents délais.

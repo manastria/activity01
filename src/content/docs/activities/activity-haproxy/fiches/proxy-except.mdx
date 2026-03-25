@@ -1,0 +1,149 @@
+---
+title: Gérer les paramètres proxy et les exceptions
+description: Guide pour configurer le proxy et contourner les restrictions sur Windows et Firefox.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Contexte : Le proxy en environnement contrôlé
+
+Dans un établissement scolaire, la navigation internet passe souvent par un **serveur proxy**, une passerelle qui gère et filtre le trafic. L'adresse de ce proxy est souvent fixe, par exemple : `172.16.0.1:3128`.
+
+Parfois, un fichier de configuration automatique appelé **PAC** (`.pac`) ou **WPAD** (`.dat`) est utilisé pour définir automatiquement les règles.
+
+Pour nos TP, nous avons besoin de **contourner** ce proxy pour des adresses spécifiques, comme :
+- Les réseaux privés de notre labo (par exemple, `172.25.0.0/16`).
+- Les noms de domaine de test (ex. **`.test`**, **`.arpa`**).
+- Les adresses locales (`localhost`, noms de machines du réseau local).
+
+---
+
+## 1. Configuration sur Windows 10/11
+
+<Aside type="note" title="PAC vs. Proxy Manuel">
+Si un script de configuration automatique (PAC/WPAD) est actif, il prend le dessus ! La liste d'exceptions que vous définissez manuellement sera ignorée.
+</Aside>
+
+### 1.1. Vérifier la configuration actuelle
+Pour savoir si un script PAC est actif, rendez-vous dans les paramètres Windows.
+
+1. Allez dans `Paramètres > Réseau & Internet > Proxy`.
+2. Observez la section "Configuration automatique du proxy". Si le paramètre **Script de configuration** est activé, un PAC est en cours d'utilisation.
+
+### 1.2. Configurer le proxy manuel (si PAC inactif)
+Si vous n'êtes pas contraint par un script PAC, vous pouvez définir vos propres règles.
+
+1. Dans la même section `Proxy` des paramètres Windows, activez le **"Proxy manuel"**.
+2. Renseignez l'adresse et le port du proxy :
+   - **Adresse** : `172.16.0.1`
+   - **Port** : `3128`
+3. Dans le champ **"Ne pas utiliser le serveur proxy pour"**, entrez la liste des exceptions. Séparez-les par des points-virgules `;`.
+
+```
+
+localhost;127.*;<local>;10.*;192.168.*;172.25.*;*.test;*.arpa
+
+```
+
+<Aside type="tip" title="Attention à la syntaxe">
+Windows n'accepte pas la notation CIDR (`/16`) dans cette liste. Utilisez l'astérisque (`*`) comme un caractère de remplacement (`wildcard`).
+</Aside>
+
+---
+
+## 2. Configuration sur Firefox
+
+Firefox a sa propre configuration réseau, qui peut être indépendante des paramètres de Windows.
+
+1. Ouvrez `Paramètres` dans Firefox.
+2. Tout en bas, cliquez sur **"Paramètres réseau..."** (ou cherchez `about:preferences#general`).
+
+<Tabs>
+<TabItem label="Option A : Utiliser les paramètres système">
+C'est la méthode la plus simple. Firefox suit la configuration de Windows, y compris le script PAC s'il est actif.
+</TabItem>
+<TabItem label="Option B : Configuration manuelle (indépendante)">
+Si vous avez besoin d'une configuration différente de celle de Windows, ou si un PAC vous bloque, vous pouvez configurer Firefox manuellement.
+
+1.  Sélectionnez **"Configuration manuelle du proxy"**.
+2.  Remplissez les champs `Serveur proxy HTTP` et `Port` avec `172.16.0.1` et `3128`.
+3.  Dans le champ **"Pas de proxy pour"**, entrez vos exceptions en les séparant par des **virgules** `,`.
+
+```
+
+localhost, 127.0.0.1, 10.0.0.0/8, 172.16.0.0/12, 172.25.0.0/16, 192.168.0.0/16, \*.test, \*.arpa
+
+````
+
+**À noter :** Firefox accepte la **notation CIDR** (`/8`, `/12`, `/16`), ce qui est plus précis. Pensez à ajouter `::1` pour l'IPv6 si besoin.
+</TabItem>
+</Tabs>
+
+---
+
+## 3. Définir des exceptions en ligne de commande (CLI)
+
+Certains outils en ligne de commande (comme **`curl`**, `pip`, ou `git`) ne prennent pas en compte les paramètres proxy de Windows ou de Firefox. Pour eux, il faut définir des **variables d'environnement**.
+
+<Tabs>
+<TabItem label="PowerShell (session courante)">
+```powershell
+$env:HTTP_PROXY = "[http://172.16.0.1:3128](http://172.16.0.1:3128)"
+$env:HTTPS_PROXY = "[http://172.16.0.1:3128](http://172.16.0.1:3128)"
+$env:NO_PROXY = "localhost,127.0.0.1,10.0.0.0/8,172.16.0.0/12,172.25.0.0/16,192.168.0.0/16,.test,.arpa"
+````
+
+</TabItem>
+<TabItem label="Cmd ou script batch">
+
+```bash
+set HTTP_PROXY=[http://172.16.0.1:3128](http://172.16.0.1:3128)
+set HTTPS_PROXY=[http://172.16.0.1:3128](http://172.16.0.1:3128)
+set NO_PROXY=localhost,127.0.0.1,10.0.0.0/8,172.16.0.0/12,172.25.0.0/16,192.168.0.0/16,.test,.arpa
+```
+
+</TabItem>
+</Tabs>
+
+-----
+
+## 4. Vérifier que ça fonctionne (Tests)
+
+### 4.1. Test de navigation
+
+  - Ouvrez une IP de votre réseau de labo (ex. `http://172.25.10.20`) dans votre navigateur. Elle devrait se charger sans erreur.
+  - Ouvrez un site public (ex. `https://www.example.com`). Il doit charger correctement, en passant par le proxy.
+
+### 4.2. Avec `curl`
+
+Windows 10/11 intègre `curl`. Vous pouvez l'utiliser pour forcer ou bypasser le proxy.
+
+```bash
+# Test vers une machine locale (devrait réussir)
+curl -I [http://172.25.10.20](http://172.25.10.20)
+
+# Test vers une machine locale, en forçant le proxy (devrait échouer si le proxy ne gère pas le LAN)
+curl -I --proxy [http://172.16.0.1:3128](http://172.16.0.1:3128) [http://172.25.10.20](http://172.25.10.20)
+```
+
+<Aside type="note" title="Vider les caches">
+Si les changements ne s'appliquent pas immédiatement, pensez à :
+
+  - Vider le cache DNS de Windows : `ipconfig /flushdns`
+  - Vider le cache de votre navigateur.
+</Aside>
+
+-----
+
+## 5. Dépannage : Problèmes courants
+
+| Symptôme                                       | Cause probable                                                         | Solution                                                                                                                              |
+| ---------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Mes exceptions Windows n'ont aucun effet.      | Un script PAC est actif.                                               | Mettez les exceptions dans le PAC si vous êtes l'admin, sinon basculez en proxy manuel.                                               |
+| L'accès à `172.25.10.20` échoue.               | La syntaxe des exceptions est incorrecte.                              | Sous Windows, utilisez un `*` (ex. `172.25.*`). Sous Firefox, utilisez la notation CIDR (`172.25.0.0/16`).                           |
+| `intranet` ne fonctionne pas.                  | Les noms de machines locales ne sont pas considérés comme locaux.      | Ajoutez `localhost` et `<local>` aux exceptions.                                                                                      |
+| `*.test` ne contourne pas le proxy.            | Le proxy ne gère pas correctement les TLD de test.                     | Assurez-vous d'avoir la bonne syntaxe (`*.test` ou `.test`) et vérifiez si le proxy ne bloque pas les domaines inconnus.               |
+| Tout marche dans le navigateur mais pas dans `git` ou `npm`. | Chaque application a sa propre gestion du proxy.                         | Définissez les variables d'environnement `HTTP_PROXY`, `HTTPS_PROXY` et `NO_PROXY` comme montré dans la section 3.                  |
+| La connexion HTTPS échoue via le proxy.        | "Utiliser pour tous les protocoles" n'est pas coché.                   | Vérifiez cette option dans la configuration manuelle et assurez-vous que le proxy est configuré pour gérer le trafic HTTPS.           |
+| Les changements ne s'appliquent pas.           | Le cache est toujours actif.                                           | Exécutez `ipconfig /flushdns` et videz le cache du navigateur. Vous devrez peut-être même redémarrer l'application ou la machine.     |
+| Je ne peux rien modifier sur mon poste.        | Une GPO (stratégie de groupe) ou un EDR bloque la configuration.       | Utilisez la configuration manuelle de Firefox si elle n'est pas bloquée, ou demandez à l'administrateur de l'établissement.          |

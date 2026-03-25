@@ -1,0 +1,281 @@
+---
+title: Partie 6 — Sécurisation et optimisation du reverse-proxy
+description: Guide pratique pour sécuriser et optimiser une configuration HAProxy en vue d'une utilisation en production.
+sidebar:
+  order: 2
+level: "BTS SIO 2"
+duration: "45 min"
+tags: ["haproxy", "tls", "sni", "bts-sio"]
+---
+
+import { Aside, Tabs, TabItem, Steps } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+**Je n’ai pas encore relu cette fiche.** Considérez-la comme un brouillon.
+</Aside>
+
+:::note
+Dans cette partie, vous allez renforcer votre configuration HAProxy :
+* forcer l’utilisation de **HTTPS**,
+* ajouter des **en-têtes de sécurité** et d’identification,
+* filtrer certaines requêtes,
+* et améliorer légèrement les performances (compression et connexions).
+
+L’objectif est de rapprocher votre configuration de ce qu’on ferait **en production**, tout en restant simple à comprendre.
+:::
+
+## 1. Prérequis
+
+Avant de commencer :
+* Le frontal HTTPS fonctionne (certificats valides, tests de la partie 3 passés).
+* Les backends sont accessibles et stables.
+* Vous avez un accès administrateur à la VM HaProxy.
+* Vous pouvez lire les logs avec `journalctl -u haproxy -f`.
+
+---
+
+## 2. Forcer la redirection HTTP → HTTPS
+
+Aujourd’hui, un client peut encore accéder à votre site en **HTTP**. En production, on veut **forcer** le chiffrement. C’est HAProxy qui s’en charge, en redirigeant automatiquement vers HTTPS.
+
+### 2.1. Modification du frontend HTTP
+
+Dans `/etc/haproxy/haproxy.cfg`, trouvez la section `frontend fe_http` et remplacez-la par :
+
+```ini
+frontend fe_http
+  bind :80
+  http-request redirect scheme https code 301 unless { ssl_fc }
+````
+
+**Explication :**
+
+| Ligne | Rôle |
+| :--- | :--- |
+| `bind :80` | Écoute les requêtes HTTP classiques. |
+| `http-request redirect scheme https unless { ssl_fc }` | Redirige vers HTTPS sauf si la connexion est déjà sécurisée (`ssl_fc` = *SSL front connection*). |
+
+**Test :**
+
+```bash
+curl -I http://node1.example.test/
+```
+
+Réponse attendue :
+
+```http
+HTTP/1.1 301 Moved Permanently
+Location: https://node1.example.test/
+```
+
+:::tip
+C’est le proxy (et non les backends) qui applique la politique HTTPS.
+:::
+
+-----
+
+## 3\. Ajouter des en-têtes HTTP de sécurité et d’audit
+
+En plus de forcer le HTTPS, HAProxy peut **injecter des en-têtes HTTP** pour sécuriser les échanges et informer les backends de la véritable adresse cliente.
+
+### 3.1. Ajouter des en-têtes globaux
+
+Toujours dans `frontend fe_https`, ajoutez après vos ACL :
+
+```ini
+  # En-têtes de sécurité
+  http-response set-header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+  http-response set-header X-Frame-Options "SAMEORIGIN"
+  http-response set-header X-Content-Type-Options "nosniff"
+
+  # En-tête d’audit : indique l’adresse IP du client d’origine
+  http-request set-header X-Forwarded-For %[src]
+```
+
+**Explication :**
+
+| En-tête | Rôle |
+| :--- | :--- |
+| **HSTS** (`Strict-Transport-Security`) | Indique au navigateur de **toujours utiliser HTTPS**, même si l’utilisateur tape `http://`. |
+| **X-Frame-Options** | Empêche le site d’être affiché dans une iframe d’un autre domaine (protection anti-clickjacking). |
+| **X-Content-Type-Options** | Interdit au navigateur d’essayer d’interpréter un fichier comme un autre type. |
+| **X-Forwarded-For** | Transmet l’IP réelle du client au backend (sinon le serveur verrait seulement l’IP du proxy). |
+
+**Test :**
+
+```bash
+curl -I https://node1.example.test/
+```
+
+➡️ Les en-têtes doivent apparaître dans la réponse.
+
+:::tip
+Bon réflexe : ces en-têtes sont envoyés par le proxy, vous pouvez les modifier sans toucher aux backends.
+:::
+
+-----
+
+## 4\. Filtrer les requêtes
+
+Un proxy peut aussi **refuser certaines requêtes** avant qu’elles n’atteignent les serveurs web. Exemples typiques : accès à `/admin`, blocage d’une IP, restriction d’un réseau.
+
+### 4.1. Exemple : interdire `/admin` sauf depuis le labo
+
+```ini
+frontend fe_https
+  bind :443 ssl crt /etc/haproxy/certs/wildcard-example-test.pem
+
+  # Bloque /admin sauf depuis 172.25.0.0/16
+  acl is_admin path_beg /admin
+  acl is_lab  src 172.25.0.0/16
+  http-request deny if is_admin !is_lab
+```
+
+**Explication :**
+
+  * `path_beg /admin` → détecte les URLs qui commencent par `/admin`.
+  * `src 172.25.0.0/16` → plage des IP internes du labo.
+  * `deny if is_admin !is_lab` → refuse la requête si c’est `/admin` et que la source **n’est pas du labo**.
+
+**Test :**
+
+  * Depuis le réseau 172.25.x.x → OK.
+  * Depuis l’extérieur (ou simulateur) → 403 Forbidden.
+
+-----
+
+## 5\. Améliorer la performance
+
+### 5.1. Compression HTTP
+
+HAProxy peut compresser les réponses (texte, HTML, CSS, JSON…). Ajoutez ceci dans `defaults` ou directement dans `fe_https` :
+
+```ini
+  compression algo gzip
+  compression type text/html text/plain text/css application/javascript application/json
+```
+
+**Effet** : les pages HTML/CSS/JS seront transmises compressées.
+
+**Test :**
+
+```bash
+curl -I --compressed https://node1.example.test/
+```
+
+Le header `Content-Encoding: gzip` doit apparaître.
+
+### 5.2. Fermer les connexions proprement
+
+Par défaut, HTTP/1.1 garde les connexions ouvertes longtemps. Cela peut être utile, mais consomme de la mémoire côté proxy. On peut demander à HAProxy de fermer la session **après chaque réponse** :
+
+```ini
+  option http-server-close
+```
+
+:::tip
+Cela force HAProxy à relâcher plus vite les connexions au backend, évitant qu’un serveur « retienne » des sockets inactives.
+:::
+
+-----
+
+## 6\. Organisation et maintenance
+
+### 6.1. Structure propre des fichiers
+
+En production, on évite un fichier unique de 200 lignes. Créez un dossier :
+
+```bash
+sudo mkdir /etc/haproxy/conf.d
+```
+
+Et dans `/etc/haproxy/haproxy.cfg` :
+
+```ini
+include /etc/haproxy/conf.d/*.cfg
+```
+
+Vous pouvez alors séparer :
+
+  * `frontend-http.cfg`
+  * `frontend-https.cfg`
+  * `backends.cfg`
+  * `stats.cfg`
+
+Cela facilite la relecture et la maintenance.
+
+### 6.2. Rotation des logs
+
+Les fichiers de logs peuvent grossir vite. Debian fournit déjà un service :
+
+```bash
+sudo ls /etc/logrotate.d/haproxy
+```
+
+:::tip
+Vérifiez qu’il existe : cela limite automatiquement la taille des journaux et garde quelques jours d’historique.
+:::
+
+-----
+
+## 7\. Tests de validation
+
+1.  **Redirection HTTPS**
+
+    ```bash
+    curl -I http://node1.example.test/
+    ```
+
+    → doit renvoyer `301` vers `https://…`
+
+2.  **En-têtes de sécurité**
+
+    ```bash
+    curl -I https://node1.example.test/
+    ```
+
+    → `Strict-Transport-Security`, `X-Frame-Options`, `X-Content-Type-Options` présents.
+
+3.  **Filtrage `/admin`**
+
+    ```bash
+    curl -I https://node1.example.test/admin
+    ```
+
+    → 403 depuis un réseau non-autorisé.
+
+4.  **Compression**
+
+    ```bash
+    curl -I --compressed https://node1.example.test/
+    ```
+
+    → `Content-Encoding: gzip`.
+
+-----
+
+## 8\. À retenir
+
+:::caution
+
+  * HAProxy peut faire bien plus que du routage : il **protége** et **optimise** le trafic.
+  * La sécurité HTTPS se renforce avec **HSTS** et le **filtrage des accès**.
+  * Les en-têtes `X-Forwarded-For` et `X-*` permettent aux backends de **reconnaître** le client réel.
+  * Les optimisations simples (compression, fermeture des connexions) améliorent la **réactivité** et la **stabilité**.
+  * Une configuration claire et segmentée facilite les mises à jour sans erreur.
+:::
+
+-----
+
+## 9\. Auto-évaluation
+
+:::caution
+
+  * [ ] Les requêtes HTTP sont **redirigées** vers HTTPS.
+  * [ ] Les en-têtes HSTS et `X-*` sont présents dans les réponses.
+  * [ ] Le chemin `/admin` est **bloqué** hors du réseau labo.
+  * [ ] La **compression** gzip est active.
+  * [ ] Je comprends le rôle de chaque bloc (`frontend`, `backend`, `defaults`, `listen`).
+  * [ ] Je sais lire les **logs** et vérifier mes tests.
+:::
+
