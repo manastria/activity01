@@ -1,0 +1,218 @@
+# Infrastructure HaProxy
+
+Created Date: 4 octobre 2025 08:26
+Last Modified: 10 octobre 2025 14:57
+Status: Draft
+
+# Reverse Proxy HTTPS avec HAProxy
+
+> Objectif général :
+> 
+> 
+> Comprendre et mettre en œuvre un reverse proxy complet avec **HAProxy** sur **Debian 12**, capable de distribuer, sécuriser et superviser le trafic vers plusieurs serveurs web internes (Docker), dans une architecture réaliste de type **frontend / DMZ / backend**.
+> 
+
+---
+
+### **Partie 1 — Mise en place de l’infrastructure virtuelle**
+
+[Partie 1 : Préparer l’infrastructure réseau](Infrastructure%20HaProxy/Partie%201%20Pr%C3%A9parer%20l%E2%80%99infrastructure%20r%C3%A9seau%20282a2e074d3c80ca83eceb0975aee08d.md)
+
+> Objectif : construire l’environnement réseau complet du TP.
+> 
+- Importation des fichiers `.ova` (`CSNx-v4.3-FW-DEBIANS.ova`, `debian.ova`).
+- Configuration du **pare-feu Stormshield (SNS)** et des réseaux **Labo (172.25.x.0/16)** et **DMZ (10.10.0.0/24)**.
+- Création des VMs `HaProxy` et `Backends` (clones liés).
+- Attribution des adresses IP, passerelles, et test de connectivité.
+- Introduction à la séparation **frontend / backend** dans une DMZ.
+
+---
+
+### **Partie 2 — Mise en place des backends Docker**
+
+[Partie 2 : **Mise en place des backends Docker**](Infrastructure%20HaProxy/Partie%202%20Mise%20en%20place%20des%20backends%20Docker%20282a2e074d3c80829c9cf0fdbf8d1c60.md)
+
+> Objectif : préparer deux serveurs web distincts simulant node1 et node2.
+> 
+- Création d’un réseau **macvlan** pour donner une IP propre à chaque conteneur.
+- Démarrage de deux serveurs Nginx (`node1`, `node2`) via **Docker Compose**.
+- Commandes de diagnostic (`docker exec`, `ip`, `curl`, `tcpdump`).
+- Vérification du mode **promiscuité** VirtualBox et des règles réseau DMZ.
+- Checklists et procédures de dépannage (routage, pare-feu SNS, macvlan).
+
+---
+
+### **Partie 3 — Configuration de HAProxy (HTTPS)**
+
+[Partie 3 : Configuration HAProxy (TLS frontal + SNI, certificats wildcard vs dédiés)](Infrastructure%20HaProxy/Partie%203%20Configuration%20HAProxy%20(TLS%20frontal%20+%20SNI,%20282a2e074d3c8026ab65e7ab89d96cf8.md)
+
+> Objectif : mettre en place le reverse proxy HTTPS et comprendre les certificats TLS.
+> 
+- Création d’une **autorité de certification (CA)** locale et des certificats serveur.
+- Configuration du frontend HTTP/HTTPS dans `haproxy.cfg`.
+- Découverte du **SNI** (Server Name Indication) et des ACL par nom de domaine.
+- Comparaison **certificats dédiés** vs **wildcard** et leurs implications.
+- Étapes de test et validation via `curl`, avec et sans option `k`.
+- Note explicative sur la génération et le rôle des **SAN** (SubjectAltName).
+
+---
+
+### **Partie 4 — Supervision et observation**
+
+[Partie 4 : Observer et diagnostiquer HAProxy](Infrastructure%20HaProxy/Partie%204%20Observer%20et%20diagnostiquer%20HAProxy%20282a2e074d3c80c69760c3cb53bc488b.md)
+
+> Objectif : apprendre à observer et diagnostiquer le comportement de HAProxy.
+> 
+- Activation du **log HTTP** (option `httplog`).
+- Lecture des logs avec `journalctl` (Debian 12 et systemd-journald).
+- Option `rsyslog` pour avoir un fichier `/var/log/haproxy.log`.
+- Activation et configuration de la **page de statistiques** HAProxy (port 8404).
+- Explication de chaque directive (`bind`, `stats uri`, `auth`, etc.).
+- Observation de l’état des serveurs en direct : `UP`, `DOWN`, `MAINT`.
+
+---
+
+### **Partie 5 — Équilibrage de charge et haute disponibilité**
+
+[Partie 5 : Équilibrage & haute disponibilité avec HAProxy](Infrastructure%20HaProxy/Partie%205%20%C3%89quilibrage%20&%20haute%20disponibilit%C3%A9%20avec%20HA%20282a2e074d3c80dcbdbac9abdcd87085.md)
+
+> Objectif : répartir le trafic et gérer les pannes sans interruption de service.
+> 
+- Configuration du **load balancing** (`roundrobin`, `leastconn`).
+- Introduction aux **health-checks** HTTP (`option httpchk`).
+- Simulation de panne / redémarrage de conteneur.
+- Passage en **maintenance (MAINT)** via stats ou socket admin.
+- Réglages avancés : `weight`, `maxconn`, `slowstart`.
+- Validation par tests réels (boucles `curl`, logs, page stats).
+
+---
+
+### **Partie 6 — Sécurisation et optimisation**
+
+[Partie 6 : Sécurisation et optimisation du reverse-proxy](Infrastructure%20HaProxy/Partie%206%20S%C3%A9curisation%20et%20optimisation%20du%20reverse-p%20282a2e074d3c80a586c9d38ea9dfa9bd.md)
+
+> Objectif : renforcer la sécurité et améliorer la performance du proxy.
+> 
+- Redirection automatique **HTTP → HTTPS**.
+- Ajout d’**en-têtes de sécurité** : HSTS, X-Frame-Options, X-Content-Type-Options.
+- Transmission d’`X-Forwarded-For` vers les backends.
+- Exemple de filtrage : blocage `/admin` hors réseau Labo.
+- Activation de la **compression gzip** et gestion des connexions (`http-server-close`).
+- Organisation du fichier `haproxy.cfg` en sections séparées.
+
+---
+
+### **Partie 7 — Persistance de session (Sticky Sessions)**
+
+[Partie 7 : Persistance de session (Sticky Sessions)](Infrastructure%20HaProxy/Partie%207%20Persistance%20de%20session%20(Sticky%20Sessions)%20282a2e074d3c803d87bcd7ffef7474a6.md)
+
+> Objectif : conserver la session d’un client sur le même serveur backend.
+> 
+- Explication du cookie HAProxy (`SRV=n1`).
+- Configuration du cookie (`insert`, `indirect`, `nocache`, `maxidle`, `maxlife`).
+- Tests avec `curl` (fichier cookie) et navigateur.
+- Gestion automatique en cas de panne (recréation du cookie).
+- Variante : persistance sur cookie applicatif (`stick-table`).
+- Risques et limites (déséquilibre de charge, durée de vie).
+
+---
+
+### **Partie 8 — Sécurisation de l’OS (pare-feu et durcissement)**
+
+[Partie 8 : Sécuriser l’OS (pare-feu UFW & durcissement léger)](Infrastructure%20HaProxy/Partie%208%20S%C3%A9curiser%20l%E2%80%99OS%20(pare-feu%20UFW%20&%20durcisseme%20282a2e074d3c80da8dfdc8e406de31cb.md)
+
+> Objectif : fermer les ports inutiles et sécuriser le système Debian.
+> 
+- Installation et configuration du pare-feu **UFW**.
+- Politiques par défaut (`deny incoming`, `allow outgoing`).
+- Règles précises : SSH, HTTP, HTTPS, stats (8404).
+- Activation, test et logging (`ufw logging low`, `journalctl -u ufw`).
+- Vérification pratique via `curl` et `ss -lnt`.
+- Durcissement léger :
+    - Désactiver login root SSH,
+    - Authentification par clé,
+    - Mises à jour automatiques (`unattended-upgrades`),
+    - Option `fail2ban`.
+- Dépannage rapide et validation des règles.
+
+---
+
+### **Partie 9 — (à compléter)**
+
+> [A faire]
+> 
+
+---
+
+### **Partie 10 — Bonus : Full-TLS jusqu’aux backends**
+
+[Bonus — Full-TLS jusqu’aux backends](Infrastructure%20HaProxy/Bonus%20%E2%80%94%20Full-TLS%20jusqu%E2%80%99aux%20backends%20282a2e074d3c80c08005c9dfb1b58b5d.md)
+
+> Objectif : chiffrer intégralement le trafic entre client, proxy et serveurs internes.
+> 
+- Rappel : différence TLS “offload” (proxy termine TLS) vs “Full-TLS” (bout-en-bout).
+- Génération de certificats backend (signés par la même CA).
+- Configuration Nginx pour HTTPS interne.
+- Adaptation du `haproxy.cfg` : `ssl`, `sni`, `verify none`.
+- Tests de validation (`curl --cacert`, logs HAProxy).
+- Tableau comparatif performance / sécurité / complexité.
+- Synthèse : quand activer le Full-TLS selon le contexte.
+
+---
+
+## 🔎 Utiliser ce sommaire
+
+- **Chercher une fonctionnalité ?**
+    
+    > → “cookies” → partie 7
+    > 
+    > 
+    > → “filtrage HTTP” → partie 6
+    > 
+    > → “certificats TLS” → partie 3 ou 10
+    > 
+    > → “logs” → partie 4
+    > 
+    > → “équilibrage” → partie 5
+    > 
+    > → “pare-feu” → partie 8
+    > 
+- **Relire la progression ?**
+    
+    → Les parties 1–3 : mise en place et premiers tests
+    
+    → 4–5 : supervision et haute dispo
+    
+    → 6–8 : sécurité & durcissement
+    
+    → 10 : bonus pour aller plus loin
+    
+
+---
+
+Souhaites-tu que je te crée aussi une **version “table des matières abrégée”** (juste les titres des parties et sous-sections, sans les explications) pour insérer au début du document Word ou PDF ?
+
+# Résolution DNS pour le TP
+
+Sur les postes étudiants (ou sur ta machine si tu testes), ajoute :
+
+```
+# /etc/hosts ou DNS de labo
+<IP_VM_frontend> node1.example.test node2.example.test
+
+```
+
+> Les deux pointent vers l’IP de la VM HAProxy, SNI distinguera les backends.
+> 
+
+[Détails de la réinitialisation du SNS](Infrastructure%20HaProxy/D%C3%A9tails%20de%20la%20r%C3%A9initialisation%20du%20SNS%20282a2e074d3c8097a607df54515d91cc.md)
+
+[SNS EVA Stormshield NAT sortant (SNAT)](https://www.notion.so/SNS-EVA-Stormshield-NAT-sortant-SNAT-286a2e074d3c80d5bd1bfd411e71c38a?pvs=21) 
+
+[SNS EVA Stormshield NAT entrant (DNAT)](Infrastructure%20HaProxy/SNS%20EVA%20Stormshield%20NAT%20entrant%20(DNAT)%20282a2e074d3c80288706d972c4cf488f.md)
+
+[Comprendre le réseau macvlan et pourquoi on a besoin d’un shim](Infrastructure%20HaProxy/Comprendre%20le%20r%C3%A9seau%20macvlan%20et%20pourquoi%20on%20a%20beso%20283a2e074d3c80878b31fb9d05cb295c.md)
+
+[Vérifier le réseau macvlan](Infrastructure%20HaProxy/V%C3%A9rifier%20le%20r%C3%A9seau%20macvlan%20286a2e074d3c807e80d7c762451b775d.md)
+
+[DNS & Proxy cache DNS sur Stormshield SNS (EVA1)](https://www.notion.so/DNS-Proxy-cache-DNS-sur-Stormshield-SNS-EVA1-286a2e074d3c804f9ac1c12542b84807?pvs=21)
