@@ -1,0 +1,310 @@
+---
+title: Diagnostic de serveurs web avec curl
+description: >
+  Utiliser curl en ligne de commande pour diagnostiquer des serveurs web en labo :
+  en-têtes HTTP, redirections, certificats TLS, codes de retour, temps de connexion.
+filename: curl-diagnostic-web
+topic: curl
+section: systeme
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+# Déboguer un serveur web avec *curl*
+
+## Pourquoi *curl* plutôt que le navigateur en labo ?
+
+En environnement de labo, le navigateur introduit plusieurs biais qui
+compliquent le diagnostic :
+
+- le cache du navigateur peut masquer une modification récente du serveur ;
+- le proxy système ou du navigateur peut intercepter la requête sans que
+  ce soit visible ;
+- les redirections sont suivies silencieusement, sans que l'on voie les
+  codes de retour intermédiaires ;
+- le *handshake* *TLS* (*Transport Layer Security*) est opaque pour
+  l'utilisateur.
+
+*curl* (*Client URL*) permet d'envoyer des requêtes *HTTP*
+(*HyperText Transfer Protocol*) en ligne de commande, de contrôler
+précisément chaque paramètre et d'observer l'intégralité des échanges.
+
+<Aside type="note">
+**Commande de référence** — bon point de départ pour le diagnostic en labo :
+
+```bash
+curl -vsL4 --noproxy '*' https://monsite.fr 2>&1 | less
+```
+
+Elle combine les options les plus utiles et redirige *stderr* et *stdout*
+vers `less` pour un défilement confortable.
+</Aside>
+
+---
+
+## Les options essentielles
+
+### `-v` — mode verbeux (*verbose*)
+
+Affiche l'intégralité de la négociation :
+
+- les en-têtes de requête envoyés par `curl` (lignes préfixées par `>`) ;
+- les en-têtes de réponse du serveur (lignes préfixées par `<`) ;
+- les informations *TLS* (certificat, protocole, suite de chiffrement).
+
+```bash
+curl -v https://monsite.fr
+```
+
+<details>
+<summary>Exemple de sortie <code>-v</code></summary>
+
+```
+* Trying 192.168.1.10:443...
+* Connected to monsite.fr (192.168.1.10) port 443
+* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384
+> GET / HTTP/1.1
+> Host: monsite.fr
+> User-Agent: curl/8.5.0
+>
+< HTTP/1.1 200 OK
+< Content-Type: text/html; charset=UTF-8
+```
+
+Les lignes préfixées par `>` sont les en-têtes **envoyés**, celles
+préfixées par `<` sont les en-têtes **reçus**.
+</details>
+
+---
+
+### `-s` — mode silencieux (*silent*)
+
+Supprime la barre de progression et les messages d'erreur de `curl`
+lui-même. À combiner avec `-v` pour ne garder que les informations
+de débogage.
+
+---
+
+### `-L` — suivre les redirections (*follow redirects*)
+
+Suit automatiquement les en-têtes `Location:` renvoyées par le serveur
+(codes *HTTP* `301`, `302`, `307`, `308`). Sans `-L`, `curl` s'arrête à
+la première réponse.
+
+<Aside type="caution">
+En cas de boucle infinie de redirections, limitez le nombre de sauts avec
+l'option `--max-redirs 5`.
+</Aside>
+
+---
+
+### `-4` — forcer *IPv4* (*Internet Protocol version 4*)
+
+En labo, les piles *IPv6* (*Internet Protocol version 6*) sont parfois mal
+configurées. Forcer *IPv4* évite des délais de connexion inexpliqués.
+
+---
+
+### `--noproxy '*'` — ignorer le proxy
+
+Contourne toute configuration de proxy (variables d'environnement
+`http_proxy`, `https_proxy`, fichier de configuration système).
+Indispensable quand le proxy est mal configuré ou absent dans la maquette.
+
+---
+
+### `2>&1 | less`
+
+`curl -v` envoie les informations de débogage sur *stderr* et le corps de
+la réponse sur *stdout*. La redirection `2>&1` fusionne les deux flux pour
+les parcourir ensemble dans `less`.
+
+---
+
+## Cas d'usage typiques en labo
+
+### Vérifier qu'une page répond — code de retour uniquement
+
+```bash
+curl -o /dev/null -s -w "%{http_code}\n" http://monsite.fr
+```
+
+Affiche uniquement le code de statut *HTTP* (`200`, `404`, `500`…).
+Utile dans un script ou pour un test rapide sans polluer le terminal
+avec le corps de la réponse.
+
+<details>
+<summary>Créer un alias <code>httpcode</code> prêt à l'emploi</summary>
+
+Ajoutez la ligne suivante à votre fichier `~/.bashrc` (ou `~/.zshrc`
+selon votre shell) :
+
+```bash
+alias httpcode='curl -o /dev/null -s -w "%{http_code}\n"'
+```
+
+Rechargez ensuite la configuration :
+
+```bash
+source ~/.bashrc
+```
+
+Vous pouvez désormais tester n'importe quelle *URL* (*Uniform Resource
+Locator*) en une seule frappe :
+
+```bash
+httpcode http://monsite.fr
+# → 200
+
+httpcode http://monsite.fr/page-inexistante
+# → 404
+```
+
+<Aside type="tip">
+Pour rendre cet alias permanent sur tous les utilisateurs de la machine,
+ajoutez-le dans `/etc/bash.bashrc` (Debian/Ubuntu) plutôt que dans le
+fichier personnel `~/.bashrc`.
+</Aside>
+
+</details>
+
+<details>
+<summary>Codes de statut HTTP fréquents</summary>
+
+| Code  | Signification |
+|-------|--------------|
+| `200` | OK — la ressource est disponible |
+| `301` | Moved Permanently — redirection permanente |
+| `302` | Found — redirection temporaire |
+| `403` | Forbidden — accès refusé |
+| `404` | Not Found — ressource absente |
+| `500` | Internal Server Error — erreur côté serveur |
+| `502` | Bad Gateway — le *reverse proxy* n'atteint pas le *backend* |
+
+</details>
+
+---
+
+### Afficher uniquement les en-têtes de réponse
+
+```bash
+curl -sI https://monsite.fr
+```
+
+L'option `-I` envoie une requête `HEAD` : le serveur renvoie uniquement
+les en-têtes, sans le corps. Utile pour vérifier `Content-Type`,
+`Cache-Control`, `Server`, `Set-Cookie`…
+
+```bash
+# Alternative : afficher en-têtes ET corps
+curl -si https://monsite.fr | less
+```
+
+---
+
+### Déboguer *TLS*
+
+```bash
+curl -v --tlsv1.2 https://monsite.fr
+```
+
+Force l'utilisation de *TLS* 1.2. Le mode `-v` affichera la version
+négociée, le certificat présenté (sujet, émetteur, dates de validité) et
+la suite de chiffrement (*cipher suite*).
+
+```bash
+# Ignorer les erreurs de certificat (auto-signé en labo)
+curl -vk https://monsite.fr
+```
+
+<Aside type="danger">
+L'option `-k` / `--insecure` désactive la vérification du certificat
+*TLS*. Elle permet de tester un serveur avec un certificat auto-signé,
+mais **ne doit jamais être utilisée en production**.
+</Aside>
+
+---
+
+### Voir les redirections étape par étape
+
+```bash
+curl -vsL4 --noproxy '*' https://monsite.fr 2>&1 | grep -E "^[<>*]"
+```
+
+Filtre la sortie pour ne conserver que les lignes de débogage (`*`),
+les en-têtes envoyés (`>`) et reçus (`<`), ce qui permet de suivre
+chaque saut de redirection.
+
+---
+
+### Envoyer une requête `POST` avec des données
+
+```bash
+curl -v -X POST -d "user=admin&pass=secret" http://monsite.fr/login
+```
+
+Ou avec un corps *JSON* (*JavaScript Object Notation*) :
+
+```bash
+curl -v -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"user":"admin","pass":"secret"}' \
+  http://monsite.fr/api/login
+```
+
+---
+
+### Simuler un *Virtual Host* sans *DNS*
+
+En labo, si le *DNS* (*Domain Name System*) n'est pas encore configuré,
+on peut forcer `curl` à se connecter à une *IP* (*Internet Protocol*)
+précise tout en envoyant le bon en-tête `Host` :
+
+```bash
+curl -v --resolve monsite.fr:443:192.168.1.10 https://monsite.fr
+```
+
+---
+
+### Mesurer les temps de connexion
+
+```bash
+curl -o /dev/null -s -w \
+  "DNS: %{time_namelookup}s\nConnect: %{time_connect}s\nTLS: %{time_appconnect}s\nTotal: %{time_total}s\n" \
+  https://monsite.fr
+```
+
+<details>
+<summary>Signification des variables de temps</summary>
+
+| Variable            | Mesure                                               |
+|---------------------|------------------------------------------------------|
+| `time_namelookup`   | Résolution *DNS*                                     |
+| `time_connect`      | Établissement *TCP* (*Transmission Control Protocol*)|
+| `time_appconnect`   | Fin du *handshake* *TLS*                             |
+| `time_total`        | Durée totale jusqu'à réception complète              |
+
+</details>
+
+---
+
+## Tableau récapitulatif des options
+
+| Option             | Effet |
+|--------------------|-------|
+| `-v`               | Mode verbeux : en-têtes, *TLS*, connexion |
+| `-s`               | Silencieux : supprime la progression |
+| `-i`               | Inclut les en-têtes de réponse dans la sortie |
+| `-I`               | Requête `HEAD` uniquement |
+| `-L`               | Suit les redirections |
+| `-4` / `-6`        | Force *IPv4* / *IPv6* |
+| `-k`               | Ignore les erreurs de certificat (labo uniquement) |
+| `-X METHOD`        | Choisit la méthode *HTTP* (`GET`, `POST`, `PUT`…) |
+| `-H "En-tête: val"`| Ajoute un en-tête personnalisé |
+| `-d "données"`     | Corps de la requête (`POST`) |
+| `-o fichier`       | Enregistre la réponse dans un fichier |
+| `-w "format"`      | Affiche des métriques personnalisées |
+| `--noproxy '*'`    | Ignore toute configuration de proxy |
+| `--resolve h:p:ip` | Résolution *DNS* forcée |
+| `--tlsv1.2`        | Force la version *TLS* |
+| `2>&1 \| less`     | Fusionne *stderr*/*stdout* et pagine |
