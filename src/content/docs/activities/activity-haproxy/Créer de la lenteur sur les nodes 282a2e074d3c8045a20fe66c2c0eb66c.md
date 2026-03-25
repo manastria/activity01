@@ -1,3 +1,8 @@
+---
+title: "Creer de la lenteur sur les nodes"
+description: "Strategies pour simuler des reponses lentes sur les conteneurs node1 et node2"
+---
+
 # Créer de la lenteur sur les nodes
 
 Sans PHP (ni app côté serveur), le plus simple pour créer une **route “lente”** est… de **rendre le serveur lent au niveau réseau** plutôt que d’écrire un handler applicatif.

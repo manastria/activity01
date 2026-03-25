@@ -1,125 +1,131 @@
-# Partie 2 : Mise en place des backends Docker
+---
+title: "Partie 2 – Mise en place des backends Docker"
+description: "Démarrage de deux serveurs web node1 et node2 en conteneurs Docker avec macvlan dans la DMZ"
+sidebar:
+  order: 2
+---
 
-<aside>
-🎯
+import { Aside, Steps } from '@astrojs/starlight/components';
 
-**Objectif** :
+### Objectifs
 
-Démarrer deux serveurs web `node1` et `node2` en **conteneurs Docker** dans la **DMZ**, chacun avec **sa propre IP** grâce à **macvlan**.
+<Aside type="note">
+**Objectif** : Démarrer deux serveurs web en conteneurs Docker avec macvlan et valider la connectivité.
 
-À la fin, vous validez la **connectivité** depuis **HaProxy** (pas encore de config HAProxy côté frontal).
+**Scope de cette partie** : Docker, réseau macvlan, conteneurs, tests de connectivité depuis haproxy.
+**Hors scope** : Configuration d'haproxy (reverse proxy), TLS, certificats.
 
-</aside>
+À la fin de cette partie :
+- ✅ Les deux conteneurs `node1` et `node2` sont démarrés avec des IPs fixes via macvlan
+- ✅ Connectivité validée depuis haproxy (ou sns)
+- ❌ haproxy n'est pas encore configuré en tant que reverse proxy
+</Aside>
 
 ---
 
-# 1) Prérequis
+## 1) Prérequis
 
-- **SNS (pare-feu)** opérationnel :
-    - Résolution DNS fonctionnelle pour la DMZ,
-    - **NAT sortant** activé (pour `docker pull`).
-- **HaProxy (VM)** : IP labo + DMZ configurées, routage OK.
-- **Backends (VM)** : **`10.0.0.100/24`** sur l’interface DMZ, passerelle `10.0.0.1`, accès Internet vérifié :
-    
-    ```bash
-    curl -I http://deb.debian.org
-    ```
-    
-- **VirtualBox** : sur la VM *Backends*, l’adaptateur **DMZ** doit être en **promiscuité = Allow All** (indispensable pour macvlan).
+- **sns (pare-feu)** opérationnel :
+   - Résolution DNS fonctionnelle pour la DMZ,
+   - **NAT sortant** activé (pour `docker pull`).
+- **haproxy (VM)** : IP labo + DMZ configurées, routage OK.
+- **backends (VM)** : **`10.10.0.100/24`** sur l'interface DMZ, passerelle `10.10.0.1`, accès Internet vérifié :
 
-> Windows : utilisez `curl` depuis « Git Bash » (évitez PowerShell qui a un alias `curl` non compatible).
-> 
+   ```bash
+   curl -I http://deb.debian.org
+   ```
+
+- **VirtualBox** : sur la VM *backends*, l'adaptateur **DMZ** doit être en **promiscuité = Allow All** (indispensable pour macvlan).
 
 ---
 
-# 2) Ce que vous allez faire
+## 2) Ce que vous allez faire
 
-1. Récupérer le dépôt git **backends-lab** (Compose + Makefile + scripts).
+1. Récupérer le dépôt git **docker_backends** (Compose + Makefile + scripts).
 2. Créer le **réseau macvlan** (externe à Compose).
-3. Démarrer `node1` (**10.0.0.101**) et `node2` (**10.0.0.102**).
-4. Tester **depuis HaProxy** (ou SNS).
+3. Démarrer `node1` (**10.10.0.101**) et `node2` (**10.10.0.102**).
+4. Tester **depuis haproxy** (ou sns).
 
-<aside>
-🔥
-
-**Important** : avec macvlan, l’hôte Docker ne peut pas parler directement à ses conteneurs. C’est normal. Pour tester depuis l’hôte, utilisez le *shim* (section 6).
-
-</aside>
+<Aside type="caution">
+**Important** : avec macvlan, l'hôte Docker ne peut pas parler directement à ses conteneurs. C'est normal. Pour tester depuis l'hôte, utilisez le *shim* (section 6).
+</Aside>
 
 ---
 
-# 3) Macvlan, en deux mots
+## 3) Macvlan, en deux mots
 
-- **But** : donner à chaque conteneur **sa propre adresse MAC & IP** sur la DMZ, comme une vraie machine.
-- **Conséquence** : l’hôte Docker (la VM *Backends*) est **isolé** de ses conteneurs macvlan → pas de `curl 10.0.0.101` depuis l’hôte.
-- **Tests** : faites-les **depuis HaProxy** (ou SNS), qui sont **dans le même segment DMZ**.
-- Pourquoi créer le réseau avec `docker network create` alors qu’on a Compose ?
-    
-    Parce que le réseau macvlan est une **ressource L2 sensible** : en le créant **hors Compose** (flag `external: true` côté Compose), on garantit :
-    
-    - un **parent** explicite (l’interface DMZ),
-    - une **stabilité** entre recréations de services,
-    - une **isolation** claire entre couches (réseau d’un côté, services de l’autre).
+- **But** : donner à chaque conteneur **sa propre adresse IP et adresse MAC** sur la DMZ, comme s'il était une vraie machine indépendante.
+
+- **Limitation importante** : avec macvlan, l'hôte Docker (la VM *backends*) **ne peut pas joindre directement** ses conteneurs. C'est normal, c'est le fonctionnement du driver macvlan. Pour tester les conteneurs, vous devez vous connecter depuis une autre machine du réseau (haproxy ou sns).
+
+- **Tests** : exécutez-les **depuis haproxy** (ou sns), qui sont **dans le même réseau DMZ** que les conteneurs.
+
+- Pourquoi créer le réseau macvlan avec `docker network create` et pas simplement dans Compose ?
+
+   Parce que le réseau macvlan est un **élément clé de l'infrastructure** : en le créant **en dehors de Compose** (option `external: true`), on garantit que :
+
+   - le réseau **survit aux redémarrages** des conteneurs,
+   - la **configuration réseau est bien séparée** de la gestion des services,
+   - vous pouvez réutiliser le même réseau macvlan pour d'autres conteneurs ou services sans les recréer.
 
 ---
 
-# 4) Mise en place
+## 4) Mise en place
 
-## 4.1 Récupérer et préparer le dépôt
+### 4.1 Récupérer et préparer le dépôt
 
 Le dépôt contient les conteneurs et le scripts pour mettre en place `node1` et `node2`.
 
 ```bash
 git clone https://github.com/manastria/docker_backends.git
 cd docker_backends
-cp -n .env.example .env   # crée .env s’il n’existe pas
+cp -n .env.example .env   # crée .env s'il n'existe pas
 ```
 
 - **Explications sur le fichier `.env`**
-    
-    Le fichier `.env` permet de centraliser les variables de configuration (adresses IP, passerelle, interface réseau, etc.) utilisées par Docker Compose, le Makefile et les scripts.
-    
-- **Pourquoi copier `.env.example` ?**
-    
-    Le dépôt contient un fichier modèle **`.env.example`** :
-    il sert de **modèle de référence** pour éviter d’écraser la configuration d’un autre utilisateur.
-    
-    Quand on exécute :
-    
-    ```bash
-    cp -n .env.example .env
-    ```
-    
-    - Le fichier `.env.example` (modèle) est **copié vers `.env`** (fichier actif).
-    - Le `n` signifie **no-clobber** : *ne pas écraser* le fichier `.env` s’il existe déjà.
-    
-    Cela évite de perdre des personnalisations précédentes si l’étudiant relance la commande par erreur.
-    
-- **Que contient `.env` ?**
-    
-    Ce fichier stocke des variables que les scripts et `docker-compose.yml` vont **importer automatiquement** :
-    
-    ```bash
-    SUBNET=10.0.0.0/24       # sous-réseau utilisé pour le macvlan
-    GATEWAY=10.0.0.1         # passerelle de la DMZ (SNS)
-    PARENT_IF=eth0           # interface parente de la VM Backends (DMZ)
-    NODE1_IP=10.0.0.101      # IP du conteneur node1
-    NODE2_IP=10.0.0.102      # IP du conteneur node2
-    ```
-    
-    💡 Les scripts shell (`make network`, `make up`, etc.) lisent ce fichier automatiquement via `source .env`, ce qui garantit que toutes les valeurs sont cohérentes sans avoir à les répéter dans plusieurs fichiers.
-    
 
-### **En résumé**
+   Le fichier `.env` permet de centraliser les variables de configuration (adresses IP, passerelle, interface réseau, etc.) utilisées par Docker Compose, le Makefile et les scripts.
+
+- **Pourquoi copier `.env.example` ?**
+
+   Le dépôt contient un fichier modèle **`.env.example`** :
+   il sert de **modèle de référence** pour éviter d'écraser la configuration d'un autre utilisateur.
+
+   Quand on exécute :
+
+   ```bash
+   cp -n .env.example .env
+   ```
+
+   - Le fichier `.env.example` (modèle) est **copié vers `.env`** (fichier actif).
+   - Le `-n` signifie **no-clobber** : *ne pas écraser* le fichier `.env` s'il existe déjà.
+
+   Cela évite de perdre des personnalisations précédentes si l'étudiant relance la commande par erreur.
+
+- **Que contient `.env` ?**
+
+   Ce fichier stocke des variables que les scripts et `docker-compose.yml` vont **importer automatiquement** :
+
+   ```bash
+   SUBNET=10.10.0.0/24       # sous-réseau utilisé pour le macvlan
+   GATEWAY=10.10.0.1         # passerelle de la DMZ (sns)
+   PARENT_IF=eth0           # interface parente de la VM backends (DMZ)
+   NODE1_IP=10.10.0.101      # IP du conteneur node1
+   NODE2_IP=10.10.0.102      # IP du conteneur node2
+   ```
+
+   💡 Les scripts shell (`make network`, `make up`, etc.) lisent ce fichier automatiquement via `source .env`, ce qui garantit que toutes les valeurs sont cohérentes sans avoir à les répéter dans plusieurs fichiers.
+
+#### **En résumé**
 
 | Élément | Rôle |
 | --- | --- |
 | `.env.example` | Modèle partagé dans le dépôt Git (jamais modifié directement) |
 | `.env` | Votre configuration locale et personnalisée |
 | `-n` (option de `cp`) | Protège le fichier `.env` existant : il **ne sera pas écrasé** |
-| Usage | Permet à Docker Compose et aux scripts `make` d’utiliser les bonnes variables sans les retaper |
+| Usage | Permet à Docker Compose et aux scripts `make` d'utiliser les bonnes variables sans les retaper |
 
-## 4.2 Créer le réseau **macvlan** (une seule fois)
+### 4.2 Créer le réseau **macvlan** (une seule fois)
 
 ```bash
 make network
@@ -127,20 +133,18 @@ make network
 
 Ce Make cible appelle `scripts/create-macvlan.sh` qui :
 
-- détecte l’interface **parente** DMZ (par défaut via la route par défaut, ou `PARENT_IF`),
+- détecte l'interface **parente** DMZ (par défaut via la route par défaut, ou `PARENT_IF`),
 - crée le réseau **externe** `macvlan_lan` avec `SUBNET`/`GATEWAY`,
-- le rend disponible pour Compose sans qu’il soit recréé à chaque `up`.
+- le rend disponible pour Compose sans qu'il soit recréé à chaque `up`.
 
-> Si vous vous trompez d’interface parente, supprimez le réseau et relancez :
-> 
-> 
+> Si vous vous trompez d'interface parente, supprimez le réseau et relancez :
+>
 > ```bash
 > docker network rm macvlan_lan
 > PARENT_IF=… make network
 > ```
-> 
 
-## 4.3 Démarrer les conteneurs web
+### 4.3 Démarrer les conteneurs web
 
 ```bash
 make up
@@ -149,41 +153,38 @@ make ps
 
 Attendu : deux conteneurs **nginx** en ligne, attachés à `macvlan_lan` :
 
-- `node1` → **10.0.0.101**
-- `node2` → **10.0.0.102**
+- `node1` → **10.10.0.101**
+- `node2` → **10.10.0.102**
 
 ---
 
-# 5) Vérification du bon fonctionnement des backends
+## 5) Vérification du bon fonctionnement des backends
 
-<aside>
-🎯
-
-**Objectif** : s’assurer que vos deux conteneurs web `node1` et `node2` sont bien accessibles sur le réseau DMZ (`10.0.0.0/24`) depuis la VM HaProxy.
-À ce stade, vous n’avez pas encore configuré HAProxy, mais vous devez prouver que la connectivité réseau + HTTP est correcte.
-
-</aside>
+<Aside type="caution">
+**Objectif** : s'assurer que vos deux conteneurs web `node1` et `node2` sont bien accessibles sur le réseau DMZ (`10.10.0.0/24`) depuis la VM haproxy.
+À ce stade, vous n'avez pas encore configuré HAProxy, mais vous devez prouver que la connectivité réseau + HTTP est correcte.
+</Aside>
 
 ---
 
-## 5.1 Tester depuis HaProxy
+### 5.1 Tester depuis haproxy
 
-Sur la VM **HaProxy**, exécutez ces deux commandes :
+Sur la VM **haproxy**, exécutez ces deux commandes :
 
 ```bash
-curl -I http://10.0.0.101
-curl -I http://10.0.0.102
+curl -I http://10.10.0.101
+curl -I http://10.10.0.102
 ```
 
-### Comprendre ce que vous testez
+#### Comprendre ce que vous testez
 
 - La commande `curl -I` (ou `-head`) envoie une **requête HTTP HEAD** :
 elle demande uniquement les **en-têtes HTTP** (sans télécharger la page).
-C’est donc un test rapide et léger.
-- L’adresse IP ciblée (`10.0.0.101` ou `.102`) correspond à vos conteneurs **node1** et **node2**, situés sur le réseau **macvlan_lan (DMZ)**.
-- La requête part de HaProxy → traverse le réseau DMZ → arrive dans le conteneur nginx.
+C'est donc un test rapide et léger.
+- L'adresse IP ciblée (`10.10.0.101` ou `.102`) correspond à vos conteneurs **node1** et **node2**, situés sur le réseau **macvlan_lan (DMZ)**.
+- La requête part de haproxy → traverse le réseau DMZ → arrive dans le conteneur nginx.
 
-### Résultat attendu
+#### Résultat attendu
 
 ```bash
 HTTP/1.1 200 OK
@@ -194,57 +195,54 @@ Content-Type: text/html
 
 ✅ Si vous obtenez une réponse `200 OK` pour les deux IP, vos conteneurs sont **en ligne et accessibles** depuis la DMZ.
 Cela valide **tout le chemin réseau** :
-HaProxy → interface DMZ → réseau macvlan → conteneur nginx.
+haproxy → interface DMZ → réseau macvlan → conteneur nginx.
 
 ---
 
-## 5.2 Ce qu’il ne faut pas faire
+### 5.2 Ce qu'il ne faut pas faire
 
-Sur la VM **Backends** (l’hôte Docker), la commande suivante échouera :
+Sur la VM **backends** (l'hôte Docker), la commande suivante échouera :
 
 ```bash
-curl http://10.0.0.101/
+curl http://10.10.0.101/
 ```
 
-C’est normal et attendu.
+C'est normal et attendu.
 
-### Pourquoi ?
+#### Pourquoi ?
 
-Le réseau **macvlan** isole les conteneurs de l’hôte Docker :
+Le réseau **macvlan** isole les conteneurs de l'hôte Docker :
 
-- L’hôte **ne peut pas communiquer directement** avec ses propres conteneurs macvlan.
+- L'hôte **ne peut pas communiquer directement** avec ses propres conteneurs macvlan.
 - Ce comportement est volontaire : chaque conteneur a **sa propre carte réseau virtuelle** sur le segment DMZ.
 
-<aside>
-💡
-
+<Aside type="tip">
 **Retenez ceci :**
-Le seul moyen de tester la connectivité avec vos conteneurs macvlan est de passer par une autre machine du même réseau (ex : **HaProxy** ou **SNS**), ou d’utiliser le **shim macvlan** (section 6).
-
-</aside>
+Le seul moyen de tester la connectivité avec vos conteneurs macvlan est de passer par une autre machine du même réseau (ex : **haproxy** ou **sns**), ou d'utiliser le **shim macvlan** (section 6).
+</Aside>
 
 ---
 
-## 5.3 Si le test échoue
+### 5.3 Si le test échoue
 
 Si `curl` échoue ou reste bloqué :
 
 | Cas observé | Cause probable | Vérification |
 | --- | --- | --- |
-| `curl` ne répond pas (timeout) | Mauvais branchement VirtualBox ou pare-feu SNS bloquant le flux DMZ | Vérifiez le mode « Réseau interne : DMZ » des 3 VMs |
-| `curl` affiche "Connection refused" | nginx non lancé dans le conteneur | `docker ps` sur Backends |
-| Aucun paquet sur la DMZ | Promiscuité désactivée sur Backends | Mode « Allow All » sur l’adaptateur DMZ |
-| `curl` fonctionne depuis Backends mais pas depuis HaProxy | Mauvais routage sur HaProxy (DMZ non joignable) | `ip r` sur HaProxy, vérifier route `10.0.0.0/24 dev eth1` |
+| `curl` ne répond pas (timeout) | Mauvais branchement VirtualBox ou pare-feu sns bloquant le flux DMZ | Vérifiez le mode « Réseau interne : DMZ » des 3 VMs |
+| `curl` affiche "Connection refused" | nginx non lancé dans le conteneur | `docker ps` sur backends |
+| Aucun paquet sur la DMZ | Promiscuité désactivée sur backends | Mode « Allow All » sur l'adaptateur DMZ |
+| `curl` fonctionne depuis backends mais pas depuis haproxy | Mauvais routage sur haproxy (DMZ non joignable) | `ip r` sur haproxy, vérifier route `10.10.0.0/24 dev eth1` |
 
 ---
 
-## 5.4 Validation avant de continuer
+### 5.4 Validation avant de continuer
 
 Pour passer à la partie suivante, assurez-vous que :
 
-- [ ]  `curl -I http://10.0.0.101` renvoie **HTTP/1.1 200 OK**
-- [ ]  `curl -I http://10.0.0.102` renvoie **HTTP/1.1 200 OK**
-- [ ]  Les deux adresses sont atteignables depuis **HaProxy** (pas depuis Backends).
+- [ ]  `curl -I http://10.10.0.101` renvoie **HTTP/1.1 200 OK**
+- [ ]  `curl -I http://10.10.0.102` renvoie **HTTP/1.1 200 OK**
+- [ ]  Les deux adresses sont atteignables depuis **haproxy** (pas depuis backends).
 - [ ]  Le réseau **macvlan_lan** existe et contient `node1` et `node2` :
 
 ```bash
@@ -252,34 +250,34 @@ docker network inspect macvlan_lan | grep IPv4Address
 ```
 
 Si toutes les cases sont cochées → ✅
-vous pouvez passer à la [Partie 3 : Configuration HAProxy (TLS frontal + SNI, certificats wildcard vs dédiés)](Partie%203%20Configuration%20HAProxy%20(TLS%20frontal%20+%20SNI,%20282a2e074d3c8026ab65e7ab89d96cf8.md) 
+vous pouvez passer à la [Partie 3](activities/activity-haproxy/part3).
 
 ---
 
-# 6) Option : tester depuis l’hôte *Backends* (shim macvlan)
+## 6) Option : tester depuis l'hôte *backends* (shim macvlan)
 
-Le **shim** ajoute une interface macvlan locale (ex. `macvlan0` en `10.0.0.200/24`) pour que l’hôte puisse joindre `10.0.0.0/24`.
+Le **shim** ajoute une interface macvlan locale (ex. `macvlan0` en `10.10.0.200/24`) pour que l'hôte puisse joindre `10.10.0.0/24`.
 
 ```bash
 make host-shim-up
-curl http://10.0.0.101/
-curl http://10.0.0.102/
+curl http://10.10.0.101/
+curl http://10.10.0.102/
 make host-shim-status
-# Quand vous avez fini :
+## Quand vous avez fini :
 make host-shim-down
 ```
 
 ---
 
-# 7) Dépannage
+## 7) Dépannage
 
-### 7.1 VirtualBox (souvent la cause)
+#### 7.1 VirtualBox (souvent la cause)
 
-- Les trois VMs (`SNS`, `HaProxy`, `Backends`) ont bien un adaptateur sur **Réseau interne : DMZ**.
-- **Backends (hôte Docker)** : **Promiscuité = Allow All** sur l’interface DMZ.
-- **HaProxy/SNS** : *Allow VMs* suffit généralement.
+- Les trois VMs (`sns`, `haproxy`, `backends`) ont bien un adaptateur sur **Réseau interne : DMZ**.
+- **backends (hôte Docker)** : **Promiscuité = Allow All** sur l'interface DMZ.
+- **haproxy/sns** : *Allow VMs* suffit généralement.
 
-### 7.2 Vérifier côté **Backends** (hôte Docker)
+#### 7.2 Vérifier côté **backends** (hôte Docker)
 
 **Réseau macvlan correct** :
 
@@ -291,8 +289,8 @@ Vérifiez :
 
 - `Driver` = `macvlan`
 - `Options.parent` = **interface DMZ** (ex. `enp0s3`)
-- `IPAM.Config` = `Subnet: 10.0.0.0/24`, `Gateway: 10.0.0.1`
-- `Containers` → `node1` & `node2` avec `10.0.0.101/24` & `10.0.0.102/24`
+- `IPAM.Config` = `Subnet: 10.10.0.0/24`, `Gateway: 10.10.0.1`
+- `Containers` → `node1` & `node2` avec `10.10.0.101/24` & `10.10.0.102/24`
 
 **Conteneurs écoutent** :
 
@@ -307,65 +305,63 @@ Attendu : `nginx` sur `:80` et `HTTP/1.1 200 OK` local.
 **Capture côté interface parente** (optionnel) :
 
 ```bash
-# Remplacez enp0s3 par l'interface DMZ
-sudo tcpdump -nni enp0s3 host 10.0.0.101 or host 10.0.0.102
+## Remplacez enp0s3 par l'interface DMZ
+sudo tcpdump -nni enp0s3 host 10.10.0.101 or host 10.10.0.102
 ```
 
-- **Rien n’arrive** : problème **amont** (SNS/VirtualBox).
+- **Rien n'arrive** : problème **amont** (sns/VirtualBox).
 - **SYN sans SYN/ACK** : promiscuité non autorisée ou filtrage multi-MAC.
 
-> Normal : l’hôte Backends ne joint pas ses macvlan. Testez depuis HaProxy ou utilisez le shim.
-> 
+> Normal : l'hôte backends ne joint pas ses macvlan. Testez depuis haproxy ou utilisez le shim.
 
-### 7.3 Tester depuis HaProxy/SNS
+#### 7.3 Tester depuis haproxy/sns
 
 ```bash
-curl -I http://10.0.0.101/
-curl -I http://10.0.0.102/
+curl -I http://10.10.0.101/
+curl -I http://10.10.0.102/
 ```
 
 **Voir les paquets** :
 
-- Sur **HaProxy** :
-    
-    ```bash
-    sudo tcpdump -nni <if_dmz_haproxy> host 10.0.0.101 and tcp port 80
-    ```
-    
-- Sur **Backends** (interface parente) :
-    
-    ```bash
-    sudo tcpdump -nni enp0s3 host 10.0.0.101 or host 10.0.0.102
-    ```
-    
-- Présent côté HaProxy, absent côté Backends → **SNS/DMZ** à revoir.
-- Présent des deux côtés sans réponse → **promiscuité** à corriger côté Backends.
+- Sur **haproxy** :
 
-### 7.4 Politique **SNS**
+   ```bash
+   sudo tcpdump -nni <if_dmz_haproxy> host 10.10.0.101 and tcp port 80
+   ```
 
-- Routage connu pour `172.25.x.0/16` (labo) et `10.0.0.0/24` (DMZ).
-- Règle autorisant **HaProxy (172.25.x.2) → 10.0.0.101/102:80** (ou 443 plus tard).
+- Sur **backends** (interface parente) :
+
+   ```bash
+   sudo tcpdump -nni enp0s3 host 10.10.0.101 or host 10.10.0.102
+   ```
+
+- Présent côté haproxy, absent côté backends → **sns/DMZ** à revoir.
+- Présent des deux côtés sans réponse → **promiscuité** à corriger côté backends.
+
+#### 7.4 Politique **sns**
+
+- Routage connu pour `172.25.x.0/16` (labo) et `10.10.0.0/24` (DMZ).
+- Règle autorisant **haproxy (172.25.x.2) → 10.10.0.101/102:80** (ou 443 plus tard).
 - **NAT sortant** DMZ → labo/Internet actif pour `docker pull`.
 - Logs activés sur la règle DMZ pendant le diagnostic.
 
 ---
 
-# 8) Checklist éclair
+## 8) Checklist éclair
 
-- [ ]  **Promiscuité** VirtualBox (Backends) = **Allow All**.
+- [ ]  **Promiscuité** VirtualBox (backends) = **Allow All**.
 - [ ]  `docker network inspect macvlan_lan` : parent/plan IP corrects.
 - [ ]  `docker exec node1 curl 127.0.0.1` = **200 OK**.
-- [ ]  `tcpdump` sur HaProxy **et** Backends : paquets visibles.
-- [ ]  Règle SNS : `172.25.x.2 → 10.0.0.101/102:80` autorisée.
+- [ ]  `tcpdump` sur haproxy **et** backends : paquets visibles.
+- [ ]  Règle sns : `172.25.x.2 → 10.10.0.101/102:80` autorisée.
 - [ ]  Pas de confusion **/24** vs **/16** dans vos IP.
 
 ---
 
-# 9) Résultat attendu
+## 9) Résultat attendu
 
-- `node1` (**10.0.0.101**) et `node2` (**10.0.0.102**) **répondent en HTTP** depuis **HaProxy** (ou SNS).
+- `node1` (**10.10.0.101**) et `node2` (**10.10.0.102**) **répondent en HTTP** depuis **haproxy** (ou sns).
 - Le réseau **macvlan** est en place et **persistant**.
-- Vous avez compris la **limitation d’accessibilité** macvlan (hôte ↔ conteneurs) et comment la contourner avec le **shim**.
+- Vous avez compris la **limitation d'accessibilité** macvlan (hôte ↔ conteneurs) et comment la contourner avec le **shim**.
 
-> Vous pouvez passer à la [Partie 3 : Configuration HAProxy (TLS frontal + SNI, certificats wildcard vs dédiés)](Partie%203%20Configuration%20HAProxy%20(TLS%20frontal%20+%20SNI,%20282a2e074d3c8026ab65e7ab89d96cf8.md).
->
+> Vous pouvez passer à la [Partie 3](activities/activity-haproxy/part3).

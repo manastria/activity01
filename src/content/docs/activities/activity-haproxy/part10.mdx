@@ -3,11 +3,16 @@ title: Partie 10 — Bonus – Full-TLS jusqu’aux backends
 description: Guide pratique pour mettre en place un chiffrement TLS de bout en bout, du client jusqu'aux serveurs web internes.
 sidebar:
   order: 3
-status: "draft"
 level: "BTS SIO 2"
 duration: "45 min"
 tags: ["haproxy", "tls", "sni", "bts-sio"]
 ---
+
+import { Aside, Tabs, TabItem, Steps } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+**Je n’ai pas encore relu cette fiche.** Considérez-la comme un brouillon.
+</Aside>
 
 :::note
 Dans toutes les parties précédentes, c’est HAProxy qui “terminait” la connexion HTTPS. Le trafic entre **le client** et **HAProxy** était chiffré, mais la liaison entre **HAProxy** et les **serveurs backends** restait en HTTP clair.
