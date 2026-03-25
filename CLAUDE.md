@@ -6,6 +6,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Astro + Starlight educational content platform for publishing pedagogical activities (TP/lab exercises) in French. Topics include SNS firewall configuration, VPN setup, and network supervision.
 
+## Contexte
+Ces fichiers sont des cours pour BTS SIO SISR 1ère année.
+Public : étudiants avec peu de bagage réseau.
+
+## Style attendu
+- Phrases courtes, vocabulaire accessible
+- Conserver les termes techniques mais les expliquer
+- Garder les exemples concrets (analogies objets du quotidien)
+
+## Convention TODO
+Les commentaires `<!-- TODO: ... -->` ou `> **TODO Claude** : ...` dans les .md sont des instructions de révision.
+Traite-les un par un et supprime-les après modification.
+
 ## Key Commands
 
 ```bash
@@ -58,6 +71,59 @@ All components use shared utilities from `src/utils/images.ts` (`withBase`, `loa
 - **ImageFigureViewer.astro**: Image with ViewerJS zoom (same props as ImageFigure)
 
 Components auto-prefix URLs with `import.meta.env.BASE_URL` for subpath deployments.
+
+### Other Components
+
+- **SectionLinks.astro**: Renders a list of `LinkCard` (Starlight) for all docs whose `id` starts with a given `prefix`, sorted by `order` field then alphabetically. Props: `prefix: string`.
+
+  ```mdx
+  import SectionLinks from '@/components/SectionLinks.astro';
+  <SectionLinks prefix="activities/my-activity/" />
+  ```
+
+- **TaskLevel.astro**: Collapsible `<details>` block scoped to a difficulty level (1 = green, 2 = blue, 3 = purple). Level 1 is open by default; levels 2 and 3 are collapsed. The heading (`###`, `####`) must remain a Markdown heading for the Starlight TOC; this component wraps only the body content.
+
+  Props: `level: 1 | 2 | 3`, `summary?: string`, `open?: boolean`
+
+  ```mdx
+  import TaskLevel from '@/components/TaskLevel.astro';
+
+  ### ⭐ Tâche 1 : Titre
+
+  <TaskLevel level={1}>
+    Contenu de la tâche...
+  </TaskLevel>
+
+  #### ⭐⭐⭐ Tâche 1.1 : Avancé
+
+  <TaskLevel level={3} summary="Voir les consignes avancées">
+    Contenu avancé...
+  </TaskLevel>
+  ```
+
+### Icons (astro-icon + Iconify)
+
+The project uses [`astro-icon`](https://github.com/natemoo-re/astro-icon) with the following Iconify JSON sets installed:
+
+| Prefix | Set |
+| ------ | --- |
+| `mdi:` | Material Design Icons |
+| `lucide:` | Lucide |
+| `tabler:` | Tabler Icons |
+| `devicon:` | Devicon (tech logos) |
+| `skill-icons:` | Skill Icons |
+
+**Usage in MDX/Astro**:
+
+```mdx
+import { Icon } from 'astro-icon/components';
+
+<Icon name="mdi:server" />
+<Icon name="lucide:shield" size={24} />
+<Icon name="tabler:network" class="my-class" />
+```
+
+Browse available icons at [icones.js.org](https://icones.js.org) and filter by set prefix.
 
 ### Path Alias
 
@@ -123,3 +189,35 @@ import quizData from '@/data/quiz/my-quiz.json';
 
 <Quiz data={quizData} />
 ```
+
+## Style rédactionnel (à appliquer systématiquement)
+
+1. **Typographie :** Guillemets français « » exclusivement pour les citations et mises en avant.
+2. **Terminologie :** Tout terme technique anglais en italique. À sa première apparition dans le document, développer l'acronyme entre parenthèses — ex : *RFC* (*Request For Comment*).
+
+## Convention de nommage (noms courts)
+
+À appliquer dès qu'un nom court est nécessaire : objets SNS, noms de
+machines, interfaces réseau, variables dans les scripts, labels dans
+les schémas, noms de fichiers.
+
+Ne pas appliquer au texte courant, aux titres, ni aux noms propres.
+
+Séparateur : `_` (underscore) — jamais de tiret.
+Casse : tout en minuscules.
+
+| Catégorie        | Préfixe      | Format                  | Exemples                          |
+|------------------|-------------|-------------------------|-----------------------------------|
+| Réseau           | `net_`      | `net_<zone>`            | `net_lan`, `net_dmz`              |
+| Machine          | `host_`     | `host_<nom>`            | `host_glpi_web01`, `host_dns01`   |
+| Passerelle       | `gw_`       | `gw_<zone_ou_isp>`      | `gw_out`, `gw_labo`               |
+| Pare-feu         | `fw_`       | `fw_<nom_site>`         | `fw_crash`                        |
+| Service          | `svc_`      | `svc_<proto>_<desc>`    | `svc_tcp_https`, `svc_udp_dns`    |
+| Groupe services  | `grp_svc_`  | `grp_svc_<usage>`       | `grp_svc_web`, `grp_svc_admin`    |
+| Groupe machines  | `grp_host_` | `grp_host_<rôle>`       | `grp_host_srv_dmz`                |
+| Groupe réseaux   | `grp_net_`  | `grp_net_<desc>`        | `grp_net_prive`                   |
+| VPN              | `vpn_`      | `vpn_<site>`            | `vpn_site_distant`                |
+| Règle filtrage   | —           | `[ZONE→ZONE] desc`      | `[LAN→DMZ] Admin GLPI`            |
+
+Numérotation : suffixe `01`, `02`… pour les objets de même type.
+Zones : `lan`, `dmz`, `out` — cohérent avec les interfaces SNS natives.

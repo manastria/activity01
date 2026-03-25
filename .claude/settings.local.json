@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -l \"^---\" d:/depots/_edgand/_cours/activity01/src/content/docs/activities/**/*.mdx)",
+      "Bash(npm run:*)"
+    ]
+  }
+}
