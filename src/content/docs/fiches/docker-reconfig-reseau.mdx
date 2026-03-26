@@ -1,0 +1,191 @@
+---
+title: "Reconfigurer les plages réseau Docker"
+description: "Modifier daemon.json pour forcer Docker à utiliser des adresses dans 10.x.x.x au lieu de 172.x.x.x, et éviter les conflits avec les réseaux de TP SISR."
+filename: "docker-reconfig-reseau"
+topic: "docker"
+section: "systeme"
+sidebar:
+  label: "Docker — Plages réseau"
+---
+
+import { Aside, Steps, Code } from '@astrojs/starlight/components';
+
+## Problème
+
+Par défaut, Docker alloue ses réseaux internes dans la plage `172.16.0.0/12` :
+
+| Réseau Docker      | Usage                                   |
+| :----------------- | :-------------------------------------- |
+| `172.17.0.0/16`    | Pont `docker0` (réseau par défaut)      |
+| `172.18.0.0/16`    | Premier réseau `docker network create`  |
+| `172.19.0.0/16`    | Deuxième réseau créé, etc.              |
+
+Cette plage **chevauche directement** les réseaux privés de classe B utilisés dans les TP SISR (`172.16.0.0/12`), ce qui provoque des conflits de routage sur la machine hôte.
+
+:::caution[Symptôme typique]
+Une VM ou une interface virtuelle en `172.x.x.x` devient injoignable depuis l'hôte dès que Docker est démarré, parce que le noyau route ce trafic vers le pont Docker au lieu de l'interface réseau cible.
+:::
+
+---
+
+## Solution
+
+On reconfigure le *daemon* Docker pour qu'il utilise des plages dans `10.0.0.0/8`, loin des adresses utilisées en TP.
+
+### Plages choisies
+
+| Paramètre               | Valeur              | Rôle                                         |
+| :---------------------- | :------------------ | :------------------------------------------- |
+| `bip`                   | `10.200.0.1/24`     | Adresse du pont `docker0` (réseau par défaut)|
+| `default-address-pools` | `10.200.0.0/16 /24` | Réservoir pour les réseaux créés à la demande|
+
+:::tip[Pourquoi `10.200.0.0/16` ?]
+Cette plage est dans `10.0.0.0/8` mais suffisamment haute (`10.200.x`) pour ne pas interférer avec les adresses de TP classiques (`10.0.x`, `10.1.x`, etc.).
+Si vous utilisez des adresses proches de `10.200.x` en TP, vous pouvez opter pour `10.254.0.0/16` à la place.
+:::
+
+---
+
+## Manipulation
+
+<Steps>
+
+1. **Ouvrir (ou créer) le fichier de configuration du *daemon* Docker**
+
+   ```bash title="Terminal"
+   sudo nano /etc/docker/daemon.json
+   ```
+
+   :::note
+   Si le fichier n'existe pas, `nano` le crée. S'il contient déjà des options (pilote de logs, etc.), fusionnez le contenu — ne remplacez pas le fichier entier.
+   :::
+
+2. **Saisir la configuration**
+
+   ```json title="/etc/docker/daemon.json"
+   {
+     "bip": "10.200.0.1/24",
+     "default-address-pools": [
+       {
+         "base": "10.200.0.0/16",
+         "size": 24
+       }
+     ]
+   }
+   ```
+
+   | Clé JSON                | Valeur             | Explication                                                         |
+   | :---------------------- | :----------------- | :------------------------------------------------------------------ |
+   | `bip`                   | `10.200.0.1/24`    | *Bridge IP* : adresse de `docker0` sur l'hôte                      |
+   | `base`                  | `10.200.0.0/16`    | Plage globale dans laquelle Docker pioche                           |
+   | `size`                  | `24`               | Taille des sous-réseaux découpés (`/24` → 254 conteneurs par réseau)|
+
+3. **Redémarrer le service Docker**
+
+   ```bash title="Terminal"
+   sudo systemctl restart docker
+   ```
+
+4. **Vérifier que `docker0` a bien la nouvelle adresse**
+
+   ```bash title="Terminal"
+   ip addr show docker0
+   ```
+
+   La sortie doit contenir `inet 10.200.0.1/24` :
+
+   ```
+   3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN
+       link/ether 02:42:xx:xx:xx:xx brd ff:ff:ff:ff:ff:ff
+       inet 10.200.0.1/24 brd 10.200.0.255 scope global docker0
+   ```
+
+5. **Vérifier la configuration IPAM du réseau par défaut**
+
+   ```bash title="Terminal"
+   docker network inspect bridge
+   ```
+
+   Cherchez le bloc `IPAM` dans la sortie JSON :
+
+   ```json
+   "IPAM": {
+       "Driver": "default",
+       "Config": [
+           {
+               "Subnet": "10.200.0.0/24",
+               "Gateway": "10.200.0.1"
+           }
+       ]
+   }
+   ```
+
+</Steps>
+
+---
+
+## Ce qui change dans la table de routage
+
+Avant la modification, Docker injectait une route `172.17.0.0/16 dev docker0` dans le noyau. Après, seules des routes en `10.200.x` sont présentes :
+
+```bash title="Vérification des routes Docker"
+ip route | grep docker
+# Attendu : 10.200.0.0/24 dev docker0 proto kernel scope link src 10.200.0.1
+```
+
+Les plages `172.16.0.0/12` et `192.168.0.0/16` sont désormais entièrement libres pour vos VMs et TP.
+
+---
+
+## Cas des réseaux Docker déjà existants
+
+Les réseaux personnalisés créés **avant** la modification conservent leurs anciennes adresses. Pour les migrer :
+
+```bash title="Migration d'un réseau existant"
+# Lister les réseaux
+docker network ls
+
+# Supprimer le réseau à migrer (les conteneurs attachés doivent être arrêtés)
+docker network rm mon_reseau
+
+# Le recréer : Docker utilisera automatiquement la nouvelle plage
+docker network create mon_reseau
+```
+
+:::caution[Le réseau `bridge` par défaut]
+Le réseau `bridge` intégré (celui de `docker0`) est mis à jour au redémarrage du *daemon* via le paramètre `bip`. Il n'a pas besoin d'être recréé manuellement.
+:::
+
+### Réseaux créés par Docker Compose
+
+Les réseaux créés par `docker compose up` sont **persistants** : ils survivent à l'arrêt des conteneurs, au redémarrage du *daemon* et même au reboot de la machine. Seul `docker compose down` les supprime, car Docker les considère comme des ressources partagées potentiellement réutilisées par d'autres projets.
+
+| Commande                  | Conteneurs  | Réseaux Compose | Volumes     |
+| :------------------------ | :---------- | :-------------- | :---------- |
+| `docker compose stop`     | Arrêtés     | Conservés       | Conservés   |
+| `docker compose down`     | Supprimés   | Supprimés       | Conservés   |
+| `docker compose down -v`  | Supprimés   | Supprimés       | Supprimés   |
+| Reboot                    | Selon `restart:` | Conservés  | Conservés   |
+
+Pour supprimer d'un coup tous les réseaux inutilisés (sans conteneur actif attaché) :
+
+```bash title="Nettoyage des réseaux inutilisés"
+docker network prune
+```
+
+:::tip[Utile en fin de TP]
+Si vous avez lancé plusieurs stacks Compose sans faire `docker compose down`, `docker network prune` nettoie tous les réseaux orphelins en une seule commande — sans avoir à retrouver les fichiers `compose.yml` d'origine.
+:::
+
+---
+
+## Résumé des plages après configuration
+
+| Plage               | Statut après config     | Usage                          |
+| :------------------ | :---------------------- | :----------------------------- |
+| `10.200.0.0/24`     | Utilisée par Docker     | Pont `docker0`                 |
+| `10.200.1.0/24`     | Utilisée par Docker     | 1er réseau créé à la demande   |
+| `10.200.2.0/24`     | Utilisée par Docker     | 2e réseau créé, etc.           |
+| `172.16.0.0/12`     | **Libérée**             | Disponible pour vos TP SISR    |
+| `192.168.0.0/16`    | Non touchée par Docker  | Disponible pour vos TP SISR    |
+| `10.0.0.0–10.199.x` | Non touchée par Docker  | Disponible pour vos TP SISR    |
