@@ -9,6 +9,7 @@ sidebar:
 ---
 
 import { Aside, Steps, Code } from '@astrojs/starlight/components';
+import ImageFigureViewer from "@/components/ImageFigureViewer.astro";
 
 ## Problème
 
@@ -25,6 +26,14 @@ Cette plage **chevauche directement** les réseaux privés de classe B utilisés
 :::caution[Symptôme typique]
 Une VM ou une interface virtuelle en `172.x.x.x` devient injoignable depuis l'hôte dès que Docker est démarré, parce que le noyau route ce trafic vers le pont Docker au lieu de l'interface réseau cible.
 :::
+
+
+
+<ImageFigureViewer
+  src="/images/_inbox/docker_network_plages.svg"
+  alt="Schéma de comparaison des plages réseau Docker avant et après reconfiguration : avant, 172.17–172.18.x crée un conflit avec les réseaux de TP; après, le pont docker0 utilise 10.200.0.1/24 et les pools réseau 10.200.1.0/24 et 10.200.2.0/24, libérant ainsi les plages 172.16.0.0/12 et 192.168.0.0/16."
+  scale={1}
+/>
 
 ---
 
