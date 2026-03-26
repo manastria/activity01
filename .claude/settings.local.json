@@ -2,7 +2,21 @@
   "permissions": {
     "allow": [
       "Bash(grep -l \"^---\" d:/depots/_edgand/_cours/activity01/src/content/docs/activities/**/*.mdx)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(python3 -c \":*)",
+      "Bash(powershell -Command \"Get-Content ''D:\\\\depots\\\\_edgand\\\\_cours\\\\activity01\\\\src\\\\content\\\\docs\\\\activities\\\\sns\\\\nat-sortant-snat.mdx'' | Select-Object -Skip 62 -First 6 | ForEach-Object { [System.Text.Encoding]::UTF8.GetBytes\\($_ | ForEach-Object { $_ToString\\(''X2''\\) } | Join-String -Separator '' '' }\")",
+      "Bash(powershell -Command \"& { $lines = Get-Content ''D:\\\\depots\\\\_edgand\\\\_cours\\\\activity01\\\\src\\\\content\\\\docs\\\\activities\\\\sns\\\\nat-sortant-snat.mdx''; $lines[62..67] | ForEach-Object { Write-Host \\(\"\"[\"\" + $_+ \"\"]\"\"\\) } }\")",
+      "Bash(node -e \"const fs=require\\(''fs''\\); const lines=fs.readFileSync\\(''d:/depots/_edgand/_cours/activity01/src/content/docs/activities/sns/nat-sortant-snat.mdx'',''utf8''\\).split\\(''\\\\n''\\); lines.slice\\(62,68\\).forEach\\(\\(l,i\\)=>console.log\\(63+i, JSON.stringify\\(l.substring\\(0,30\\)\\)\\)\\)\")",
+      "Bash(node -e \"const fs=require\\(''fs''\\); const content=fs.readFileSync\\(''d:/depots/_edgand/_cours/activity01/src/content/docs/activities/sns/nat-sortant-snat.mdx'',''utf8''\\); console.log\\(''CRLF:'', content.includes\\(''\\\\r\\\\n''\\)\\); const idx=content.indexOf\\('':::danger[Ne jamais''\\); console.log\\(''Found at:'', idx\\); if\\(idx>=0\\) console.log\\(''Char before:'', JSON.stringify\\(content.substring\\(idx-10,idx\\)\\)\\)\")",
+      "Bash(node -e \":*)",
+      "Bash(ls d:/depots/_edgand/_cours/activity01/public/favicon*)",
+      "Bash(ls d:/depots/_edgand/_cours/activity01/public/activity01/favicon*)",
+      "Bash(node -e \"const fs=require\\(''fs''\\); const pkg=JSON.parse\\(fs.readFileSync\\(''d:/depots/_edgand/_cours/activity01/node_modules/@astrojs/starlight/package.json'',''utf8''\\)\\); console.log\\(''starlight:'', pkg.version\\)\")",
+      "Bash(xargs grep:*)",
+      "Bash(find d:/depots/_edgand/_cours/activity01/node_modules/@astrojs/starlight/components -name *.ts)",
+      "Bash(node -e \"const p=require\\(''./d:/depots/_edgand/_cours/activity01/package.json''\\); const deps={...p.dependencies,...p.devDependencies}; [''astro'',''@astrojs/starlight''].forEach\\(k=>console.log\\(k+'':'', deps[k]\\)\\)\")",
+      "Bash(node -e \"const p=require\\(''./package.json''\\); const deps={...p.dependencies,...p.devDependencies}; [''astro'',''@astrojs/starlight''].forEach\\(k=>console.log\\(k+'':'', deps[k]\\)\\)\")",
+      "Bash(npm outdated:*)"
     ]
   }
 }
