@@ -1,4 +1,184 @@
 {
+  "/images/fiches/sns-nat/Pasted-image-20260326152720.png": {
+    "full": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326152720.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326152720.webp",
+      "fallback": "/images/fiches/sns-nat/Pasted-image-20260326152720.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326152720.thumb.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326152720.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/fiches/sns-nat/Pasted-image-20260326152853.png": {
+    "full": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326152853.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326152853.webp",
+      "fallback": "/images/fiches/sns-nat/Pasted-image-20260326152853.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326152853.thumb.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326152853.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/fiches/sns-nat/Pasted-image-20260326153128.png": {
+    "full": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326153128.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326153128.webp",
+      "fallback": "/images/fiches/sns-nat/Pasted-image-20260326153128.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326153128.thumb.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326153128.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/fiches/sns-nat/Pasted-image-20260326153321.png": {
+    "full": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326153321.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326153321.webp",
+      "fallback": "/images/fiches/sns-nat/Pasted-image-20260326153321.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326153321.thumb.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326153321.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/fiches/sns-nat/Pasted-image-20260326153442.png": {
+    "full": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326153442.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326153442.webp",
+      "fallback": "/images/fiches/sns-nat/Pasted-image-20260326153442.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326153442.thumb.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326153442.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/fiches/sns-nat/Pasted-image-20260326153554.png": {
+    "full": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326153554.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326153554.webp",
+      "fallback": "/images/fiches/sns-nat/Pasted-image-20260326153554.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326153554.thumb.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326153554.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/fiches/sns-nat/Pasted-image-20260326153703.png": {
+    "full": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326153703.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326153703.webp",
+      "fallback": "/images/fiches/sns-nat/Pasted-image-20260326153703.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326153703.thumb.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326153703.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/fiches/sns-nat/Pasted-image-20260326153823.png": {
+    "full": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326153823.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326153823.webp",
+      "fallback": "/images/fiches/sns-nat/Pasted-image-20260326153823.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326153823.thumb.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326153823.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/fiches/sns-nat/Pasted-image-20260326154000.png": {
+    "full": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326154000.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326154000.webp",
+      "fallback": "/images/fiches/sns-nat/Pasted-image-20260326154000.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326154000.thumb.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326154000.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/fiches/sns-nat/Pasted-image-20260326154056.png": {
+    "full": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326154056.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326154056.webp",
+      "fallback": "/images/fiches/sns-nat/Pasted-image-20260326154056.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326154056.thumb.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326154056.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/fiches/sns-nat/Pasted-image-20260326154442.png": {
+    "full": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326154442.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326154442.webp",
+      "fallback": "/images/fiches/sns-nat/Pasted-image-20260326154442.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326154442.thumb.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326154442.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/fiches/sns-nat/Pasted-image-20260326155148.png": {
+    "full": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326155148.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326155148.webp",
+      "fallback": "/images/fiches/sns-nat/Pasted-image-20260326155148.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326155148.thumb.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326155148.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/fiches/sns-nat/Pasted-image-20260326155548.png": {
+    "full": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326155548.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326155548.webp",
+      "fallback": "/images/fiches/sns-nat/Pasted-image-20260326155548.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326155548.thumb.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326155548.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/fiches/sns-nat/Pasted-image-20260326155929.png": {
+    "full": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326155929.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326155929.webp",
+      "fallback": "/images/fiches/sns-nat/Pasted-image-20260326155929.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326155929.thumb.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326155929.thumb.webp",
+      "fallback": null
+    }
+  },
+  "/images/fiches/sns-nat/Pasted-image-20260326160157.png": {
+    "full": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326160157.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326160157.webp",
+      "fallback": "/images/fiches/sns-nat/Pasted-image-20260326160157.png"
+    },
+    "thumb": {
+      "avif": "/images/fiches/sns-nat/Pasted-image-20260326160157.thumb.avif",
+      "webp": "/images/fiches/sns-nat/Pasted-image-20260326160157.thumb.webp",
+      "fallback": null
+    }
+  },
   "/images/fiches/sns-nat-destination-regle-filtrage/Pasted-image-20260323143251.png": {
     "full": {
       "avif": "/images/fiches/sns-nat-destination-regle-filtrage/Pasted-image-20260323143251.avif",
