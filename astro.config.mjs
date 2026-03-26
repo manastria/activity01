@@ -27,7 +27,8 @@ export default defineConfig({
         },
         // Ajout manuel de la catégorie SNS
         {
-          label: "SNS", // Le nom de la catégorie dans le menu
+          label: "SNS",
+          collapsed: true,
           items: [
             { label: "Reset", link: "activities/sns/reset" },
             { label: "Configuration de base", link: "activities/sns/init" },
@@ -51,6 +52,7 @@ export default defineConfig({
         },
         {
           label: "Outils",
+          collapsed: true,
           items: [
             { label: "Déploiement clé SSH", link: "/outils/ssh-key-deployer" },
             { label: "Mémo", link: "/memo" },
