@@ -1,11 +1,15 @@
 ---
 title: Translation d'adresses (NAT) sur SNS
-description: Comprendre et configurer les règles de NAT dynamique, statique par port et statique sur les firewalls Stormshield Network Security.
+description: Comprendre et configurer les trois types de translation NAT sur un pare-feu Stormshield Network Security — translation dynamique, statique par port et bidirectionnelle.
+topic: sns
+section: reseau
+filename: sns-nat
 sidebar:
   order: 1
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import ImageFigureViewer from "@/components/ImageFigureViewer.astro";
 
 ## Pourquoi faire du NAT ?
 
@@ -35,7 +39,11 @@ Sur SNS, trois types de translation sont utilisés selon le besoin :
 
 ## Translation dynamique (masquerading)
 
-![[Pasted image 20260326152720.png]]
+<ImageFigureViewer
+  src="/images/_inbox/Pasted image 20260326152720.png"
+  alt="Schéma de translation dynamique (masquerading) : une machine interne (@privA) accède à un serveur web via le firewall qui traduit l'adresse source privée en IP publique."
+  scale={1}
+/>
 
 ### Principe
 
@@ -51,7 +59,11 @@ Le schéma ci-dessus illustre une connexion HTTP entre une machine interne (`@pr
 
 ### Pourquoi changer le port source ?
 
-![[Pasted image 20260326152853.png]]
+<ImageFigureViewer
+  src="/images/_inbox/Pasted image 20260326152853.png"
+  alt="Schéma illustrant pourquoi le firewall change le port source : deux machines internes utilisent le même port, le firewall attribue des ports différents pour lever l'ambiguïté."
+  scale={1}
+/>
 
 Deux machines peuvent choisir le même port source par hasard. Si le firewall ne modifiait pas ce port, le serveur distant recevrait deux connexions avec exactement la même IP source et le même port source — il ne pourrait pas les distinguer. Le firewall non plus, au retour : il ne saurait pas à quelle machine transmettre la réponse.
 
@@ -69,7 +81,11 @@ Il est possible de translater la source vers une **plage d'adresses IP** plutôt
 
 ## Translation statique par port (redirection de port)
 
-![[Pasted image 20260326153128.png]]
+<ImageFigureViewer
+  src="/images/_inbox/Pasted image 20260326153128.png"
+  alt="Schéma de translation statique par port (DNAT) : un client extérieur se connecte à l'IP publique du firewall, qui redirige le trafic vers un serveur interne."
+  scale={1}
+/>
 
 ### Principe
 
@@ -89,7 +105,11 @@ Les ports de destination **avant** et **après** translation peuvent être diff�
 
 ### Plusieurs services derrière une même IP publique
 
-![[Pasted image 20260326153321.png]]
+<ImageFigureViewer
+  src="/images/_inbox/Pasted image 20260326153321.png"
+  alt="Schéma montrant plusieurs services (web et mail) derrière une même IP publique, distingués par leur numéro de port."
+  scale={1}
+/>
 
 Plusieurs règles DNAT peuvent coexister sur la même IP publique. Le firewall distingue la destination grâce au **numéro de port** : chaque port est redirigé vers une adresse IP et un port de destination différents en interne.
 
@@ -108,7 +128,11 @@ La translation statique bidirectionnelle (**bimap**) dédie une adresse IP publi
 
 ### Connexion entrante
 
-![[Pasted image 20260326153442.png]]
+<ImageFigureViewer
+  src="/images/_inbox/Pasted image 20260326153442.png"
+  alt="Schéma de translation statique bimap, connexion entrante : un client externe joint le serveur mail interne via son IP publique virtuelle dédiée."
+  scale={1}
+/>
 
 Le firewall dispose de deux adresses IP publiques : `@pub_fw`, configurée sur son interface externe, et `@pub_mail`, une adresse **virtuelle** dédiée au serveur mail (elle n'est portée par aucune interface — voir la section [Publication ARP](#publication-arp-des-ip-virtuelles)).
 
@@ -122,7 +146,11 @@ Le firewall dispose de deux adresses IP publiques : `@pub_fw`, configurée sur s
 
 ### Connexion sortante
 
-![[Pasted image 20260326153554.png]]
+<ImageFigureViewer
+  src="/images/_inbox/Pasted image 20260326153554.png"
+  alt="Schéma de translation statique bimap, connexion sortante (SNAT) : le serveur mail interne initie une connexion vers Internet avec son IP publique virtuelle comme source."
+  scale={1}
+/>
 
 Quand le serveur interne initie une connexion vers Internet, c'est cette fois l'adresse **source** qui est translatée — on parle de **SNAT** (*Source NAT*). Une deuxième règle NAT est nécessaire pour couvrir ce sens.
 
@@ -140,13 +168,21 @@ La translation bimap nécessite **deux règles NAT** dans la politique SNS : une
 
 ### Plusieurs serveurs, plusieurs IP publiques
 
-![[Pasted image 20260326153703.png]]
+<ImageFigureViewer
+  src="/images/_inbox/Pasted image 20260326153703.png"
+  alt="Schéma de plusieurs serveurs internes (mail, FTP) chacun associé à sa propre IP publique virtuelle via des règles bimap distinctes."
+  scale={1}
+/>
 
 Si tu disposes de plusieurs adresses IP publiques, chaque serveur interne peut se voir attribuer la sienne. Chaque association nécessite ses propres deux règles bimap.
 
 ### Publication ARP des IP virtuelles
 
-![[Pasted image 20260326153823.png]]
+<ImageFigureViewer
+  src="/images/_inbox/Pasted image 20260326153823.png"
+  alt="Schéma de publication ARP : le firewall répond aux requêtes ARP pour les IP virtuelles afin que le routeur lui transmette le trafic destiné à ces adresses."
+  scale={1}
+/>
 
 Dans une translation statique bimap, l'adresse IP publique virtuelle (ex. `@pub_mail`) n'est pas l'adresse du firewall — c'est l'**identité publique du serveur interne**. Elle n'est donc pas configurée sur l'interface externe du firewall.
 
@@ -179,13 +215,21 @@ L'assistant bimap propose d'activer la publication ARP directement lors de la cr
 
 ### Accès à l'interface
 
-![[Pasted image 20260326154000.png]]
+<ImageFigureViewer
+  src="/images/_inbox/Pasted image 20260326154000.png"
+  alt="Capture d'écran de l'interface SNS montrant la liste des politiques de sécurité et l'accès à la configuration Filtrage et NAT."
+  scale={1}
+/>
 
 Les règles de filtrage et de NAT sont regroupées dans la même politique de sécurité. SNS permet de définir jusqu'à **10 politiques**, mais une seule est active à la fois (identifiée par une icône dédiée). La politique **Block all** est activée par défaut en sortie d'usine.
 
 La configuration s'effectue via **Configuration → Politique de sécurité → Filtrage et NAT**, onglet **NAT**.
 
-![[Pasted image 20260326154056.png]]
+<ImageFigureViewer
+  src="/images/_inbox/Pasted image 20260326154056.png"
+  alt="Capture d'écran de l'en-tête d'une politique NAT SNS avec les options Renommer, Réinitialiser, Copier et Exporter."
+  scale={1}
+/>
 
 L'en-tête de la politique permet de :
 - Sélectionner la politique active (liste déroulante)
@@ -194,7 +238,11 @@ L'en-tête de la politique permet de :
 
 ### Créer une règle
 
-![[Pasted image 20260326154442.png]]
+<ImageFigureViewer
+  src="/images/_inbox/Pasted image 20260326154442.png"
+  alt="Capture d'écran du menu Nouvelle règle NAT avec ses quatre options : règle standard, masquerading, séparateur, NAT statique bimap."
+  scale={1}
+/>
 
 Le bouton **Nouvelle règle** propose quatre options :
 
@@ -214,7 +262,11 @@ L'option **Tracer** active la journalisation du trafic dans le journal Filtrage 
 
 ### Indicateur d'utilisation des règles
 
-![[Pasted image 20260326155148.png]]
+<ImageFigureViewer
+  src="/images/_inbox/Pasted image 20260326155148.png"
+  alt="Capture d'écran de l'indicateur d'utilisation des règles NAT avec le compteur de hits et le code couleur associé."
+  scale={1}
+/>
 
 Chaque règle affiche un compteur de *hits* (nombre de fois où elle a été appliquée). La couleur indique l'activité relative par rapport à la règle la plus sollicitée de la politique :
 
@@ -233,7 +285,11 @@ Pour **sauvegarder**, clique sur **Appliquer**. Une fenêtre propose ensuite d'a
 
 ### Translation dynamique (SNAT)
 
-![[Pasted image 20260326155548.png]]
+<ImageFigureViewer
+  src="/images/_inbox/Pasted image 20260326155548.png"
+  alt="Capture d'écran d'un exemple de règle de translation dynamique (SNAT) dans l'interface SNS, avec le processus de sauvegarde et l'indicateur de hits."
+  scale={1}
+/>
 
 - **Trafic avant translation** — Elle sélectionne tous les paquets provenant du réseau interne `Network_in`, sortant par l'interface externe (`out`), sur n'importe quel port destination.
 - **Trafic après translation** — L'adresse source est remplacée par l'IP de l'interface externe du firewall (`Firewall_out`), et le port source par un port dans la plage `ephemeral_fw`. La destination n'est pas renseignée : elle reste inchangée.
@@ -244,14 +300,22 @@ L'indicateur d'utilisation visible à gauche de la règle affiche ici 2032 *hits
 
 ### Translation statique par port (DNAT)
 
-![[Pasted image 20260326155929.png]]
+<ImageFigureViewer
+  src="/images/_inbox/Pasted image 20260326155929.png"
+  alt="Capture d'écran d'un exemple de règle de translation statique par port (DNAT) dans l'interface SNS, redirigeant le port 80 vers un serveur web interne."
+  scale={1}
+/>
 
 - **Trafic avant translation** — Elle sélectionne les paquets entrant par l'interface externe (`out`), provenant de `internet` (toutes les adresses IP que le firewall ne connaît pas et ne gère pas), à destination de l'IP publique du firewall (`Firewall_out`) sur le port `http` (80/tcp).
 - **Trafic après translation** — Seule la destination est modifiée : l'adresse IP est remplacée par celle du serveur web interne (`srv_web`). Le port destination n'est pas renseigné : il reste inchangé. La source n'est pas touchée.
 
 ### Translation statique bidirectionnelle (bimap)
 
-![[Pasted image 20260326160157.png]]
+<ImageFigureViewer
+  src="/images/_inbox/Pasted image 20260326160157.png"
+  alt="Capture d'écran des deux règles bimap générées automatiquement par l'assistant SNS : une règle SNAT (flux sortant) et une règle DNAT (flux entrant) pour le serveur mail."
+  scale={1}
+/>
 
 La règle bimap est créée via un **assistant**, accessible depuis **Nouvelle règle → Static NAT rule (bimap)**. Il suffit de renseigner deux informations principales : l'adresse privée du serveur interne (`srv_mail`) et son adresse IP publique virtuelle (`srv_mail_pub`), associée à l'interface externe `out`. La publication ARP est activée automatiquement pour cette adresse virtuelle.
 
