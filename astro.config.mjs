@@ -6,7 +6,8 @@ export default defineConfig({
   // Configuration au premier niveau
   integrations: [
     starlight({
-      title: "Activités SISR",
+      title: "Manastria · Cours",
+      favicon: '/favicon.svg',
       locales: { root: { label: "Français", lang: "fr" } },
       sidebar: [
         { label: "Accueil", link: "/" },
@@ -70,6 +71,7 @@ export default defineConfig({
         minHeadingLevel: 2,
         maxHeadingLevel: 4,
       },
+      customCss: ['./src/styles/custom.css'],
     }),
     icon(),
   ],
