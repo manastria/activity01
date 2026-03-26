@@ -1,0 +1,499 @@
+---
+title: Analyse de trafic réseau avec tcpdump
+description: >
+  Fiche de référence couvrant les options essentielles de tcpdump, la syntaxe des filtres
+  BPF et les exemples pratiques pour diagnostiquer le trafic réseau (SSH, DNS, ICMP, TCP, UDP).
+topic: tcpdump
+section: systeme
+filename: tcpdump-analyse-trafic-reseau
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+*tcpdump* est un analyseur de paquets (*packet analyzer*) en ligne de commande,
+disponible sur tous les systèmes Unix/Linux. Il s'appuie sur la bibliothèque
+*libpcap* (*Packet Capture library*) pour capturer le trafic réseau en temps réel
+ou le lire depuis un fichier `.pcap`. C'est l'outil de référence pour diagnostiquer
+des problèmes réseau sans interface graphique.
+
+<Aside type="tip">
+  Sur Debian/Ubuntu, installez *tcpdump* avec :
+  ```bash
+  sudo apt install tcpdump
+  ```
+</Aside>
+
+---
+
+## Syntaxe générale
+
+```
+tcpdump [OPTIONS] [FILTRE BPF]
+```
+
+*tcpdump* nécessite des droits superutilisateur (ou la *capability*
+`CAP_NET_RAW`) pour accéder aux interfaces réseau.
+
+---
+
+## Options essentielles
+
+### Sélection de l'interface
+
+| Option | Description |
+|--------|-------------|
+| `-i eth0` | Écoute sur l'interface `eth0` |
+| `-i any` | Écoute sur **toutes** les interfaces disponibles |
+| `-D` | Liste les interfaces disponibles sur le système |
+
+```bash
+# Lister les interfaces disponibles
+sudo tcpdump -D
+```
+
+### Contrôle de la sortie
+
+| Option | Description |
+|--------|-------------|
+| `-n` | Désactive la résolution DNS (affiche les IP brutes) |
+| `-nn` | Désactive la résolution DNS **et** la résolution des ports |
+| `-v` | Mode verbeux (*verbose*) — affiche le TTL, les options IP… |
+| `-vv` | Mode très verbeux — détail complet des protocoles |
+| `-vvv` | Mode extrêmement verbeux |
+| `-q` | Mode silencieux (*quiet*) — sortie réduite au minimum |
+| `-X` | Affiche le contenu des paquets en hexadécimal et en ASCII |
+| `-A` | Affiche le contenu en ASCII uniquement (utile pour HTTP) |
+| `-e` | Affiche les en-têtes de couche 2 (*Ethernet*, adresses MAC) |
+| `-t` | Supprime l'horodatage (*timestamp*) |
+| `-tttt` | Horodatage complet au format `YYYY-MM-DD HH:MM:SS` |
+
+<Aside type="note">
+  L'option **`-nn`** est presque systématiquement recommandée en débogage : elle
+  évite que *tcpdump* génère lui-même des requêtes DNS qui pollueraient la capture.
+</Aside>
+
+### Capture vers un fichier
+
+| Option | Description |
+|--------|-------------|
+| `-w fichier.pcap` | Écrit la capture dans un fichier *pcap* |
+| `-r fichier.pcap` | Relit une capture depuis un fichier *pcap* |
+| `-C 10` | Tourne les fichiers tous les 10 Mo (avec `-w`) |
+| `-G 60` | Tourne les fichiers toutes les 60 secondes (avec `-w`) |
+| `-W 5` | Conserve au maximum 5 fichiers tournants |
+
+```bash
+# Capturer 5 minutes de trafic sur eth0 et sauvegarder
+sudo tcpdump -i eth0 -nn -w /tmp/capture.pcap
+
+# Relire et analyser la capture
+sudo tcpdump -r /tmp/capture.pcap -nn -v
+```
+
+### Limitation du nombre de paquets et de la taille
+
+| Option | Description |
+|--------|-------------|
+| `-c 100` | Arrête après avoir capturé 100 paquets |
+| `-s 0` | Capture le paquet en entier (taille illimitée, *snaplen* par défaut : 262 144 octets) |
+| `-s 96` | Capture uniquement les 96 premiers octets (mode legacy) |
+
+<Aside type="caution">
+  Sans `-s 0`, certaines versions anciennes de *tcpdump* tronquent les paquets à
+  68 ou 96 octets. Le comportement par défaut des versions récentes est de tout
+  capturer. Vérifiez avec `tcpdump --version`.
+</Aside>
+
+---
+
+## Filtres BPF
+
+*tcpdump* utilise la syntaxe *BPF* (*Berkeley Packet Filter*) pour filtrer les
+paquets à la volée. Les filtres se placent après les options.
+
+### Primitives de base
+
+| Primitive | Exemple | Signification |
+|-----------|---------|---------------|
+| `host` | `host 192.168.1.1` | Trafic source **ou** destination |
+| `src host` | `src host 10.0.0.1` | Trafic source uniquement |
+| `dst host` | `dst host 10.0.0.1` | Trafic destination uniquement |
+| `net` | `net 192.168.0.0/24` | Tout le sous-réseau |
+| `port` | `port 80` | Port source **ou** destination |
+| `src port` | `src port 1024` | Port source uniquement |
+| `dst port` | `dst port 443` | Port destination uniquement |
+| `proto` | `proto icmp` | Protocole spécifique |
+| `tcp` | `tcp` | Tout le trafic *TCP* |
+| `udp` | `udp` | Tout le trafic *UDP* |
+| `icmp` | `icmp` | Tout le trafic *ICMP* (*Internet Control Message Protocol*) |
+| `ether host` | `ether host aa:bb:cc:dd:ee:ff` | Adresse MAC |
+
+### Opérateurs logiques
+
+| Opérateur | Alias | Exemple |
+|-----------|-------|---------|
+| `and` | `&&` | `host 10.0.0.1 and port 443` |
+| `or` | `\|\|` | `port 80 or port 443` |
+| `not` | `!` | `not port 22` |
+
+Les filtres complexes doivent être placés entre guillemets simples pour éviter
+l'interprétation par le *shell* :
+
+```bash
+sudo tcpdump -i eth0 -nn 'host 10.0.0.1 and (port 80 or port 443)'
+```
+
+### Filtres sur les *flags* TCP
+
+Les *flags* TCP (*Transmission Control Protocol*) se filtrent via un accès
+direct aux octets du paquet :
+
+| Flag | Valeur | Filtre BPF |
+|------|--------|------------|
+| *SYN* | 0x02 | `'tcp[13] & 2 != 0'` |
+| *ACK* | 0x10 | `'tcp[13] & 16 != 0'` |
+| *FIN* | 0x01 | `'tcp[13] & 1 != 0'` |
+| *RST* (*Reset*) | 0x04 | `'tcp[13] & 4 != 0'` |
+| *SYN+ACK* | 0x12 | `'tcp[13] = 18'` |
+| *PSH+ACK* (*Push*) | 0x18 | `'tcp[13] = 24'` |
+
+---
+
+## Exemples courants par protocole
+
+### SSH (*Secure Shell*)
+
+<details>
+<summary>▶ Filtrer le trafic SSH (port 22)</summary>
+
+```bash
+# Tout le trafic SSH
+sudo tcpdump -i eth0 -nn port 22
+
+# SSH depuis un hôte précis uniquement
+sudo tcpdump -i eth0 -nn 'src host 192.168.1.50 and port 22'
+
+# Exclure le SSH pour ne pas polluer la capture (utile si connecté en SSH)
+sudo tcpdump -i eth0 -nn not port 22
+
+# Observer les connexions SSH entrantes (SYN vers port 22)
+sudo tcpdump -i eth0 -nn 'dst port 22 and tcp[13] & 2 != 0'
+```
+
+<Aside type="tip">
+  Lors d'une session SSH active, ajoutez systématiquement `not port 22` pour
+  éviter que votre propre session pollue la capture.
+</Aside>
+
+</details>
+
+---
+
+### DNS (*Domain Name System*)
+
+<details>
+<summary>▶ Filtrer le trafic DNS (port 53)</summary>
+
+```bash
+# Toutes les requêtes et réponses DNS
+sudo tcpdump -i eth0 -nn port 53
+
+# DNS uniquement en UDP (standard)
+sudo tcpdump -i eth0 -nn 'udp and port 53'
+
+# DNS en TCP (grandes réponses, transferts de zone AXFR)
+sudo tcpdump -i eth0 -nn 'tcp and port 53'
+
+# DNS depuis un client spécifique
+sudo tcpdump -i eth0 -nn 'src host 192.168.1.10 and port 53'
+
+# Afficher le contenu des paquets DNS (lisible en ASCII)
+sudo tcpdump -i eth0 -nn -A 'port 53'
+
+# DNS vers un résolveur précis
+sudo tcpdump -i eth0 -nn 'dst host 8.8.8.8 and port 53'
+```
+
+<Aside type="note">
+  Le *flag* `-n` est **indispensable** pour les captures DNS : sans lui,
+  *tcpdump* génère lui-même des requêtes DNS pour résoudre les adresses
+  IP, ce qui fausse la capture.
+</Aside>
+
+</details>
+
+---
+
+### ICMP
+
+<details>
+<summary>▶ Filtrer le trafic ICMP (ping, traceroute…)</summary>
+
+```bash
+# Tout le trafic ICMP
+sudo tcpdump -i eth0 -nn icmp
+
+# ICMP depuis/vers un hôte précis
+sudo tcpdump -i eth0 -nn 'icmp and host 192.168.1.1'
+
+# Seulement les echo-request (ping sortants, type 8)
+sudo tcpdump -i eth0 -nn 'icmp[icmptype] = icmp-echo'
+
+# Seulement les echo-reply (réponses ping, type 0)
+sudo tcpdump -i eth0 -nn 'icmp[icmptype] = icmp-echoreply'
+
+# ICMP de type « destination unreachable » (type 3)
+sudo tcpdump -i eth0 -nn 'icmp[icmptype] = icmp-unreach'
+
+# Verbose pour voir le TTL et le code ICMP
+sudo tcpdump -i eth0 -nn -v icmp
+```
+
+</details>
+
+---
+
+### HTTP / HTTPS
+
+<details>
+<summary>▶ Filtrer le trafic web (ports 80 et 443)</summary>
+
+```bash
+# HTTP uniquement
+sudo tcpdump -i eth0 -nn port 80
+
+# HTTPS (TLS)
+sudo tcpdump -i eth0 -nn port 443
+
+# HTTP et HTTPS simultanément
+sudo tcpdump -i eth0 -nn 'port 80 or port 443'
+
+# Afficher les en-têtes HTTP en clair (HTTP uniquement, non chiffré)
+sudo tcpdump -i eth0 -nn -A 'port 80'
+
+# Nouvelles connexions HTTP (SYN)
+sudo tcpdump -i eth0 -nn 'dst port 80 and tcp[13] & 2 != 0'
+
+# Connexions TCP réinitialisées (RST) — utile pour diagnostiquer des coupures
+sudo tcpdump -i eth0 -nn 'port 80 and tcp[13] & 4 != 0'
+```
+
+<Aside type="caution">
+  Le trafic *HTTPS* est chiffré par *TLS* (*Transport Layer Security*).
+  *tcpdump* permet de voir les paquets (adresses IP, ports, *flags* TCP)
+  mais **pas** leur contenu en clair. Pour déchiffrer, il faudrait la clé
+  privée du serveur ou les *session keys*, et utiliser *Wireshark*.
+</Aside>
+
+</details>
+
+---
+
+### TCP — Analyse des connexions
+
+<details>
+<summary>▶ Diagnostiquer les connexions TCP (handshake, reset, fin)</summary>
+
+```bash
+# Observer le three-way handshake (SYN, SYN-ACK, ACK)
+sudo tcpdump -i eth0 -nn 'tcp[13] & 2 != 0'
+
+# Détecter les RST (connexions brutalement coupées)
+sudo tcpdump -i eth0 -nn 'tcp[13] & 4 != 0'
+
+# Détecter les FIN (fermetures propres)
+sudo tcpdump -i eth0 -nn 'tcp[13] & 1 != 0'
+
+# Connexions vers un port applicatif (ex : PostgreSQL 5432)
+sudo tcpdump -i eth0 -nn 'tcp and port 5432'
+
+# Trafic TCP entre deux hôtes précis
+sudo tcpdump -i eth0 -nn 'tcp and host 10.0.0.1 and host 10.0.0.2'
+
+# Paquets TCP de grande taille (potentiel problème de MTU)
+sudo tcpdump -i eth0 -nn 'tcp and greater 1400'
+```
+
+</details>
+
+---
+
+### UDP
+
+<details>
+<summary>▶ Filtrer le trafic UDP (DNS, DHCP, NTP, VoIP…)</summary>
+
+```bash
+# Tout le trafic UDP
+sudo tcpdump -i eth0 -nn udp
+
+# DHCP (Dynamic Host Configuration Protocol) — ports 67 et 68
+sudo tcpdump -i eth0 -nn 'udp and (port 67 or port 68)'
+
+# NTP (Network Time Protocol) — port 123
+sudo tcpdump -i eth0 -nn 'udp and port 123'
+
+# SIP (Session Initiation Protocol) — VoIP, port 5060
+sudo tcpdump -i eth0 -nn 'udp and port 5060'
+
+# RTP (Real-time Transport Protocol) — flux audio/vidéo (ports dynamiques)
+sudo tcpdump -i eth0 -nn 'udp and portrange 10000-20000'
+
+# UDP vers un réseau de destination
+sudo tcpdump -i eth0 -nn 'udp and dst net 172.16.0.0/12'
+```
+
+</details>
+
+---
+
+### ARP (*Address Resolution Protocol*)
+
+<details>
+<summary>▶ Surveiller les requêtes ARP (détection d'ARP spoofing)</summary>
+
+```bash
+# Tout le trafic ARP
+sudo tcpdump -i eth0 -nn arp
+
+# ARP avec affichage des adresses MAC
+sudo tcpdump -i eth0 -nn -e arp
+
+# Détecter un ARP gratuit (Gratuitous ARP) — indice potentiel d'ARP spoofing
+# Un ARP gratuit : src IP == dst IP dans la requête
+sudo tcpdump -i eth0 -nn 'arp[6:2] = 2'
+```
+
+<Aside type="danger">
+  Une quantité anormale de *broadcasts* ARP ou des réponses ARP non sollicitées
+  peuvent indiquer une attaque de type *ARP spoofing* (*empoisonnement ARP*).
+  Croisez ces données avec la table ARP (`arp -n`) et les logs du switch.
+</Aside>
+
+</details>
+
+---
+
+## Recettes de débogage
+
+### Flux complet entre deux machines
+
+```bash
+# Capturer tout le trafic entre deux hôtes (toutes directions)
+sudo tcpdump -i eth0 -nn -w /tmp/debug.pcap \
+  'host 192.168.1.10 and host 192.168.1.20'
+```
+
+### Surveiller plusieurs ports applicatifs en même temps
+
+```bash
+# HTTP, HTTPS, SSH et DNS ensemble
+sudo tcpdump -i any -nn \
+  'port 80 or port 443 or port 22 or port 53'
+```
+
+### Isoler les erreurs réseau
+
+```bash
+# RST TCP + ICMP unreachable + paquets fragmentés
+sudo tcpdump -i eth0 -nn -v \
+  '(tcp[13] & 4 != 0) or (icmp[icmptype] = icmp-unreach) or (ip[6:2] & 0x1fff != 0)'
+```
+
+### Débogage DHCP (nouveau client sur le réseau)
+
+```bash
+sudo tcpdump -i eth0 -nn -e \
+  'udp and (port 67 or port 68)'
+```
+
+### Observer un service en écoute sur un port non standard
+
+```bash
+# Service écoutant sur le port 8080
+sudo tcpdump -i eth0 -nn -v 'tcp and port 8080'
+```
+
+---
+
+## Workflow de capture recommandé
+
+<Steps>
+
+1. **Identifier l'interface réseau**
+
+   ```bash
+   sudo tcpdump -D
+   ip link show
+   ```
+
+2. **Lancer une capture brute dans un fichier**
+
+   Toujours capturer *d'abord* dans un fichier, puis analyser ensuite.
+   ```bash
+   sudo tcpdump -i eth0 -nn -s 0 -w /tmp/capture_$(date +%F_%H%M).pcap
+   ```
+   Arrêtez la capture avec `Ctrl+C` quand suffisamment de trafic est collecté.
+
+3. **Analyser la capture en rejouant le fichier**
+
+   ```bash
+   # Vue synthétique
+   sudo tcpdump -r /tmp/capture_*.pcap -nn
+
+   # Vue détaillée avec contenu des paquets
+   sudo tcpdump -r /tmp/capture_*.pcap -nn -vv -X
+
+   # Filtrage a posteriori
+   sudo tcpdump -r /tmp/capture_*.pcap -nn 'port 443 and host 10.0.0.5'
+   ```
+
+4. **Transférer le fichier `.pcap` vers Wireshark** *(optionnel)*
+
+   Le fichier `.pcap` peut être ouvert dans *Wireshark* pour une analyse
+   graphique avancée avec dissection des protocoles applicatifs.
+
+   ```bash
+   scp user@serveur:/tmp/capture.pcap ~/Bureau/
+   # Puis double-cliquez sur le fichier dans Wireshark
+   ```
+
+</Steps>
+
+<Aside type="tip">
+  Pour une capture longue durée sans remplir le disque, combinez les options
+  de rotation :
+  ```bash
+  sudo tcpdump -i eth0 -nn -s 0 \
+    -w /tmp/capture_%Y%m%d_%H%M%S.pcap \
+    -G 300 -W 12
+  ```
+  Ceci crée un fichier toutes les 5 minutes (`-G 300`), en conservant
+  au maximum 12 fichiers (`-W 12`), soit 1 heure d'historique.
+</Aside>
+
+---
+
+## Récapitulatif des options les plus utiles
+
+| Option | Usage typique |
+|--------|--------------|
+| `-i eth0` | Spécifier l'interface |
+| `-nn` | Pas de résolution DNS/ports |
+| `-v` / `-vv` | Plus de détails |
+| `-A` | Contenu en ASCII |
+| `-X` | Contenu en hexa + ASCII |
+| `-e` | Afficher les adresses MAC |
+| `-w fichier.pcap` | Sauvegarder la capture |
+| `-r fichier.pcap` | Relire une capture |
+| `-c N` | Arrêter après N paquets |
+| `-s 0` | Capture complète des paquets |
+| `not port 22` | Exclure le trafic SSH courant |
+
+<Aside type="note">
+  *tcpdump* capture uniquement le trafic qui passe **par la machine elle-même**
+  (envoyé, reçu, ou en transit si le routage est activé). Pour analyser le
+  trafic entre deux machines tierces sur un réseau commuté (*switched network*),
+  il faut configurer un *port mirroring* (*SPAN — Switched Port Analyzer*) sur
+  le commutateur, ou utiliser un *tap* réseau matériel.
+</Aside>
