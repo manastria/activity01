@@ -1,0 +1,325 @@
+---
+title: Translation d'adresses (NAT) sur SNS
+description: Comprendre et configurer les trois types de translation NAT sur un pare-feu Stormshield Network Security — translation dynamique, statique par port et bidirectionnelle.
+topic: sns
+section: reseau
+filename: sns-nat
+sidebar:
+  order: 1
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import ImageFigureViewer from "@/components/ImageFigureViewer.astro";
+
+## Pourquoi faire du NAT ?
+
+### Adresses privées et routabilité
+
+Le RFC 1918 (*Request For Comments*) définit trois plages d'adresses IP réservées aux réseaux privés. Ces adresses ne sont **pas routables sur Internet** : un routeur public ne transmettra jamais un paquet dont la source ou la destination appartient à l'une de ces plages.
+
+| Plage | Étendue |
+|---|---|
+| `10.0.0.0/8` | 10.0.0.0 → 10.255.255.255 |
+| `172.16.0.0/12` | 172.16.0.0 → 172.31.255.255 |
+| `192.168.0.0/16` | 192.168.0.0 → 192.168.255.255 |
+
+### Le rôle du NAT
+
+Le NAT (*Network Address Translation*) permet au firewall de **traduire** les adresses et/ou les ports des paquets qui le traversent. Cette translation est appliquée lorsqu'un paquet passe d'une interface configurée comme **interne** vers une interface configurée comme **externe** — ou en sens inverse. C'est ce mécanisme qui permet à un réseau privé de communiquer avec Internet, et à des services internes d'être accessibles depuis l'extérieur.
+
+Sur SNS, trois types de translation sont utilisés selon le besoin :
+
+| Type | Usage typique |
+|---|---|
+| **Translation dynamique** | Accès Internet d'un réseau interne via une IP publique unique |
+| **Translation statique par port** | Exposer un service interne sur une IP publique (redirection de port) |
+| **Translation statique (bimap)** | Dédier une IP publique virtuelle à un serveur interne |
+
+---
+
+## Translation dynamique (masquerading)
+
+<ImageFigureViewer
+  src="/images/fiches/sns-nat/Pasted-image-20260326152720.png"
+  alt="Schéma de translation dynamique (masquerading) : une machine interne (@privA) accède à un serveur web via le firewall qui traduit l'adresse source privée en IP publique."
+  scale={1}
+/>
+
+### Principe
+
+Le schéma ci-dessus illustre une connexion HTTP entre une machine interne (`@privA`) et un serveur web sur Internet (`@web`).
+
+**① Paquet original** — La machine envoie un paquet vers `@web:80`. L'adresse source est son IP privée `@privA`, le port source `xxxx` est choisi par son système d'exploitation.
+
+**② Paquet translaté (sortant)** — Le firewall intercepte le paquet et remplace l'adresse source `@privA` et le port `xxxx` par son IP publique `@pub_fw` et un port dans la plage `[20 000–59 999]`. C'est ce paquet modifié qui part vers Internet. Le firewall mémorise la correspondance dans sa **table de translation** : `@privA:xxxx` ↔ `@pub_fw:20 000`.
+
+**③ Réponse originale** — Le serveur `@web` reçoit le paquet et répond à `@pub_fw:20 000`, sans savoir qu'une machine interne est derrière.
+
+**④ Paquet retranslaté (entrant)** — En consultant sa table de translation, le firewall sait que ce paquet est destiné à `@privA:xxxx`. Il remplace l'adresse destination `@pub_fw:20 000` par `@privA:xxxx` et retransmet le paquet à la bonne machine.
+
+### Pourquoi changer le port source ?
+
+<ImageFigureViewer
+  src="/images/fiches/sns-nat/Pasted-image-20260326152853.png"
+  alt="Schéma illustrant pourquoi le firewall change le port source : deux machines internes utilisent le même port, le firewall attribue des ports différents pour lever l'ambiguïté."
+  scale={1}
+/>
+
+Deux machines peuvent choisir le même port source par hasard. Si le firewall ne modifiait pas ce port, le serveur distant recevrait deux connexions avec exactement la même IP source et le même port source — il ne pourrait pas les distinguer. Le firewall non plus, au retour : il ne saurait pas à quelle machine transmettre la réponse.
+
+En attribuant un port différent à chaque connexion, le firewall lève cette ambiguïté.
+
+<Aside type="tip">
+Il est conseillé d'activer l'option **Choisir aléatoirement le port source translaté** dans la règle. Cela rend le port moins prévisible et protège contre certaines attaques par prédiction de port.
+</Aside>
+
+### Translation sur une plage d'IP publiques
+
+Il est possible de translater la source vers une **plage d'adresses IP** plutôt qu'une adresse unique. La correspondance se fait alors en 1:1 entre les deux plages (elles doivent être de même taille). Dans ce cas, le port source ne doit **pas** être translaté.
+
+---
+
+## Translation statique par port (redirection de port)
+
+<ImageFigureViewer
+  src="/images/fiches/sns-nat/Pasted-image-20260326153128.png"
+  alt="Schéma de translation statique par port (DNAT) : un client extérieur se connecte à l'IP publique du firewall, qui redirige le trafic vers un serveur interne."
+  scale={1}
+/>
+
+### Principe
+
+La translation statique par port est aussi appelée **DNAT** (*Destination NAT*) : c'est l'adresse de **destination** du paquet qui est modifiée. Contrairement à la translation dynamique, c'est ici un client extérieur qui initie la connexion vers un serveur interne.
+
+**① Paquet original** — Le client `@client` envoie une requête HTTP vers l'IP publique du firewall `@pub_fw:80`. Il ne connaît pas l'existence du serveur interne.
+
+**② Paquet translaté (entrant)** — Le firewall remplace l'adresse destination `@pub_fw:80` par l'adresse du serveur interne `@priv_web:80` et transmet le paquet sur le réseau interne.
+
+**③ Réponse originale** — Le serveur `@priv_web` répond au client en utilisant son IP privée comme source : `@priv_web:80` → `@client:xxxx`.
+
+**④ Réponse retranslatée (sortant)** — Le firewall remplace l'adresse source `@priv_web:80` par `@pub_fw:80` avant de renvoyer la réponse vers Internet. Le client reçoit une réponse qui semble venir de `@pub_fw`, sans jamais connaître l'IP privée du serveur.
+
+<Aside type="note">
+Les ports de destination **avant** et **après** translation peuvent être différents. Par exemple, le service peut être exposé sur le port 8080 en externe et écouter sur le port 80 en interne.
+</Aside>
+
+### Plusieurs services derrière une même IP publique
+
+<ImageFigureViewer
+  src="/images/fiches/sns-nat/Pasted-image-20260326153321.png"
+  alt="Schéma montrant plusieurs services (web et mail) derrière une même IP publique, distingués par leur numéro de port."
+  scale={1}
+/>
+
+Plusieurs règles DNAT peuvent coexister sur la même IP publique. Le firewall distingue la destination grâce au **numéro de port** : chaque port est redirigé vers une adresse IP et un port de destination différents en interne.
+
+Dans l'exemple ci-dessus, les deux règles partagent la même IP publique `@pub_fw` :
+
+| Trafic original (avant translation) | Redirigé vers |
+|---|---|
+| `@pub_fw:80` | `@priv_web:80` |
+| `@pub_fw:25` | `@priv_mail:25` |
+
+---
+
+## Translation statique bidirectionnelle (bimap)
+
+La translation statique bidirectionnelle (**bimap**) dédie une adresse IP publique à un serveur interne — que le trafic **entre** (connexion depuis Internet vers le serveur) ou **sorte** (connexion depuis le serveur vers Internet).
+
+### Connexion entrante
+
+<ImageFigureViewer
+  src="/images/fiches/sns-nat/Pasted-image-20260326153442.png"
+  alt="Schéma de translation statique bimap, connexion entrante : un client externe joint le serveur mail interne via son IP publique virtuelle dédiée."
+  scale={1}
+/>
+
+Le firewall dispose de deux adresses IP publiques : `@pub_fw`, configurée sur son interface externe, et `@pub_mail`, une adresse **virtuelle** dédiée au serveur mail (elle n'est portée par aucune interface — voir la section [Publication ARP](#publication-arp-des-ip-virtuelles)).
+
+**① Paquet original** — Le serveur mail distant `@client` envoie un message SMTP vers `@pub_mail:25`.
+
+**② Paquet translaté (entrant)** — Le firewall remplace la destination `@pub_mail:25` par `@priv_mail:25` et transmet le paquet au serveur interne.
+
+**③ Réponse originale** — Le serveur interne répond : `@priv_mail:25` → `@client:xxxx`.
+
+**④ Réponse retranslatée (sortant)** — Le firewall remplace la source `@priv_mail:25` par `@pub_mail:25`. Le serveur distant voit la réponse arriver de `@pub_mail`, cohérent avec la connexion qu'il a initiée.
+
+### Connexion sortante
+
+<ImageFigureViewer
+  src="/images/fiches/sns-nat/Pasted-image-20260326153554.png"
+  alt="Schéma de translation statique bimap, connexion sortante (SNAT) : le serveur mail interne initie une connexion vers Internet avec son IP publique virtuelle comme source."
+  scale={1}
+/>
+
+Quand le serveur interne initie une connexion vers Internet, c'est cette fois l'adresse **source** qui est translatée — on parle de **SNAT** (*Source NAT*). Une deuxième règle NAT est nécessaire pour couvrir ce sens.
+
+**① Paquet original** — Le serveur interne envoie un mail vers `@server:25`. Sa source est `@priv_mail:xxxx`.
+
+**② Paquet translaté (sortant)** — Le firewall remplace la source `@priv_mail` par `@pub_mail`. Le serveur distant reçoit un paquet qui semble provenir de `@pub_mail`.
+
+**③ Réponse originale** — Le serveur distant répond à `@pub_mail:xxxx`.
+
+**④ Réponse retranslatée (entrant)** — Le firewall remplace la destination `@pub_mail` par `@priv_mail` et transmet la réponse au serveur interne.
+
+<Aside type="note">
+La translation bimap nécessite **deux règles NAT** dans la politique SNS : une règle DNAT pour les connexions entrantes (destination `@pub_mail` → `@priv_mail`), et une règle SNAT pour les connexions sortantes (source `@priv_mail` → `@pub_mail`). L'assistant *bimap* les génère automatiquement toutes les deux.
+</Aside>
+
+### Plusieurs serveurs, plusieurs IP publiques
+
+<ImageFigureViewer
+  src="/images/fiches/sns-nat/Pasted-image-20260326153703.png"
+  alt="Schéma de plusieurs serveurs internes (mail, FTP) chacun associé à sa propre IP publique virtuelle via des règles bimap distinctes."
+  scale={1}
+/>
+
+Si tu disposes de plusieurs adresses IP publiques, chaque serveur interne peut se voir attribuer la sienne. Chaque association nécessite ses propres deux règles bimap.
+
+### Publication ARP des IP virtuelles
+
+<ImageFigureViewer
+  src="/images/fiches/sns-nat/Pasted-image-20260326153823.png"
+  alt="Schéma de publication ARP : le firewall répond aux requêtes ARP pour les IP virtuelles afin que le routeur lui transmette le trafic destiné à ces adresses."
+  scale={1}
+/>
+
+Dans une translation statique bimap, l'adresse IP publique virtuelle (ex. `@pub_mail`) n'est pas l'adresse du firewall — c'est l'**identité publique du serveur interne**. Elle n'est donc pas configurée sur l'interface externe du firewall.
+
+Cela pose un problème : quand un paquet à destination de `@pub_mail` arrive sur Internet, les routeurs cherchent quelle machine porte cette adresse via le protocole ARP. Comme aucune interface ne la porte, le firewall ne répond pas — et les paquets n'arrivent jamais.
+
+La **publication ARP** résout ce problème :
+
+1. Le firewall dispose d'une seule interface externe, qui porte `@pub_fw`
+2. Les adresses IP virtuelles (`@pub_mail`, etc.) ne sont pas configurées sur cette interface
+3. Sans publication ARP, les requêtes ARP pour ces adresses restent sans réponse — le trafic ne parvient pas au firewall
+4. Avec la publication ARP activée, le firewall répond « c'est moi » aux requêtes ARP pour ces adresses virtuelles, et peut ainsi intercepter et translater le trafic
+
+Le schéma ci-dessus illustre les échanges qui ont lieu entre le routeur et le firewall lorsqu'un paquet à destination de `@pub_mail` arrive.
+
+**① Broadcast ARP** (*who has*) — Le routeur reçoit un paquet IP destiné à `@pub_mail`. Pour construire la trame Ethernet, il doit connaître l'adresse MAC associée à cette IP. Il envoie une requête ARP en broadcast sur le réseau : « Qui possède `@pub_mail` ? »
+
+**② Réponse ARP** (*is at*) — Grâce à la publication ARP, le firewall a enregistré `@pub_mail` dans sa table ARP, associée à `@MAC_fw`. Il répond : « `@pub_mail` est accessible à `@MAC_fw` »
+
+**③ Transmission de la trame** — Le routeur encapsule le paquet IP dans une trame Ethernet à destination de `@MAC_fw` et la transmet au firewall, qui peut alors appliquer la règle de translation.
+
+À gauche du schéma, on voit que le firewall associe **plusieurs IP publiques à la même adresse MAC** (`@pub_fw`, `@pub_mail`, `@pub_ftp` → `@MAC_fw`). C'est ce qui lui permet de recevoir le trafic destiné à toutes ces adresses sur une seule interface physique.
+
+<Aside type="tip">
+L'assistant bimap propose d'activer la publication ARP directement lors de la création des règles — il est conseillé de ne pas l'oublier.
+</Aside>
+
+---
+
+## Configurer les règles NAT sur SNS
+
+### Accès à l'interface
+
+<ImageFigureViewer
+  src="/images/fiches/sns-nat/Pasted-image-20260326154000.png"
+  alt="Capture d'écran de l'interface SNS montrant la liste des politiques de sécurité et l'accès à la configuration Filtrage et NAT."
+  scale={1}
+/>
+
+Les règles de filtrage et de NAT sont regroupées dans la même politique de sécurité. SNS permet de définir jusqu'à **10 politiques**, mais une seule est active à la fois (identifiée par une icône dédiée). La politique **Block all** est activée par défaut en sortie d'usine.
+
+La configuration s'effectue via **Configuration → Politique de sécurité → Filtrage et NAT**, onglet **NAT**.
+
+<ImageFigureViewer
+  src="/images/fiches/sns-nat/Pasted-image-20260326154056.png"
+  alt="Capture d'écran de l'en-tête d'une politique NAT SNS avec les options Renommer, Réinitialiser, Copier et Exporter."
+  scale={1}
+/>
+
+L'en-tête de la politique permet de :
+- Sélectionner la politique active (liste déroulante)
+- **Renommer**, **Réinitialiser** ou **Copier** la politique
+- **Exporter** les règles au format CSV (utile pour SMC)
+
+### Créer une règle
+
+<ImageFigureViewer
+  src="/images/fiches/sns-nat/Pasted-image-20260326154442.png"
+  alt="Capture d'écran du menu Nouvelle règle NAT avec ses quatre options : règle standard, masquerading, séparateur, NAT statique bimap."
+  scale={1}
+/>
+
+Le bouton **Nouvelle règle** propose quatre options :
+
+| Option | Usage |
+|---|---|
+| **Règle standard** | Toutes les translations manuelles |
+| **Règle de partage d'adresse source (masquerading)** | Translation dynamique — ajoute automatiquement la plage `ephemeral_fw` |
+| **Séparateur** | Organiser les règles par groupe (couleur + commentaire) |
+| **Règle de NAT statique (bimap)** | Lance l'assistant pour la translation statique bidirectionnelle |
+
+Chaque règle se décompose en deux sections qui correspondent à deux questions distinctes :
+
+- **Trafic avant translation** — *Quel paquet doit être concerné par cette règle ?* C'est le critère de sélection : source, destination, port destination du paquet original.
+- **Trafic après translation** — *Comment modifier ce paquet ?* C'est l'action : les nouvelles valeurs à appliquer. Ce qui n'est pas renseigné reste inchangé.
+
+L'option **Tracer** active la journalisation du trafic dans le journal Filtrage (désactivée par défaut). Une seconde option permet d'activer le NAT dans un tunnel VPN *IPsec*.
+
+### Indicateur d'utilisation des règles
+
+<ImageFigureViewer
+  src="/images/fiches/sns-nat/Pasted-image-20260326155148.png"
+  alt="Capture d'écran de l'indicateur d'utilisation des règles NAT avec le compteur de hits et le code couleur associé."
+  scale={1}
+/>
+
+Chaque règle affiche un compteur de *hits* (nombre de fois où elle a été appliquée). La couleur indique l'activité relative par rapport à la règle la plus sollicitée de la politique :
+
+| Couleur | Signification |
+|---|---|
+| Blanc | Jamais appliquée |
+| Bleu | Entre 0 % et 2 % du hit maximal |
+| Vert | Entre 2 % et 20 % du hit maximal |
+| Orange | ≥ 20 % du hit maximal **et** > 10 000 hits |
+
+Pour **sauvegarder**, clique sur **Appliquer**. Une fenêtre propose ensuite d'activer la politique immédiatement (**Oui, activer la politique**) ou plus tard (**Plus tard**).
+
+---
+
+## Exemples de règles
+
+### Translation dynamique (SNAT)
+
+<ImageFigureViewer
+  src="/images/fiches/sns-nat/Pasted-image-20260326155548.png"
+  alt="Capture d'écran d'un exemple de règle de translation dynamique (SNAT) dans l'interface SNS, avec le processus de sauvegarde et l'indicateur de hits."
+  scale={1}
+/>
+
+- **Trafic avant translation** — Elle sélectionne tous les paquets provenant du réseau interne `Network_in`, sortant par l'interface externe (`out`), sur n'importe quel port destination.
+- **Trafic après translation** — L'adresse source est remplacée par l'IP de l'interface externe du firewall (`Firewall_out`), et le port source par un port dans la plage `ephemeral_fw`. La destination n'est pas renseignée : elle reste inchangée.
+
+Le schéma montre également le processus de sauvegarde : après avoir cliqué sur **Appliquer**, une confirmation s'affiche, suivie d'une boîte de dialogue proposant d'activer immédiatement la politique (**Oui, activer la politique**) ou plus tard (**Plus tard**).
+
+L'indicateur d'utilisation visible à gauche de la règle affiche ici 2032 *hits*. Sa couleur reflète l'activité relative de la règle par rapport aux autres règles de la politique.
+
+### Translation statique par port (DNAT)
+
+<ImageFigureViewer
+  src="/images/fiches/sns-nat/Pasted-image-20260326155929.png"
+  alt="Capture d'écran d'un exemple de règle de translation statique par port (DNAT) dans l'interface SNS, redirigeant le port 80 vers un serveur web interne."
+  scale={1}
+/>
+
+- **Trafic avant translation** — Elle sélectionne les paquets entrant par l'interface externe (`out`), provenant de `internet` (toutes les adresses IP que le firewall ne connaît pas et ne gère pas), à destination de l'IP publique du firewall (`Firewall_out`) sur le port `http` (80/tcp).
+- **Trafic après translation** — Seule la destination est modifiée : l'adresse IP est remplacée par celle du serveur web interne (`srv_web`). Le port destination n'est pas renseigné : il reste inchangé. La source n'est pas touchée.
+
+### Translation statique bidirectionnelle (bimap)
+
+<ImageFigureViewer
+  src="/images/fiches/sns-nat/Pasted-image-20260326160157.png"
+  alt="Capture d'écran des deux règles bimap générées automatiquement par l'assistant SNS : une règle SNAT (flux sortant) et une règle DNAT (flux entrant) pour le serveur mail."
+  scale={1}
+/>
+
+La règle bimap est créée via un **assistant**, accessible depuis **Nouvelle règle → Static NAT rule (bimap)**. Il suffit de renseigner deux informations principales : l'adresse privée du serveur interne (`srv_mail`) et son adresse IP publique virtuelle (`srv_mail_pub`), associée à l'interface externe `out`. La publication ARP est activée automatiquement pour cette adresse virtuelle.
+
+Une fois l'assistant validé, **deux règles sont générées automatiquement** :
+
+- **Règle 1 (SNAT — flux sortant)** — Elle sélectionne les paquets dont la source est `srv_mail`, sortant par l'interface `out`, sur n'importe quel port. La source est remplacée par `srv_mail_pub`. C'est cette règle qui garantit que les connexions initiées par le serveur interne apparaissent sur Internet avec l'IP publique virtuelle.
+- **Règle 2 (DNAT — flux entrant)** — Elle sélectionne les paquets entrant par l'interface `out`, à destination de `srv_mail_pub`, sur n'importe quel port. La destination est remplacée par `srv_mail`. C'est cette règle qui permet aux machines d'Internet de joindre le serveur interne via son IP publique virtuelle.

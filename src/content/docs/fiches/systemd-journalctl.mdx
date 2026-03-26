@@ -1,0 +1,608 @@
+---
+title: "Consultation des journaux systemd avec journalctl"
+description: "Fiche de référence pour interroger le journal binaire géré par systemd-journald : options de navigation, filtres par unité, priorité et fenêtres temporelles, suivi en temps réel et export des logs pour le débogage des services Linux."
+filename: "systemd-journalctl"
+topic: "systemd"
+section: "systeme"
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+*journalctl* est l'outil en ligne de commande permettant de consulter le
+*journal* (*journal binaire*) géré par *systemd-journald*. Contrairement aux
+fichiers texte classiques de `/var/log/`, le journal *systemd* est stocké
+dans un format binaire indexé qui permet des recherches rapides, un filtrage
+puissant et une garantie d'intégrité des entrées. *journalctl* est le point
+d'entrée unique pour exploiter ces données.
+
+<Aside type="tip">
+  *journalctl* est disponible sur toute distribution utilisant *systemd*
+  (Debian ≥ 8, Ubuntu ≥ 15.04, RHEL/Rocky ≥ 7, Arch Linux…).
+  Aucune installation supplémentaire n'est nécessaire.
+
+  Pour vérifier que *systemd-journald* est actif :
+  ```bash
+  systemctl status systemd-journald
+  ```
+</Aside>
+
+---
+
+## Syntaxe générale
+
+```
+journalctl [OPTIONS] [MATCHES]
+```
+
+Par défaut, *journalctl* affiche l'intégralité du journal depuis le démarrage
+le plus ancien conservé, paginé via `less`. Appuyez sur `q` pour quitter,
+`G` pour aller à la fin, `/` pour rechercher.
+
+<Aside type="note">
+  Les utilisateurs ordinaires ne voient que leurs propres logs. Les membres du
+  groupe `adm` ou `systemd-journal` accèdent aux logs système sans `sudo`.
+  L'administrateur voit tout avec `sudo journalctl`.
+</Aside>
+
+---
+
+## Options essentielles
+
+### Navigation dans le journal
+
+| Option | Description |
+|--------|-------------|
+| `-e` | Saute directement à la **fin** du journal (*end*) |
+| `-n 50` | Affiche les **50 dernières** entrées (défaut : 10) |
+| `-r` | Affichage en ordre **inverse** (plus récent en premier) |
+| `--no-pager` | Désactive la pagination (sortie directe dans le terminal) |
+| `-o short` | Format court, une ligne par entrée (défaut) |
+| `-o verbose` | Tous les champs *metadata* de chaque entrée |
+| `-o json` | Sortie au format *JSON* (*JavaScript Object Notation*) |
+| `-o json-pretty` | *JSON* indenté, plus lisible |
+| `-o cat` | Message brut uniquement, sans horodatage ni *hostname* |
+| `-o export` | Format binaire exportable (*journalctl* → autre machine) |
+
+```bash
+# Les 20 dernières entrées, ordre chronologique inverse
+sudo journalctl -n 20 -r
+
+# Sortie JSON pour traitement automatique (grep, jq…)
+sudo journalctl -n 100 -o json | jq '.MESSAGE'
+```
+
+### Suivi en temps réel
+
+| Option | Description |
+|--------|-------------|
+| `-f` | Suit le journal en temps réel (*follow*, équivalent de `tail -f`) |
+| `-f -n 0` | Suit en temps réel **sans** afficher les entrées existantes |
+
+```bash
+# Suivre tous les logs en temps réel
+sudo journalctl -f
+
+# Suivre uniquement les nouveaux logs d'un service
+sudo journalctl -f -u nginx.service
+```
+
+<Aside type="tip">
+  Combinez `-f` avec `-u` et `-p` pour un suivi ciblé en débogage :
+  ```bash
+  sudo journalctl -f -u ssh.service -p warning
+  ```
+</Aside>
+
+---
+
+## Filtres par unité *systemd*
+
+L'option `-u` (*unit*) est la plus utilisée au quotidien : elle filtre les
+logs d'un service *systemd* précis.
+
+| Option | Exemple | Description |
+|--------|---------|-------------|
+| `-u` | `-u nginx.service` | Logs d'une unité précise |
+| `-u` (joker) | `-u 'ssh*'` | Toutes les unités commençant par `ssh` |
+| `-u … -u …` | `-u nginx -u php-fpm` | Logs de **plusieurs** unités combinées |
+| `_SYSTEMD_UNIT=` | `_SYSTEMD_UNIT=cron.service` | Filtre exact sur le champ *journal* |
+
+```bash
+# Logs du serveur web Apache
+sudo journalctl -u apache2.service -e
+
+# Logs combinés Nginx + PHP-FPM (utile pour déboguer une appli web)
+sudo journalctl -u nginx.service -u php8.2-fpm.service -f
+
+# Logs du démon SSH depuis le dernier démarrage
+sudo journalctl -u ssh.service -b
+
+# Logs de tous les services réseau (joker)
+sudo journalctl -u 'network*'
+```
+
+<Aside type="note">
+  Le suffixe `.service` est optionnel : `journalctl -u nginx` et
+  `journalctl -u nginx.service` sont équivalents.
+</Aside>
+
+---
+
+## Filtres par priorité (*syslog priority*)
+
+L'option `-p` (*priority*) filtre selon le niveau de gravité *syslog*
+(*System Log*). Les niveaux sont hérités de la norme *RFC 5424*.
+
+| Niveau | Valeur | Signification |
+|--------|--------|---------------|
+| `emerg` | 0 | Système inutilisable |
+| `alert` | 1 | Action immédiate requise |
+| `crit` | 2 | Condition critique |
+| `err` | 3 | Erreur |
+| `warning` | 4 | Avertissement |
+| `notice` | 5 | Condition normale mais significative |
+| `info` | 6 | Message informatif |
+| `debug` | 7 | Message de débogage |
+
+```bash
+# Afficher uniquement les erreurs et plus graves (0 à 3)
+sudo journalctl -p err
+
+# Plage de priorités : de warning (4) à crit (2)
+sudo journalctl -p crit..warning
+
+# Erreurs du service MySQL uniquement
+sudo journalctl -u mysql.service -p err -e
+
+# Tous les messages de niveau warning et au-dessus, en temps réel
+sudo journalctl -f -p warning
+```
+
+<Aside type="caution">
+  `-p err` affiche les entrées de niveau `err` **et plus graves**
+  (0, 1, 2, 3). Pour n'afficher qu'un niveau exact, utilisez la plage :
+  `-p err..err`.
+</Aside>
+
+---
+
+## Filtres temporels
+
+### Filtres par démarrage (*boot*)
+
+| Option | Description |
+|--------|-------------|
+| `-b` | Logs depuis le **démarrage actuel** uniquement |
+| `-b -1` | Logs du **démarrage précédent** |
+| `-b -2` | Logs de l'avant-avant-dernier démarrage |
+| `--list-boots` | Liste tous les démarrages connus avec leur identifiant |
+
+```bash
+# Logs depuis le boot actuel
+sudo journalctl -b
+
+# Logs du boot précédent (utile après un crash)
+sudo journalctl -b -1
+
+# Lister tous les boots enregistrés
+sudo journalctl --list-boots
+```
+
+<Aside type="tip">
+  Après un crash ou un redémarrage inattendu, `-b -1` est votre premier
+  réflexe : il donne accès aux logs du dernier cycle de vie du système
+  avant l'arrêt.
+</Aside>
+
+### Filtres par date et heure
+
+| Option | Exemple | Description |
+|--------|---------|-------------|
+| `--since` | `--since "2024-01-15 08:00:00"` | Depuis une date/heure précise |
+| `--until` | `--until "2024-01-15 09:30:00"` | Jusqu'à une date/heure précise |
+| `--since` + `--until` | combinés | Fenêtre temporelle exacte |
+| Mots-clés | `--since yesterday` | Mots-clés : `today`, `yesterday`, `now` |
+| Relatif | `--since "1 hour ago"` | Relatif à l'instant présent |
+| Relatif | `--since "-2h"` | Syntaxe courte (2 heures en arrière) |
+
+```bash
+# Logs de ce matin entre 8h et 9h
+sudo journalctl --since "08:00" --until "09:00"
+
+# Logs des dernières 30 minutes
+sudo journalctl --since "30 min ago"
+
+# Logs d'hier en entier
+sudo journalctl --since yesterday --until today
+
+# Logs d'une plage précise pour un service
+sudo journalctl -u postgresql.service \
+  --since "2024-06-01 00:00:00" \
+  --until "2024-06-01 23:59:59"
+
+# Logs du service SSH depuis 1 heure, en temps réel
+sudo journalctl -u ssh.service --since "-1h" -f
+```
+
+---
+
+## Filtres par champs du journal
+
+*systemd-journald* enregistre de nombreux *metadata* (*métadonnées*)
+structurés pour chaque entrée. On peut filtrer directement sur ces champs.
+
+| Champ | Exemple | Description |
+|-------|---------|-------------|
+| `_PID` | `_PID=1234` | *PID* (*Process Identifier*) du processus |
+| `_UID` | `_UID=1000` | *UID* (*User Identifier*) de l'utilisateur |
+| `_COMM` | `_COMM=sshd` | Nom de la commande du processus |
+| `_EXE` | `_EXE=/usr/sbin/sshd` | Chemin complet de l'exécutable |
+| `_HOSTNAME` | `_HOSTNAME=srv-web` | Nom d'hôte de la machine |
+| `SYSLOG_FACILITY` | `SYSLOG_FACILITY=4` | Facilité *syslog* (4 = auth) |
+| `SYSLOG_IDENTIFIER` | `SYSLOG_IDENTIFIER=sudo` | Identifiant *syslog* |
+
+```bash
+# Logs générés par le processus PID 4812
+sudo journalctl _PID=4812
+
+# Logs de toutes les invocations de sudo
+sudo journalctl SYSLOG_IDENTIFIER=sudo
+
+# Logs d'un utilisateur précis (UID 1001)
+sudo journalctl _UID=1001
+
+# Combinaison : erreurs du binaire sshd
+sudo journalctl _COMM=sshd -p err
+
+# Lister tous les champs disponibles
+sudo journalctl -o verbose -n 1 | head -60
+```
+
+---
+
+## Exemples courants par service
+
+### SSH — *Secure Shell*
+
+<details>
+<summary>▶ Analyser les connexions et tentatives SSH</summary>
+
+```bash
+# Tous les logs SSH du boot actuel
+sudo journalctl -u ssh.service -b
+
+# Authentifications en temps réel (suivi des tentatives)
+sudo journalctl -f SYSLOG_IDENTIFIER=sshd
+
+# Échecs d'authentification uniquement
+sudo journalctl SYSLOG_IDENTIFIER=sshd -b | grep -i "failed\|invalid"
+
+# Connexions réussies
+sudo journalctl SYSLOG_IDENTIFIER=sshd -b | grep "Accepted"
+
+# Dernière heure de logs SSH en erreur
+sudo journalctl -u ssh.service --since "-1h" -p err
+```
+
+<Aside type="tip">
+  Pour détecter une attaque par force brute (*brute force*), combinez avec
+  `grep` et `sort` :
+  ```bash
+  sudo journalctl SYSLOG_IDENTIFIER=sshd -b \
+    | grep "Failed password" \
+    | awk '{print $(NF-3)}' \
+    | sort | uniq -c | sort -rn | head -10
+  ```
+  Ce *one-liner* affiche les 10 adresses IP les plus actives en tentatives
+  d'authentification.
+</Aside>
+
+</details>
+
+---
+
+### *nginx* / *Apache* — Serveurs web
+
+<details>
+<summary>▶ Déboguer un serveur web</summary>
+
+```bash
+# Logs Nginx depuis le démarrage actuel
+sudo journalctl -u nginx.service -b
+
+# Erreurs Nginx uniquement
+sudo journalctl -u nginx.service -p err -e
+
+# Suivi combiné Nginx + PHP-FPM (pile LEMP)
+sudo journalctl -u nginx.service -u php8.2-fpm.service -f
+
+# Apache : logs des 30 dernières minutes
+sudo journalctl -u apache2.service --since "-30min"
+
+# Vérifier pourquoi un service n'a pas démarré
+sudo journalctl -u nginx.service -b --no-pager | tail -30
+```
+
+<Aside type="note">
+  *nginx* et *Apache* écrivent aussi dans leurs propres fichiers de logs
+  (`/var/log/nginx/`, `/var/log/apache2/`). *journalctl* capture la sortie
+  standard et d'erreur du processus *systemd*, ce qui inclut les messages
+  de démarrage et les erreurs fatales, mais pas forcément les requêtes HTTP.
+</Aside>
+
+</details>
+
+---
+
+### *systemd* — Démarrage et services
+
+<details>
+<summary>▶ Analyser le démarrage du système et les échecs de services</summary>
+
+```bash
+# Messages du noyau (kernel) lors du boot
+sudo journalctl -k -b
+
+# Résumé des services en échec
+systemctl --failed
+
+# Logs d'un service en échec depuis le dernier démarrage
+sudo journalctl -u mon-service.service -b -p err --no-pager
+
+# Messages critiques du boot actuel
+sudo journalctl -b -p crit
+
+# Analyser un plantage précédent (boot -1)
+sudo journalctl -b -1 -p err
+
+# Temps de démarrage des unités (diagnostic de boot lent)
+systemd-analyze blame | head -20
+```
+
+<Aside type="tip">
+  Après avoir modifié un fichier de configuration, testez avec :
+  ```bash
+  sudo systemctl daemon-reload
+  sudo systemctl restart mon-service.service
+  sudo journalctl -u mon-service.service -f
+  ```
+  Le `-f` affiche les logs en direct pendant le redémarrage, ce qui
+  permet de voir immédiatement les erreurs de configuration.
+</Aside>
+
+</details>
+
+---
+
+### *cron* / *anacron* — Tâches planifiées
+
+<details>
+<summary>▶ Vérifier l'exécution des tâches planifiées</summary>
+
+```bash
+# Logs cron du jour
+sudo journalctl -u cron.service --since today
+
+# Logs cron de la dernière heure
+sudo journalctl SYSLOG_IDENTIFIER=CRON --since "-1h"
+
+# Toutes les tâches exécutées (avec leur utilisateur)
+sudo journalctl SYSLOG_IDENTIFIER=CRON -b | grep "CMD"
+
+# Erreurs cron uniquement
+sudo journalctl -u cron.service -p err -b
+
+# Logs anacron
+sudo journalctl SYSLOG_IDENTIFIER=anacron --since yesterday
+```
+
+</details>
+
+---
+
+### Authentification et *sudo*
+
+<details>
+<summary>▶ Auditer les authentifications et élévations de privilèges</summary>
+
+```bash
+# Tous les événements d'authentification (PAM, sudo, su…)
+sudo journalctl SYSLOG_FACILITY=10 -b
+
+# Utilisation de sudo depuis hier
+sudo journalctl SYSLOG_IDENTIFIER=sudo --since yesterday
+
+# Échecs d'authentification PAM (Pluggable Authentication Modules)
+sudo journalctl SYSLOG_FACILITY=10 -b | grep -i "failure\|failed"
+
+# Connexions su réussies
+sudo journalctl SYSLOG_IDENTIFIER=su -b | grep "Successful"
+
+# Résumé des authentifications en temps réel
+sudo journalctl -f SYSLOG_FACILITY=10
+```
+
+<Aside type="caution">
+  Les logs d'authentification contiennent des informations sensibles
+  (noms d'utilisateurs, adresses IP). L'accès à ces logs doit être
+  restreint et tracé dans un contexte de production.
+</Aside>
+
+</details>
+
+---
+
+### *NetworkManager* — Réseau
+
+<details>
+<summary>▶ Diagnostiquer les problèmes réseau</summary>
+
+```bash
+# Logs NetworkManager depuis le boot
+sudo journalctl -u NetworkManager.service -b
+
+# Connexions/déconnexions Wi-Fi
+sudo journalctl -u NetworkManager.service -b | grep -i "connected\|disconnect"
+
+# Logs du service DHCP client
+sudo journalctl -u systemd-networkd.service -b
+
+# Résolution DNS (systemd-resolved)
+sudo journalctl -u systemd-resolved.service -f
+
+# Problèmes de routage et d'interface
+sudo journalctl -k -b | grep -i "eth\|ens\|wlan\|link"
+```
+
+</details>
+
+---
+
+## Gestion et maintenance du journal
+
+### Connaître l'espace disque utilisé
+
+```bash
+# Taille totale du journal
+sudo journalctl --disk-usage
+
+# Informations détaillées sur les fichiers de journal
+sudo journalctl --header
+```
+
+### Rotation et purge du journal
+
+```bash
+# Conserver uniquement les 2 derniers jours
+sudo journalctl --vacuum-time=2d
+
+# Limiter la taille totale à 500 Mo
+sudo journalctl --vacuum-size=500M
+
+# Conserver uniquement les 3 derniers boots
+sudo journalctl --vacuum-files=3
+```
+
+<Aside type="caution">
+  La commande `--vacuum-*` supprime définitivement des entrées de journal.
+  Assurez-vous d'avoir exporté ou archivé les logs importants avant.
+</Aside>
+
+### Persistance du journal
+
+Par défaut sur certaines distributions, le journal est stocké en mémoire
+(`/run/log/journal/`) et perdu au redémarrage. Pour le rendre persistant :
+
+```bash
+# Activer la persistance sur disque
+sudo mkdir -p /var/log/journal
+sudo systemd-tmpfiles --create --prefix /var/log/journal
+sudo systemctl restart systemd-journald
+
+# Vérifier l'emplacement des fichiers de journal
+ls /var/log/journal/
+```
+
+### Export du journal
+
+```bash
+# Exporter en JSON pour archivage
+sudo journalctl -b -o json > /tmp/journal_boot_$(date +%F).json
+
+# Exporter en format binaire (reimportable)
+sudo journalctl -b -o export > /tmp/journal_boot.export
+
+# Exporter les logs d'un service en texte simple
+sudo journalctl -u nginx.service --since "2024-01-01" --no-pager \
+  > /tmp/nginx_janvier_2024.log
+```
+
+---
+
+## Workflow de débogage recommandé
+
+<Steps>
+
+1. **Identifier le service en cause**
+
+   Si un service est en échec, *systemd* le signale directement :
+   ```bash
+   systemctl status mon-service.service
+   # La dernière ligne de logs apparaît directement dans la sortie
+   ```
+   Pour une vue globale des échecs :
+   ```bash
+   systemctl --failed
+   ```
+
+2. **Consulter les logs du boot actuel pour ce service**
+
+   ```bash
+   sudo journalctl -u mon-service.service -b -e
+   ```
+   L'option `-e` positionne directement en bas du journal pour voir
+   les entrées les plus récentes.
+
+3. **Affiner par niveau de priorité**
+
+   Filtrer d'abord sur les erreurs pour réduire le bruit :
+   ```bash
+   sudo journalctl -u mon-service.service -b -p err --no-pager
+   ```
+
+4. **Affiner la fenêtre temporelle si nécessaire**
+
+   Si l'incident est survenu à un moment connu :
+   ```bash
+   sudo journalctl -u mon-service.service \
+     --since "14:00" --until "14:30" --no-pager
+   ```
+
+5. **Suivre en temps réel lors d'un redémarrage**
+
+   Après correction de la configuration, relancez et observez :
+   ```bash
+   sudo systemctl restart mon-service.service \
+     && sudo journalctl -u mon-service.service -f -n 0
+   ```
+
+6. **Exporter pour analyse approfondie ou archivage**
+
+   ```bash
+   sudo journalctl -u mon-service.service -b --no-pager \
+     > /tmp/debug_$(date +%F_%H%M).log
+   ```
+
+</Steps>
+
+---
+
+## Récapitulatif des options les plus utiles
+
+| Option | Usage typique |
+|--------|--------------|
+| `-f` | Suivi en temps réel |
+| `-e` | Aller à la fin du journal |
+| `-n 50` | Afficher les N dernières lignes |
+| `-r` | Ordre inverse (plus récent en premier) |
+| `-u nginx` | Filtrer par unité *systemd* |
+| `-b` | Depuis le boot actuel uniquement |
+| `-b -1` | Boot précédent (après un crash) |
+| `-p err` | Priorité erreur et plus grave |
+| `--since "1h ago"` | Depuis une heure |
+| `--since … --until …` | Fenêtre temporelle précise |
+| `-k` | Logs du noyau (*kernel*) uniquement |
+| `-o json` | Sortie *JSON* pour traitement |
+| `--no-pager` | Pas de pagination (pour les scripts) |
+| `--disk-usage` | Taille du journal sur disque |
+| `--vacuum-time=7d` | Purger les logs de plus de 7 jours |
+
+<Aside type="note">
+  *journalctl* et *systemd-journald* fonctionnent en binôme avec les
+  fichiers traditionnels de `/var/log/`. Sur la plupart des distributions,
+  *rsyslog* ou *syslog-ng* reste actif en parallèle et écrit les mêmes
+  messages dans des fichiers texte. Les deux sources sont complémentaires :
+  *journalctl* pour la recherche interactive rapide, `/var/log/` pour la
+  compatibilité avec des outils comme *logwatch*, *fail2ban* ou les
+  *SIEM* (*Security Information and Event Management*).
+</Aside>
