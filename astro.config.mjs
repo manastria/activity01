@@ -6,7 +6,8 @@ export default defineConfig({
   // Configuration au premier niveau
   integrations: [
     starlight({
-      title: "Activités SISR",
+      title: "Manastria · Cours",
+      favicon: '/favicon.svg',
       locales: { root: { label: "Français", lang: "fr" } },
       sidebar: [
         { label: "Accueil", link: "/" },
@@ -26,7 +27,8 @@ export default defineConfig({
         },
         // Ajout manuel de la catégorie SNS
         {
-          label: "SNS", // Le nom de la catégorie dans le menu
+          label: "SNS",
+          collapsed: true,
           items: [
             { label: "Reset", link: "activities/sns/reset" },
             { label: "Configuration de base", link: "activities/sns/init" },
@@ -50,6 +52,7 @@ export default defineConfig({
         },
         {
           label: "Outils",
+          collapsed: true,
           items: [
             { label: "Déploiement clé SSH", link: "/outils/ssh-key-deployer" },
             { label: "Mémo", link: "/memo" },
@@ -70,6 +73,7 @@ export default defineConfig({
         minHeadingLevel: 2,
         maxHeadingLevel: 4,
       },
+      customCss: ['./src/styles/custom.css'],
     }),
     icon(),
   ],

@@ -60,10 +60,10 @@ Par défaut, les ports sont choisis **séquentiellement** dans cette plage. Une 
    - Onglet **Destination originale** :
       - sélectionner `Internet`.
 
-      :::danger[Ne jamais laisser « Any » en destination originale]
-      Si vous laissez `Any` en destination originale, les flux d'administration du pare-feu (en *SSH* et en *HTTPS*) subiront également la traduction *NAT* vers l'interface « out ». Le pare-feu interprétera alors ces flux comme une tentative d'intrusion et **les bloquera**, vous privant de l'accès à l'interface d'administration.
+      <Aside type="danger" title="Ne jamais laisser « Any » en destination originale">
+      Si vous laissez `Any` en destination originale, les flux d'administration du pare-feu (en *SSH* et en *HTTPS*) subiront également la traduction *NAT* vers l'interface « out ». Le pare-feu interprétera alors ces flux comme une tentative d'intrusion et **les bloquera**, vous privant de l'accès à l'interface d'administration.
       Utilisez systématiquement l'objet `Internet` qui désigne tous les réseaux **sauf** les réseaux internes du pare-feu.
-      :::
+      </Aside>
 
       **Restreindre l'interface de sortie (recommandé)**
 
@@ -76,9 +76,9 @@ Par défaut, les ports sont choisis **séquentiellement** dans cette plage. Une 
       - Dans **Port source translaté** : laisser `ephemeral_fw`.
       - Cocher l'option **« Choisir aléatoirement le port source translaté »**.
 
-      :::tip[Pourquoi activer la sélection aléatoire du port ?]
+      <Aside type="tip" title="Pourquoi activer la sélection aléatoire du port ?">
       Avec un choix séquentiel, un attaquant peut deviner le prochain port utilisé et tenter de détourner une connexion. Le choix aléatoire rend cette prédiction beaucoup plus difficile. Ainsi, si le premier port attribué est 23 417, le suivant ne sera pas 23 418 mais un nombre tiré au hasard dans la plage `ephemeral_fw`. Cela ne rend pas les attaques impossibles, mais les complexifie significativement.
-      :::
+      </Aside>
 
 5. ### Configurer le protocole
 
@@ -88,9 +88,9 @@ Par défaut, les ports sont choisis **séquentiellement** dans cette plage. Une 
 
    Dans l'onglet **Options**, dans la liste déroulante **Niveau de trace** choisir **Tracer**. Cette option journalise le premier paquet correspondant à la règle de *NAT* dans le journal de connexions, ce qui est indispensable pour le diagnostic.
 
-   :::note[Marqueurs de traduction dans les journaux]
+   <Aside type="note" title="Marqueurs de traduction dans les journaux">
    Les entrées du journal de connexions liées au *NAT* sont identifiables grâce aux champs « Adresse source translatée » et « Port source translaté » dans l'interface web, ou par les mots-clés `modsrc` et `modsrcport` en ligne de commande.
-   :::
+   </Aside>
 
 7. ### Ajouter un commentaire
 
@@ -101,9 +101,9 @@ Par défaut, les ports sont choisis **séquentiellement** dans cette plage. Une 
    - Mettre l'état de la règle sur **On**.
    - Cliquer sur **Appliquer** puis confirmer avec **Oui, activer la politique**.
 
-   :::caution
+   <Aside type="caution">
    Avant de lancer vos tests, pensez à **réinitialiser les statistiques des règles** (menu hamburger → réinitialiser les statistiques des règles) afin de repartir de zéro et de faciliter l'interprétation des compteurs.
-   :::
+   </Aside>
 
 </Steps>
 
@@ -156,9 +156,9 @@ Une erreur courante consiste à créer une règle de filtrage avec `Firewall_out
    - **Destination** : `Internet`.
    - **Port / Protocole** : sélectionner les services nécessaires (par exemple `http`, `https`, `dns_udp`, etc.).
 
-   :::tip[Conseil pour le laboratoire]
+   <Aside type="tip" title="Conseil pour le laboratoire">
    En phase de test initial, vous pouvez temporairement laisser le service à `Any` pour valider le fonctionnement global du *SNAT*. Une fois la traduction confirmée, **restreignez immédiatement** les services autorisés conformément au principe du **moindre privilège** (par exemple : uniquement *HTTP*, *HTTPS* et *DNS*).
-   :::
+   </Aside>
 
 3. ### Activer le traçage
 
