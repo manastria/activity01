@@ -15,36 +15,36 @@ C'est exactement ce que permet la technique du **NAT sur la destination directem
 
 <ImageFigureViewer
   src="/images/fiches/sns-nat-destination-regle-filtrage/Pasted-image-20260323143251.png"
-  alt="Schéma illustrant le NAT destination (DNAT) intégré à la règle de filtrage SNS : fusion en une seule règle du contrôle d'accès et de la translation d'adresse de destination"
+  alt="Schéma illustrant le NAT destination (DNAT) intégré à la règle de filtrage SNS : fusion en une seule règle du contrôle d’accès et de la translation d’adresse de destination"
   scale={1}
 />
 
-Voici comment comprendre ce concept clé et pourquoi les professionnels l'adorent.
+Voici comment comprendre ce concept clé et pourquoi les professionnels l’adorent.
 
-### 1. Comment ça marche ? (L'art du "Tout-en-un")
+### 1. Comment ça marche ? (L’art du « Tout-en-un »)
 
 En temps normal, pour qu'un client sur Internet puisse accéder à un serveur situé dans votre entreprise (par exemple, votre serveur d'emails), vous devriez faire deux choses :
 
-1. Dire "Oui, tu peux passer" dans l'onglet Filtrage.
-2. Dire "Voici ta vraie adresse de destination" dans l'onglet NAT.
+1. Dire « Oui, tu peux passer » dans l’onglet Filtrage.
+2. Dire « Voici ta vraie adresse de destination » dans l’onglet NAT.
 
 Avec cette méthode avancée, **vous fusionnez ces deux étapes**.
 
-**L'exemple du facteur :** Imaginez un facteur (le paquet de données venant d'Internet) qui arrive à l'accueil de votre entreprise avec une lettre pour "Serveur Mail, Adresse Publique". Le vigile (votre règle de filtrage) vérifie s'il a le droit d'entrer. Au lieu de lui dire "C'est bon, va voir au bureau suivant (le NAT) pour qu'on te donne le numéro de bureau exact", le vigile fait les deux : **"C'est bon, tu peux passer, et voici directement le numéro de bureau privé de notre serveur mail"**.
+**L’exemple du facteur : ** Imaginez un facteur (le paquet de données venant d’Internet) qui arrive à l’accueil de votre entreprise avec une lettre pour « Serveur Mail, Adresse Publique ». Le vigile (votre règle de filtrage) vérifie s’il a le droit d’entrer. Au lieu de lui dire « C’est bon, va voir au bureau suivant (le NAT) pour qu’on te donne le numéro de bureau exact », le vigile fait les deux : **"C’est bon, tu peux passer, et voici directement le numéro de bureau privé de notre serveur mail"**.
 
-**Les règles d'or pour configurer cela :**
+**Les règles d’or pour configurer cela : **
 
-- L'adresse de destination initiale (l'adresse publique) est remplacée par l'adresse privée de votre serveur **directement dans la règle de filtrage**.
-- Il ne faut pas oublier d'activer une option technique appelée **« publication ARP »** pour que le pare-feu sache qu'il doit capter ces paquets.
-- **Attention aux exceptions :** Cette super-règle ne fonctionnera pas si vous essayez d'y inclure des noms de domaines (objets FQDN) ou des critères de géolocalisation.
+- L’adresse de destination initiale (l’adresse publique) est remplacée par l’adresse privée de votre serveur **directement dans la règle de filtrage**.
+- Il ne faut pas oublier d’activer une option technique appelée **« publication ARP »** pour que le pare-feu sache qu’il doit capter ces paquets.
+- **Attention aux exceptions : ** Cette super-règle ne fonctionnera pas si vous essayez d’y inclure des noms de domaines (objets FQDN) ou des critères de géolocalisation.
 
 ### 2. Pourquoi utiliser cette méthode ? (Les super-pouvoirs du DNAT)
 
-Si faire les choses en deux étapes fonctionne, pourquoi se compliquer la vie à les fusionner ? Le manuel liste **4 grands avantages** qui vont vous simplifier la vie en tant que futur administrateur réseau :
+Si faire les choses en deux étapes fonctionne, pourquoi se compliquer la vie à les fusionner ? Le manuel liste **4 grands avantages** qui vont vous simplifier la vie en tant que futur administrateur réseau :
 
-- **Une lecture plus facile (Indication rapide) :** En un seul coup d'œil, vous voyez quel flux a le droit de passer ET vers quelle machine interne il est redirigé.
-- **Une gestion centralisée :** Vous n'avez plus besoin de jongler entre l'onglet Filtrage et l'onglet NAT. Vous gérez et supervisez vos règles entrantes **dans un seul et même menu**.
-- **Un pare-feu plus rapide (Optimisation) :** C'est la cerise sur le gâteau. Comme le vigile donne directement la bonne adresse au facteur, le paquet n'a pas besoin de faire la queue au service NAT. Le système **gagne un temps précieux de traitement** puisqu'il ne parcourt pas les règles de l'onglet NAT.
-- **Une sécurité renforcée (Protections applicatives) :** C'est indispensable pour certains services. Faire le NAT directement dans le filtrage permet d'activer immédiatement des fouilles de sécurité poussées (comme le **filtrage antispam ou antivirus**) sur les connexions entrantes. Le pare-feu nettoie ainsi la donnée au moment même où il lui donne sa nouvelle adresse !
+- **Une lecture plus facile (Indication rapide) : ** En un seul coup d’œil, vous voyez quel flux a le droit de passer ET vers quelle machine interne il est redirigé.
+- **Une gestion centralisée : ** Vous n’avez plus besoin de jongler entre l’onglet Filtrage et l’onglet NAT. Vous gérez et supervisez vos règles entrantes **dans un seul et même menu**.
+- **Un pare-feu plus rapide (Optimisation) : ** C’est la cerise sur le gâteau. Comme le vigile donne directement la bonne adresse au facteur, le paquet n’a pas besoin de faire la queue au service NAT. Le système **gagne un temps précieux de traitement** puisqu’il ne parcourt pas les règles de l’onglet NAT.
+- **Une sécurité renforcée (Protections applicatives) : ** C’est indispensable pour certains services. Faire le NAT directement dans le filtrage permet d’activer immédiatement des fouilles de sécurité poussées (comme le **filtrage antispam ou antivirus**) sur les connexions entrantes. Le pare-feu nettoie ainsi la donnée au moment même où il lui donne sa nouvelle adresse !
 
 Page 257 du fichier `CSNA_v4.8_Livre_de_formation_avec_annexes_2026_01_20.pdf`
