@@ -1,0 +1,200 @@
+---
+title: Éditer des fichiers système avec un éditeur graphique sous Xubuntu
+description: >
+  Trois méthodes pour ouvrir Mousepad (ou un éditeur équivalent) avec les droits
+  administrateur sous Xubuntu 25.10 — `admin://`, `sudoedit`, ou `pkexec` — sans
+  lancer d'interface graphique complète en tant que root.
+filename: linux-editer-fichiers-admin-mousepad
+topic: linux
+section: systeme
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+*Xubuntu* 25.10 embarque *Mousepad* 0.6.3, l'éditeur de texte par défaut de
+l'environnement *Xfce*. Depuis cette version, il supporte nativement le
+*backend* d'administration de *GVfs* (*GNOME Virtual File System*), ce qui
+offre plusieurs façons propres d'éditer des fichiers système sans jamais lancer
+l'interface graphique complète en tant que `root`.
+
+<Aside type="caution">
+  Lancer une application graphique complète avec `sudo monapp` (sans précaution)
+  peut corrompre les permissions des fichiers de configuration dans votre
+  répertoire personnel. Les méthodes ci-dessous évitent ce problème.
+</Aside>
+
+---
+
+## Méthode recommandée — le préfixe `admin://`
+
+Depuis *Mousepad* 0.6.3, le protocole `admin://` de *GVfs* est pris en charge
+directement. C'est la méthode la plus simple et la plus sûre : l'éditeur
+s'ouvre normalement, mais une fenêtre graphique de saisie du mot de passe
+(*PolicyKit*) apparaît au moment de l'enregistrement.
+
+<Steps>
+
+1. **Ouvrir un terminal** (*Xfce Terminal*, *xterm*, etc.).
+
+2. **Lancer Mousepad avec le chemin préfixé** :
+
+   ```bash
+   mousepad admin:///etc/hosts
+   ```
+
+   La triple barre oblique (`///`) est obligatoire : deux barres pour le
+   protocole, une troisième pour la racine du système de fichiers.
+
+3. **Modifier le fichier** comme d'habitude.
+
+4. **Enregistrer** (Ctrl+S). Une boîte de dialogue *PolicyKit* demande votre
+   mot de passe utilisateur ; le fichier est ensuite écrit avec les droits `root`.
+
+</Steps>
+
+<Aside type="tip">
+  Cette syntaxe fonctionne aussi en ouvrant la boîte de dialogue
+  « Ouvrir un fichier » (`Ctrl+O`) directement depuis *Mousepad* : tapez
+  `admin:///etc/hosts` dans la barre d'adresse du sélecteur de fichiers.
+</Aside>
+
+---
+
+## Méthode alternative — `sudoedit` avec Mousepad comme éditeur
+
+`sudoedit` (alias `sudo -e`) crée une copie temporaire du fichier accessible
+en écriture par l'utilisateur courant, ouvre l'éditeur désigné, puis recopie
+le fichier modifié à son emplacement d'origine avec les droits `root`. Aucun
+processus graphique n'est jamais lancé en tant que `root`.
+
+<Steps>
+
+1. **(Optionnel) Définir Mousepad comme éditeur par défaut** en ajoutant la
+   ligne suivante à votre `~/.bashrc` :
+
+   ```bash
+   export SUDO_EDITOR=/usr/bin/mousepad
+   ```
+
+   Rechargez ensuite le shell :
+
+   ```bash
+   source ~/.bashrc
+   ```
+
+2. **Éditer un fichier système** :
+
+   ```bash
+   sudoedit /etc/hosts
+   ```
+
+   Mousepad s'ouvre sur une copie temporaire. Enregistrez et fermez la fenêtre ;
+   `sudoedit` recopie automatiquement le fichier.
+
+3. **Sans modifier `.bashrc`**, la commande équivalente en une seule ligne est :
+
+   ```bash
+   SUDO_EDITOR=mousepad sudoedit /etc/hosts
+   ```
+
+</Steps>
+
+<Aside type="note">
+  `sudoedit` est particulièrement adapté à un contexte pédagogique : il est
+  impossible d'accidentellement naviguer dans l'arborescence système depuis
+  l'éditeur, car celui-ci ne voit qu'une copie temporaire du fichier.
+</Aside>
+
+---
+
+## Méthode avancée — `pkexec` avec préservation de l'environnement
+
+*pkexec* (*PolicyKit Execute*) est le successeur officiel de *gksu* (supprimé
+depuis *Ubuntu* 18.04). Utilisé seul, il ne transmet pas les variables
+d'affichage, ce qui empêche toute application graphique de s'ouvrir. Le
+contournement consiste à lui passer explicitement les variables `DISPLAY` et
+`XAUTHORITY`.
+
+<Steps>
+
+1. **Créer un alias pratique** en ajoutant la ligne suivante à `~/.bash_aliases`
+   (créez le fichier s'il n'existe pas) :
+
+   ```bash
+   alias gksudo='pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY'
+   ```
+
+2. **Recharger le shell** :
+
+   ```bash
+   source ~/.bashrc
+   ```
+
+3. **Utiliser l'alias pour lancer n'importe quel éditeur graphique** :
+
+   ```bash
+   gksudo mousepad /etc/hosts
+   ```
+
+   Une fenêtre de saisie du mot de passe apparaît, puis *Mousepad* s'ouvre avec
+   les droits `root`.
+
+</Steps>
+
+<Aside type="caution">
+  Cette méthode lance l'intégralité du processus *Mousepad* en tant que `root`.
+  Préférez `admin://` ou `sudoedit` lorsque c'est possible. Réservez `pkexec`
+  aux rares cas où les deux méthodes précédentes ne fonctionnent pas.
+</Aside>
+
+---
+
+## Tableau récapitulatif
+
+<details>
+<summary>Comparaison des trois méthodes</summary>
+
+| Méthode | Commande type | Processus root ? | Interface graphique ? | Remarque |
+|---|---|---|---|---|
+| `admin://` | `mousepad admin:///etc/hosts` | Non | Oui (mot de passe *Polkit*) | **Recommandée** — Mousepad ≥ 0.6.3 |
+| `sudoedit` | `sudoedit /etc/hosts` | Non | Oui (éditeur normal) | Idéale en pédagogie |
+| `pkexec env …` | `gksudo mousepad /etc/hosts` | Oui | Oui (mot de passe *Polkit*) | Dernier recours |
+
+</details>
+
+---
+
+## Prérequis et vérification
+
+<details>
+<summary>Vérifier que gvfs-backends est installé</summary>
+
+Le protocole `admin://` requiert le paquet `gvfs-backends`. Vérifiez son
+installation :
+
+```bash
+dpkg -l gvfs-backends
+```
+
+Si le paquet est absent, installez-le :
+
+```bash
+sudo apt install gvfs-backends
+```
+
+Vérifiez également la version de *Mousepad* installée :
+
+```bash
+mousepad --version
+```
+
+La version doit être **≥ 0.6.3** pour que `admin://` soit pris en charge
+nativement.
+
+</details>
+
+<Aside type="note">
+  Sous *Xubuntu* 25.04 et 25.10, *Mousepad* 0.6.3 est livré par défaut avec le
+  support `admin://` activé. Aucune configuration supplémentaire n'est requise
+  sur une installation standard.
+</Aside>

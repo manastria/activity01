@@ -1,0 +1,125 @@
+---
+title: Connexion SSH aux équipements Cisco legacy avec algorithmes anciens
+description: Configuration SSH pour se connecter aux équipements Cisco sous IOS legacy depuis un poste Linux récent. Alias shell, fichier ~/.ssh/config et algorithmes cryptographiques compatibles.
+filename: ssh-cisco-legacy-config
+topic: ssh
+section: systeme
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+Les distributions Linux récentes (Ubuntu 24.04+, XUbuntu 25.10…) désactivent par défaut les algorithmes cryptographiques anciens. Les équipements Cisco sous *IOS* (*Internetwork Operating System*) legacy ne proposant que ces algorithmes, la connexion *SSH* échoue à la négociation. Cette fiche présente la solution recommandée pour les postes étudiants.
+
+## Alias `ssh-cisco` — solution recommandée
+
+La méthode la plus fluide est de définir un alias dans le fichier de configuration du *shell* (`~/.bashrc` pour *Bash*, `~/.zshrc` pour *Zsh*). L'alias embarque toutes les options nécessaires : la commande `ssh` habituelle reste inchangée pour les autres équipements.
+
+```bash
+alias ssh-cisco='ssh -o KexAlgorithms=diffie-hellman-group1-sha1 -o HostKeyAlgorithms=ssh-rsa -o PubkeyAcceptedAlgorithms=ssh-rsa -o Ciphers=aes128-cbc'
+```
+
+Coller cette ligne à la fin de `~/.bashrc` ou `~/.zshrc`, puis recharger le *shell* :
+
+```bash
+source ~/.bashrc   # ou source ~/.zshrc
+```
+
+L'utilisation devient alors naturelle :
+
+```bash
+ssh-cisco admin@172.25.69.1   # routeur
+ssh-cisco admin@172.25.69.2   # switch
+```
+
+<Aside type="tip">
+Sur les postes du labo, ce bloc peut être déployé une seule fois en ajoutant la ligne d'alias au profil système `/etc/profile.d/cisco-legacy.sh` — tous les étudiants en bénéficient sans manipulation individuelle.
+</Aside>
+
+---
+
+## Pourquoi faut-il forcer ces algorithmes ?
+
+### La négociation SSH
+
+Lors d'une connexion *SSH*, le client et le serveur doivent s'accorder sur trois familles d'algorithmes avant tout échange de données :
+
+| Famille | Rôle | Exemple legacy Cisco |
+|---|---|---|
+| *Key Exchange* (*KEX*) | Établir un secret partagé sans l'envoyer sur le réseau | `diffie-hellman-group1-sha1` |
+| *Host Key* | Authentifier l'identité du serveur | `ssh-rsa` |
+| *Cipher* | Chiffrer le flux de données | `aes128-cbc` |
+
+Si aucun algorithme commun n'est trouvé dans l'une de ces familles, la connexion est refusée immédiatement — c'est le message « *no matching key exchange method found* » ou « *no matching cipher found* ».
+
+### Pourquoi ces algorithmes sont-ils désactivés ?
+
+<details>
+<summary>Notions de cryptographie impliquées</summary>
+
+- **Chiffrement symétrique** — un même secret chiffre et déchiffre les données (*AES*, *3DES*). Le mode *CBC* (*Cipher Block Chaining*) est vulnérable à certaines attaques par oracle de rembourrage (*POODLE*, *BEAST*) ; les modes *CTR* ou *GCM* lui sont préférés aujourd'hui.
+
+- **Échange de clés** — le protocole *Diffie-Hellman* (*DH*) permet à deux parties de construire un secret commun sur un canal non sécurisé. `group1` utilise un module de 768 bits, `group14` un module de 2048 bits. 768 bits est considéré comme cassable ; les groupes modernes commencent à 3072 bits.
+
+- **Hachage** — *SHA-1* (*Secure Hash Algorithm 1*) produit une empreinte de 160 bits. Des collisions théoriques ont été démontrées dès 2017 (*SHAttered*) ; *SHA-2* (256 ou 512 bits) est la référence actuelle.
+
+Les trois algorithmes proposés par les vieux IOS cumulent ces faiblesses. OpenSSH les a retirés de sa configuration par défaut à partir de la version 8.8 (2021).
+
+</details>
+
+<Aside type="caution">
+Ces options ne doivent être activées **que vers les équipements Cisco legacy**. Ne jamais les appliquer de façon globale : elles affaiblissent la sécurité des connexions vers des serveurs modernes.
+</Aside>
+
+---
+
+## Alternative : le fichier `~/.ssh/config`
+
+Pour les étudiants à l'aise avec la ligne de commande, le fichier `~/.ssh/config` offre une configuration plus fine. Le principe est simple : OpenSSH lit ce fichier à chaque connexion et applique les paramètres dont le bloc `Host` correspond à la destination.
+
+```
+# ~/.ssh/config
+
+Host 172.25.69.1
+    KexAlgorithms +diffie-hellman-group1-sha1
+    HostKeyAlgorithms +ssh-rsa
+    PubkeyAcceptedAlgorithms +ssh-rsa
+    Ciphers +aes128-cbc
+
+Host routeur
+    HostName 172.25.69.1
+    KexAlgorithms +diffie-hellman-group1-sha1
+    HostKeyAlgorithms +ssh-rsa
+    PubkeyAcceptedAlgorithms +ssh-rsa
+    Ciphers +aes128-cbc
+```
+
+<Aside type="note">
+Le `+` devant chaque valeur **ajoute** l'algorithme à la liste par défaut sans écraser les autres. Sans ce `+`, seuls les algorithmes listés seraient autorisés — ce qui bloquerait les connexions vers des équipements modernes.
+</Aside>
+
+### Comment SSH utilise ce fichier
+
+Quelle que soit la forme de la commande — adresse IP directe ou alias — OpenSSH parcourt `~/.ssh/config` du haut vers le bas et applique le **premier bloc `Host` qui correspond** :
+
+<Steps>
+1. **Avec une adresse IP** — SSH cherche un bloc `Host` dont la valeur correspond à l'IP saisie :
+   ```bash
+   ssh admin@172.25.69.1
+   # → correspond au bloc "Host 172.25.69.1"
+   # → les options KexAlgorithms, Ciphers… sont appliquées automatiquement
+   ```
+
+2. **Avec un alias** — SSH cherche un bloc `Host` dont la valeur correspond au nom saisi, puis résout `HostName` pour obtenir l'IP réelle :
+   ```bash
+   ssh admin@routeur
+   # → correspond au bloc "Host routeur"
+   # → HostName 172.25.69.1 indique la vraie destination
+   # → les options sont appliquées, la connexion part vers 172.25.69.1
+   ```
+</Steps>
+
+Dans les deux cas, la commande `ssh` redevient courte et naturelle — la complexité est entièrement absorbée par le fichier de configuration.
+
+<Aside type="tip">
+Les équipements qui ne correspondent à aucun bloc `Host` (le pare-feu *SNS* en `172.25.69.3`, un serveur Linux…) ne sont pas affectés : SSH leur applique uniquement ses paramètres par défaut modernes.
+</Aside>
