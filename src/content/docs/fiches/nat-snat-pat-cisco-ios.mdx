@@ -1,0 +1,109 @@
+---
+title: "Configurer le SNAT Overload (PAT) sur Cisco IOS"
+description: "Fiche de configuration rapide pour mettre en place la traduction d'adresses NAT Overload (PAT) sur un routeur Cisco IOS, avec diagnostic."
+filename: "nat-snat-pat-cisco-ios"
+topic: "nat"
+section: "reseau"
+---
+
+import { Steps } from '@astrojs/starlight/components';
+import ImageFigureViewer from "@/components/ImageFigureViewer.astro";
+
+## Scénario
+
+Un réseau privé `192.168.1.0/24` doit accéder à Internet via l'adresse publique `203.0.113.5` du routeur.
+
+**Objectif** : traduire toutes les adresses privées vers cette unique adresse publique (*NAT Overload* / *PAT — Port Address Translation*).
+
+
+  <ImageFigureViewer
+    src="images/fiches/nat-snat-pat-cisco-ios/snat_pat_schema.svg"
+    alt="TODO"
+  />
+
+
+## Configuration
+
+<Steps>
+
+1. **Créer l'*ACL* (*Access Control List*) qui identifie le trafic à traduire**
+   ```plaintext
+   access-list 1 permit 192.168.1.0 0.0.0.255
+   ```
+
+   :::tip
+   Le *wildcard mask* `0.0.0.255` est l'inverse du masque `/24`. Il autorise tout le sous-réseau.
+   :::
+
+2. **Marquer l'interface côté Internet comme `outside`**
+   ```plaintext
+   interface GigabitEthernet0/0
+    ip address 203.0.113.5 255.255.255.0
+    ip nat outside
+   ```
+
+3. **Marquer l'interface côté réseau privé comme `inside`**
+   ```plaintext
+   interface GigabitEthernet0/1
+    ip address 192.168.1.1 255.255.255.0
+    ip nat inside
+   ```
+
+4. **Activer la traduction NAT Overload**
+   ```plaintext
+   ip nat inside source list 1 interface GigabitEthernet0/0 overload
+   ```
+
+   Cette commande lie les trois éléments : l'*ACL* 1 (qui ?), l'interface `Gi0/0` (vers quelle adresse publique ?) et le mot-clé `overload` (partage via les ports).
+
+5. **Vérifier la configuration avant de tester**
+   ```plaintext
+   show running-config | include nat
+   show ip nat statistics
+   ```
+
+   `show ip nat statistics` doit afficher l'interface *inside* et l'interface *outside* correctement assignées.
+
+6. **Tester depuis un poste du réseau privé**
+
+   Depuis un PC en `192.168.1.x`, lancer un `ping` vers une adresse extérieure :
+   ```plaintext
+   ping 8.8.8.8
+   ```
+
+7. **Vérifier les traductions sur le routeur**
+   ```plaintext
+   show ip nat translations
+   ```
+
+   Chaque ligne affiche une entrée avec l'adresse privée (*Inside local*), l'adresse publique utilisée (*Inside global*) et le port attribué. Si la table est vide après le `ping`, la configuration comporte une erreur.
+
+</Steps>
+
+## Commandes de diagnostic
+
+| Commande | Rôle |
+|---|---|
+| `show ip nat translations` | Affiche la table de traduction active |
+| `show ip nat statistics` | Compteurs et interfaces *inside*/*outside* |
+| `debug ip nat` | Affiche les traductions en temps réel (à désactiver après test avec `undebug all`) |
+| `clear ip nat translation *` | Vide la table de traduction |
+
+:::caution
+`debug ip nat` génère beaucoup de sorties sur un réseau en production. À utiliser uniquement en lab.
+:::
+
+## Checklist en cas de problème
+
+<details>
+<summary>Le `ping` échoue depuis le réseau privé</summary>
+
+Vérifier dans l'ordre :
+
+1. Les interfaces sont-elles `up/up` ? → `show ip interface brief`
+2. Les rôles `inside`/`outside` sont-ils bien assignés ? → `show ip nat statistics`
+3. L'*ACL* correspond-elle au bon sous-réseau ? → `show access-lists`
+4. Une route par défaut existe-t-elle sur le routeur ? → `show ip route`
+5. Le poste client a-t-il le routeur comme passerelle ?
+
+</details>
