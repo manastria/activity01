@@ -72,7 +72,7 @@ npm run diagram:export -- src/content/docs/fiches/sns-ordonnancement-filtrage-na
 import ImageFigureViewer from "@/components/ImageFigureViewer.astro";
 
 <ImageFigureViewer
-  src="/images/fiches/sns-ordonnancement-filtrage-nat/topologie.svg"
+  src="images/fiches/sns-ordonnancement-filtrage-nat/topologie.svg"
   alt="Description du schéma"
   caption="Topologie réseau"
 />
