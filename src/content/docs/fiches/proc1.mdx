@@ -1,0 +1,314 @@
+---
+title: "Routage inter-VLAN — Router-on-a-Stick (Cisco 2960 + 2901)"
+description: "Procédure de mise en place du routage inter-VLAN avec un switch Cisco 2960 et un routeur 2901, en minimisant les sessions console grâce à Telnet."
+filename: "cisco-routage-inter-vlan-router-on-a-stick"
+topic: "cisco"
+section: "reseau"
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+## Objectif
+
+Mettre en place un routage inter-*VLAN* (*Virtual Local Area Network*) en minimisant le temps
+passé sur le port console. La stratégie est la suivante : **une seule session console par
+équipement**, juste le temps d'activer Telnet, puis tout le reste se fait à distance depuis
+un PC branché en VLAN de gestion.
+
+<Aside type="caution">
+**Attention : la partie réinitialisation des équipement ne fonctionne peut-être pas !**
+</Aside>
+
+---
+
+## Plan d'adressage
+
+À compléter **avant** de commencer la manipulation.
+
+| Élément | VLAN | ID VLAN | Réseau | Adresse IP | Masque |
+|---|---|---|---|---|---|
+| Sous-interface routeur — VLAN gestion | ____________ | _____ | _________________ | _________________ | _________________ |
+| *SVI* (*Switched Virtual Interface*) switch — VLAN gestion | ____________ | _____ | _________________ | _________________ | _________________ |
+| Sous-interface routeur — VLAN clients | ____________ | _____ | _________________ | _________________ | _________________ |
+| PC de gestion | ____________ | _____ | _________________ | _________________ | _________________ |
+
+**Passerelle par défaut du switch :** _________________
+**Passerelle par défaut du PC de gestion :** _________________
+
+---
+
+## Câblage physique
+
+| Départ | Port | Arrivée | Port |
+|---|---|---|---|
+| Switch | _________ | Routeur | _________ |
+| Switch | _________ | PC de gestion | — |
+
+<Aside type="note">
+Le lien switch → routeur sera configuré en *trunk 802.1Q*.
+Le port PC de gestion sera configuré en *access* sur le VLAN de gestion.
+</Aside>
+
+---
+
+## Étape 0 — Vérification du client Telnet sur le PC de gestion
+
+Le client Telnet n'est pas installé par défaut sur Debian/XUbuntu. Vérifier sa présence
+avant de commencer :
+
+```bash
+which telnet || echo "telnet non installé"
+```
+
+Si la commande retourne `telnet non installé`, l'installer :
+
+```bash
+sudo apt install telnet
+```
+
+---
+
+## Étape 1 — Réinitialisation et bootstrap du switch (console)
+
+<Aside type="caution">
+**Une seule session console sur le switch.** Brancher le câble console maintenant.
+</Aside>
+
+<Steps>
+
+1. ### Réinitialisation
+
+   ```
+   Switch> enable
+   Switch# write erase
+   Switch# delete flash:vlan.dat
+   Switch# reload
+   ```
+
+   Confirmer le rechargement **sans sauvegarder** la configuration actuelle.
+   Attendre le redémarrage complet, puis :
+
+   ```
+   Switch> enable
+   Switch# configure terminal
+   ```
+
+2. ### Hostname
+
+   ```
+   hostname SW1
+   ```
+
+3. ### Création des VLANs
+
+   ```
+   vlan <ID-VLAN-serveurs>
+    name <nom-VLAN-gestion>
+   vlan <ID-VLAN-clients>
+    name <nom-VLAN-clients>
+   exit
+   ```
+
+4. ### Port trunk vers le routeur
+
+   ```
+   interface <port-trunk>
+    switchport mode trunk
+    no shutdown
+   ```
+
+5. ### Port access pour le PC de gestion
+
+   ```
+   interface <port-PC-gestion>
+    switchport mode access
+    switchport access vlan <ID-VLAN-serveurs>
+    no shutdown
+   ```
+
+6. ### SVI de gestion et passerelle par défaut
+
+   ```
+   interface Vlan<ID-VLAN-serveurs>
+    ip address <IP-SVI-switch> <masque>
+    no shutdown
+   exit
+   ip default-gateway <IP-routeur-VLAN-gestion>
+   ```
+
+7. ### Activation Telnet sur les *VTY* (*Virtual Teletype*)
+
+   ```
+   username admin privilege 15 password <mot-de-passe>
+   line vty 0 15
+    login local
+    transport input telnet
+   exit
+   end
+   write memory
+   ```
+
+</Steps>
+
+<Aside type="tip">
+**Débrancher le câble console du switch.** La suite se fera en Telnet.
+</Aside>
+
+---
+
+## Étape 2 — Réinitialisation et bootstrap du routeur (console)
+
+<Aside type="caution">
+**Une seule session console sur le routeur.** Brancher le câble console maintenant.
+</Aside>
+
+<Steps>
+
+1. ### Réinitialisation
+
+   ```
+   Router> enable
+   Router# write erase
+   Router# reload
+   ```
+
+   Confirmer le rechargement **sans sauvegarder**.
+   Attendre le redémarrage complet, puis :
+
+   ```
+   Router> enable
+   Router# configure terminal
+   ```
+
+2. ### Hostname
+
+   ```
+   hostname R1
+   ```
+
+3. ### Activation de l'interface physique
+
+   ```
+   interface <interface-physique-vers-switch>
+    no shutdown
+   ```
+
+4. ### Sous-interface VLAN gestion
+
+   ```
+   interface <interface-physique>.<ID-VLAN-serveurs>
+    encapsulation dot1Q <ID-VLAN-serveurs>
+    ip address <IP-routeur-VLAN-gestion> <masque>
+    no shutdown
+   ```
+
+5. ### Sous-interface VLAN clients
+
+   ```
+   interface <interface-physique>.<ID-VLAN-clients>
+    encapsulation dot1Q <ID-VLAN-clients>
+    ip address <IP-routeur-VLAN-clients> <masque>
+    no shutdown
+   ```
+
+6. ### Activation Telnet sur les VTY
+
+   ```
+   username admin privilege 15 password <mot-de-passe>
+   line vty 0 4
+    login local
+    transport input telnet
+   exit
+   end
+   write memory
+   ```
+
+</Steps>
+
+<Aside type="tip">
+**Débrancher le câble console du routeur.** La suite se fera en Telnet.
+</Aside>
+
+---
+
+## Étape 3 — Connexion du PC de gestion
+
+<Steps>
+
+1. Brancher le PC sur le port *access* configuré à l'étape 1.
+
+2. Configurer une adresse IP statique dans le VLAN de gestion :
+
+   | Paramètre | Valeur |
+   |---|---|
+   | Adresse IP | _________________ |
+   | Masque | _________________ |
+   | Passerelle | _________________ |
+
+3. Vérifier la connectivité :
+
+   ```bash
+   ping <IP-SVI-switch>              # doit répondre
+   ping <IP-routeur-VLAN-gestion>    # doit répondre
+   ```
+
+4. Ouvrir deux sessions Telnet :
+
+   ```bash
+   telnet <IP-SVI-switch>             # accès switch
+   telnet <IP-routeur-VLAN-gestion>   # accès routeur
+   ```
+
+</Steps>
+
+---
+
+## Étape 4 — Vérifications (depuis Telnet)
+
+### Sur le switch
+
+```
+show vlan brief
+show interfaces trunk
+show ip interface brief
+```
+
+Vérifier que :
+- les deux VLANs apparaissent dans `show vlan brief` avec le statut `active`
+- le port *trunk* est bien listé avec les VLANs autorisés dans `show interfaces trunk`
+- la SVI VLAN de gestion a une IP et est `up/up`
+
+### Sur le routeur
+
+```
+show ip interface brief
+show ip route
+```
+
+Vérifier que :
+- les deux sous-interfaces sont `up/up`
+- les deux réseaux VLAN apparaissent dans la table de routage avec le code `C` (*Connected*)
+
+### Test de routage inter-VLAN
+
+Depuis un PC branché en VLAN clients (IP dans le sous-réseau clients, GW = sous-interface
+routeur VLAN clients) :
+
+```bash
+ping <IP-PC-gestion>   # test routage VLAN clients → VLAN gestion
+```
+
+---
+
+## Récapitulatif
+
+| Équipement | Sessions console | Ce qui est fait en console |
+|---|---|---|
+| Switch 2960 | **1** | Réinitialisation + VLANs + *trunk* + SVI + Telnet |
+| Routeur 2901 | **1** | Réinitialisation + sous-interfaces + Telnet |
+| PC de gestion | 0 | Vérification Telnet + configuration réseau uniquement |
+
+Une fois Telnet actif sur les deux équipements, toute configuration complémentaire
+(*DHCP* — *Dynamic Host Configuration Protocol*, *ACL* — *Access Control List*,
+*spanning-tree*, *OSPF* — *Open Shortest Path First*…) peut être réalisée à distance
+sans recourir au port console.
