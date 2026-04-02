@@ -1,128 +1,90 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<mxfile host="app.diagrams.net" modified="2026-04-01T12:00:00.000Z" agent="Claude" version="24.0.0" type="device">
+<mxfile host="Electron" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.6.6 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36" version="29.6.6">
   <diagram id="snat-pat-ios" name="SNAT / PAT – Cisco IOS">
-    <mxGraphModel dx="1100" dy="680" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+    <mxGraphModel dx="951" dy="576" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-
-        <!-- ══════════ TITRE ══════════ -->
-        <mxCell id="title" value="&lt;b&gt;SNAT (PAT) – NAT Overload – Cisco IOS&lt;/b&gt;" style="text;html=1;fontSize=16;align=center;verticalAlign=middle;whiteSpace=wrap;" vertex="1" parent="1">
-          <mxGeometry x="284" y="30" width="600" height="30" as="geometry" />
+        <mxCell id="title" parent="1" style="text;html=1;fontSize=16;align=center;verticalAlign=middle;whiteSpace=wrap;" value="&lt;b&gt;SNAT (PAT) – NAT Overload – Cisco IOS&lt;/b&gt;" vertex="1">
+          <mxGeometry height="30" width="600" x="284" y="30" as="geometry" />
         </mxCell>
-
-        <!-- ══════════ ZONE INSIDE (réseau privé) ══════════ -->
-        <mxCell id="zone_inside" value="" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#22C55E;strokeWidth=2;fillColor=#F0FDF4;arcSize=8;" vertex="1" parent="1">
-          <mxGeometry x="60" y="100" width="340" height="380" as="geometry" />
+        <mxCell id="zone_inside" parent="1" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#22C55E;strokeWidth=2;fillColor=#F0FDF4;arcSize=8;" value="" vertex="1">
+          <mxGeometry height="380" width="340" x="60" y="100" as="geometry" />
         </mxCell>
-        <mxCell id="zone_inside_label" value="&lt;b&gt;INSIDE&lt;/b&gt;&lt;br&gt;Réseau privé 192.168.1.0/24" style="text;html=1;fontSize=12;align=center;verticalAlign=top;fillColor=none;strokeColor=none;fontColor=#16A34A;" vertex="1" parent="1">
-          <mxGeometry x="100" y="108" width="260" height="40" as="geometry" />
+        <mxCell id="zone_inside_label" parent="1" style="text;html=1;fontSize=12;align=center;verticalAlign=top;fillColor=none;strokeColor=none;fontColor=#16A34A;" value="&lt;b&gt;INSIDE&lt;/b&gt;&lt;br&gt;Réseau privé 192.168.1.0/24" vertex="1">
+          <mxGeometry height="40" width="260" x="100" y="108" as="geometry" />
         </mxCell>
-
-        <!-- PC1 -->
-        <mxCell id="pc1" value="&lt;b&gt;PC1&lt;/b&gt;&lt;br&gt;192.168.1.10" style="shape=mxgraph.cisco.computers_and_peripherals.pc;html=1;whiteSpace=wrap;fontSize=10;fillColor=#DBEAFE;strokeColor=#3B82F6;" vertex="1" parent="1">
-          <mxGeometry x="110" y="180" width="60" height="54" as="geometry" />
+        <mxCell id="pc1" parent="1" style="shape=mxgraph.cisco.computers_and_peripherals.pc;html=1;whiteSpace=wrap;fontSize=10;fillColor=#DBEAFE;strokeColor=#3B82F6;" value="&lt;b&gt;PC1&lt;/b&gt;" vertex="1">
+          <mxGeometry height="54" width="60" x="110" y="180" as="geometry" />
         </mxCell>
-        <mxCell id="pc1_label" value="192.168.1.10" style="text;html=1;fontSize=9;align=center;fillColor=none;strokeColor=none;" vertex="1" parent="1">
-          <mxGeometry x="95" y="238" width="90" height="16" as="geometry" />
+        <mxCell id="pc1_label" parent="1" style="text;html=1;fontSize=9;align=center;fillColor=none;strokeColor=none;" value="192.168.1.10" vertex="1">
+          <mxGeometry height="16" width="90" x="95" y="238" as="geometry" />
         </mxCell>
-
-        <!-- PC2 -->
-        <mxCell id="pc2" value="&lt;b&gt;PC2&lt;/b&gt;&lt;br&gt;192.168.1.20" style="shape=mxgraph.cisco.computers_and_peripherals.pc;html=1;whiteSpace=wrap;fontSize=10;fillColor=#DBEAFE;strokeColor=#3B82F6;" vertex="1" parent="1">
-          <mxGeometry x="110" y="290" width="60" height="54" as="geometry" />
+        <mxCell id="pc2" parent="1" style="shape=mxgraph.cisco.computers_and_peripherals.pc;html=1;whiteSpace=wrap;fontSize=10;fillColor=#DBEAFE;strokeColor=#3B82F6;" value="&lt;b&gt;PC2&lt;/b&gt;" vertex="1">
+          <mxGeometry height="54" width="60" x="110" y="278" as="geometry" />
         </mxCell>
-        <mxCell id="pc2_label" value="192.168.1.20" style="text;html=1;fontSize=9;align=center;fillColor=none;strokeColor=none;" vertex="1" parent="1">
-          <mxGeometry x="95" y="348" width="90" height="16" as="geometry" />
+        <mxCell id="pc2_label" parent="1" style="text;html=1;fontSize=9;align=center;fillColor=none;strokeColor=none;" value="192.168.1.20" vertex="1">
+          <mxGeometry height="16" width="90" x="95" y="333" as="geometry" />
         </mxCell>
-
-        <!-- PC3 -->
-        <mxCell id="pc3" value="&lt;b&gt;PC3&lt;/b&gt;&lt;br&gt;192.168.1.30" style="shape=mxgraph.cisco.computers_and_peripherals.pc;html=1;whiteSpace=wrap;fontSize=10;fillColor=#DBEAFE;strokeColor=#3B82F6;" vertex="1" parent="1">
-          <mxGeometry x="110" y="400" width="60" height="54" as="geometry" />
+        <mxCell id="pc3" parent="1" style="shape=mxgraph.cisco.computers_and_peripherals.pc;html=1;whiteSpace=wrap;fontSize=10;fillColor=#DBEAFE;strokeColor=#3B82F6;" value="&lt;b&gt;PC3&lt;/b&gt;" vertex="1">
+          <mxGeometry height="54" width="60" x="110" y="400" as="geometry" />
         </mxCell>
-        <mxCell id="pc3_label" value="192.168.1.30" style="text;html=1;fontSize=9;align=center;fillColor=none;strokeColor=none;" vertex="1" parent="1">
-          <mxGeometry x="95" y="458" width="90" height="16" as="geometry" />
+        <mxCell id="pc3_label" parent="1" style="text;html=1;fontSize=9;align=center;fillColor=none;strokeColor=none;" value="192.168.1.30" vertex="1">
+          <mxGeometry height="16" width="90" x="95" y="458" as="geometry" />
         </mxCell>
-
-        <!-- Switch -->
-        <mxCell id="switch" value="Switch" style="shape=mxgraph.cisco.switches.workgroup_switch;html=1;whiteSpace=wrap;fontSize=10;fillColor=#FEF9C3;strokeColor=#CA8A04;" vertex="1" parent="1">
-          <mxGeometry x="270" y="280" width="80" height="50" as="geometry" />
+        <mxCell id="switch" parent="1" style="shape=mxgraph.cisco.switches.workgroup_switch;html=1;whiteSpace=wrap;fontSize=10;fillColor=#FEF9C3;strokeColor=#CA8A04;" value="Switch" vertex="1">
+          <mxGeometry height="50" width="80" x="270" y="280" as="geometry" />
         </mxCell>
-
-        <!-- Liens PC → Switch -->
-        <mxCell id="link_pc1_sw" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#64748B;strokeWidth=1.5;" edge="1" source="pc1" target="switch" parent="1">
+        <mxCell id="link_pc1_sw" edge="1" parent="1" source="pc1" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#64748B;strokeWidth=1.5;endArrow=none;endFill=0;" target="switch">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="link_pc2_sw" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#64748B;strokeWidth=1.5;" edge="1" source="pc2" target="switch" parent="1">
+        <mxCell id="link_pc2_sw" edge="1" parent="1" source="pc2" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#64748B;strokeWidth=1.5;endArrow=none;endFill=0;" target="switch">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="link_pc3_sw" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#64748B;strokeWidth=1.5;" edge="1" source="pc3" target="switch" parent="1">
+        <mxCell id="link_pc3_sw" edge="1" parent="1" source="pc3" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#64748B;strokeWidth=1.5;endArrow=none;endFill=0;" target="switch">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- ══════════ ROUTEUR ══════════ -->
-        <mxCell id="router" value="&lt;b&gt;Routeur&lt;/b&gt;" style="shape=mxgraph.cisco.routers.router;html=1;whiteSpace=wrap;fontSize=11;fillColor=#FEE2E2;strokeColor=#EF4444;" vertex="1" parent="1">
-          <mxGeometry x="490" y="270" width="80" height="60" as="geometry" />
+        <mxCell id="router" parent="1" style="shape=mxgraph.cisco.routers.router;html=1;whiteSpace=wrap;fontSize=11;fillColor=#FEE2E2;strokeColor=#EF4444;" value="&lt;b&gt;Routeur&lt;/b&gt;" vertex="1">
+          <mxGeometry height="60" width="80" x="510" y="275" as="geometry" />
         </mxCell>
-
-        <!-- Interface Gi0/1 (inside) -->
-        <mxCell id="gi01_label" value="&lt;b&gt;Gi0/1&lt;/b&gt;&lt;br&gt;192.168.1.1&lt;br&gt;&lt;font color=&quot;#16A34A&quot;&gt;ip nat inside&lt;/font&gt;" style="text;html=1;fontSize=9;align=center;fillColor=none;strokeColor=none;" vertex="1" parent="1">
-          <mxGeometry x="410" y="240" width="90" height="40" as="geometry" />
+        <mxCell id="gi01_label" parent="1" style="text;html=1;fontSize=9;align=center;fillColor=none;strokeColor=none;" value="&lt;b&gt;Gi0/1&lt;/b&gt;&lt;br&gt;192.168.1.1&lt;br&gt;&lt;font color=&quot;#16A34A&quot;&gt;ip nat inside&lt;/font&gt;" vertex="1">
+          <mxGeometry height="40" width="90" x="410" y="240" as="geometry" />
         </mxCell>
-
-        <!-- Interface Gi0/0 (outside) -->
-        <mxCell id="gi00_label" value="&lt;b&gt;Gi0/0&lt;/b&gt;&lt;br&gt;203.0.113.5&lt;br&gt;&lt;font color=&quot;#DC2626&quot;&gt;ip nat outside&lt;/font&gt;" style="text;html=1;fontSize=9;align=center;fillColor=none;strokeColor=none;" vertex="1" parent="1">
-          <mxGeometry x="570" y="240" width="100" height="40" as="geometry" />
+        <mxCell id="gi00_label" parent="1" style="text;html=1;fontSize=9;align=center;fillColor=none;strokeColor=none;" value="&lt;b&gt;Gi0/0&lt;/b&gt;&lt;br&gt;203.0.113.5&lt;br&gt;&lt;font color=&quot;#DC2626&quot;&gt;ip nat outside&lt;/font&gt;" vertex="1">
+          <mxGeometry height="40" width="100" x="570" y="240" as="geometry" />
         </mxCell>
-
-        <!-- Lien Switch → Routeur -->
-        <mxCell id="link_sw_r" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#64748B;strokeWidth=2;" edge="1" source="switch" target="router" parent="1">
+        <mxCell id="link_sw_r" edge="1" parent="1" source="switch" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#64748B;strokeWidth=2;endArrow=none;endFill=0;" target="router">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- ══════════ ZONE OUTSIDE (Internet) ══════════ -->
-        <mxCell id="zone_outside" value="" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#DC2626;strokeWidth=2;fillColor=#FEF2F2;arcSize=8;" vertex="1" parent="1">
-          <mxGeometry x="700" y="180" width="280" height="240" as="geometry" />
+        <mxCell id="zone_outside" parent="1" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#DC2626;strokeWidth=2;fillColor=#FEF2F2;arcSize=8;" value="" vertex="1">
+          <mxGeometry height="240" width="280" x="700" y="180" as="geometry" />
         </mxCell>
-        <mxCell id="zone_outside_label" value="&lt;b&gt;OUTSIDE&lt;/b&gt;&lt;br&gt;Internet" style="text;html=1;fontSize=12;align=center;verticalAlign=top;fillColor=none;strokeColor=none;fontColor=#DC2626;" vertex="1" parent="1">
-          <mxGeometry x="780" y="188" width="120" height="40" as="geometry" />
+        <mxCell id="zone_outside_label" parent="1" style="text;html=1;fontSize=12;align=center;verticalAlign=top;fillColor=none;strokeColor=none;fontColor=#DC2626;" value="&lt;b&gt;OUTSIDE&lt;/b&gt;&lt;br&gt;Internet" vertex="1">
+          <mxGeometry height="40" width="120" x="780" y="188" as="geometry" />
         </mxCell>
-
-        <!-- Cloud Internet -->
-        <mxCell id="cloud" value="Internet" style="shape=mxgraph.cisco.clouds.cloud;html=1;whiteSpace=wrap;fontSize=12;fillColor=#FECACA;strokeColor=#EF4444;" vertex="1" parent="1">
-          <mxGeometry x="770" y="270" width="120" height="70" as="geometry" />
+        <mxCell id="cloud" parent="1" style="shape=mxgraph.cisco.clouds.cloud;html=1;whiteSpace=wrap;fontSize=12;fillColor=#FECACA;strokeColor=#EF4444;" value="Internet" vertex="1">
+          <mxGeometry height="70" width="120" x="770" y="270" as="geometry" />
         </mxCell>
-
-        <!-- Serveur distant -->
-        <mxCell id="server" value="&lt;b&gt;Serveur&lt;/b&gt;&lt;br&gt;8.8.8.8" style="shape=mxgraph.cisco.servers.standard_server;html=1;whiteSpace=wrap;fontSize=9;fillColor=#E0E7FF;strokeColor=#6366F1;" vertex="1" parent="1">
-          <mxGeometry x="900" y="285" width="40" height="50" as="geometry" />
+        <mxCell id="server" parent="1" style="shape=mxgraph.cisco.servers.standard_server;html=1;whiteSpace=wrap;fontSize=9;fillColor=#E0E7FF;strokeColor=#6366F1;" value="&lt;b&gt;Serveur&lt;/b&gt;&lt;br&gt;8.8.8.8" vertex="1">
+          <mxGeometry height="50" width="40" x="930" y="280" as="geometry" />
         </mxCell>
-
-        <!-- Lien Routeur → Cloud -->
-        <mxCell id="link_r_cloud" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#EF4444;strokeWidth=2;" edge="1" source="router" target="cloud" parent="1">
+        <mxCell id="link_r_cloud" edge="1" parent="1" source="router" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#EF4444;strokeWidth=2;endArrow=none;endFill=0;" target="cloud">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- Lien Cloud → Serveur -->
-        <mxCell id="link_cloud_srv" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#6366F1;strokeWidth=1.5;" edge="1" source="cloud" target="server" parent="1">
+        <mxCell id="link_cloud_srv" edge="1" parent="1" source="cloud" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#6366F1;strokeWidth=1.5;endArrow=none;endFill=0;" target="server">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- ══════════ ANNOTATION NAT ══════════ -->
-        <mxCell id="nat_box" value="&lt;b&gt;NAT Overload (PAT)&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;access-list 1 permit 192.168.1.0 0.0.0.255&lt;br&gt;ip nat inside source list 1 interface Gi0/0 overload&lt;/font&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#FFFBEB;strokeColor=#D97706;fontSize=10;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
-          <mxGeometry x="430" y="380" width="280" height="80" as="geometry" />
+        <mxCell id="nat_box" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#FFFBEB;strokeColor=#D97706;fontSize=10;align=left;spacingLeft=8;spacingRight=8;" value="&lt;b&gt;NAT Overload (PAT)&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;access-list 1 permit 192.168.1.0 0.0.0.255&lt;br&gt;ip nat inside source list 1 interface Gi0/0 overload&lt;/font&gt;" vertex="1">
+          <mxGeometry height="80" width="220" x="440" y="374" as="geometry" />
         </mxCell>
-        <mxCell id="nat_arrow" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#D97706;strokeWidth=1;dashed=1;dashPattern=4 4;entryX=0.5;entryY=1;" edge="1" source="nat_box" target="router" parent="1">
+        <mxCell id="nat_arrow" edge="1" parent="1" source="nat_box" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#D97706;strokeWidth=1;dashed=1;dashPattern=4 4;entryX=0.5;entryY=1;" target="router">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- ══════════ FLUX DE TRADUCTION ══════════ -->
-        <mxCell id="flux_label" value="&lt;font color=&quot;#7C3AED&quot;&gt;192.168.1.10:5001 → &lt;b&gt;203.0.113.5:10001&lt;/b&gt;&lt;br&gt;192.168.1.20:5002 → &lt;b&gt;203.0.113.5:10002&lt;/b&gt;&lt;br&gt;192.168.1.30:5003 → &lt;b&gt;203.0.113.5:10003&lt;/b&gt;&lt;/font&gt;" style="text;html=1;fontSize=9;align=left;fillColor=#F5F3FF;strokeColor=#7C3AED;rounded=1;arcSize=10;spacing=6;" vertex="1" parent="1">
-          <mxGeometry x="430" y="130" width="240" height="55" as="geometry" />
+        <mxCell id="flux_label" parent="1" style="text;html=1;fontSize=9;align=left;fillColor=#F5F3FF;strokeColor=#7C3AED;rounded=1;arcSize=10;spacing=6;" value="&lt;font color=&quot;#7C3AED&quot;&gt;192.168.1.10:5001 → &lt;b&gt;203.0.113.5:10001&lt;/b&gt;&lt;br&gt;192.168.1.20:5002 → &lt;b&gt;203.0.113.5:10002&lt;/b&gt;&lt;br&gt;192.168.1.30:5003 → &lt;b&gt;203.0.113.5:10003&lt;/b&gt;&lt;/font&gt;" vertex="1">
+          <mxGeometry height="55" width="240" x="430" y="130" as="geometry" />
         </mxCell>
-        <mxCell id="flux_arrow" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#7C3AED;strokeWidth=1;dashed=1;exitX=0.5;exitY=1;" edge="1" source="flux_label" target="router" parent="1">
+        <mxCell id="flux_arrow" edge="1" parent="1" source="flux_label" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#7C3AED;strokeWidth=1;dashed=1;exitX=0.5;exitY=1;" target="router">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
       </root>
     </mxGraphModel>
   </diagram>

@@ -64,7 +64,7 @@ function resolvePaths(mdxFile) {
     diagramsDir: path.join(ROOT, 'src', 'diagrams', type, slug),
     imagesDir:   path.join(ROOT, 'public', 'images', type, slug),
     // Chemin web utilisable dans le MDX (sans BASE_URL)
-    webBase: `/images/${type}/${slug}`,
+    webBase: `images/${type}/${slug}`,
   };
 }
 

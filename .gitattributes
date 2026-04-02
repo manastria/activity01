@@ -3,13 +3,13 @@
 * text=auto eol=lf
 
 # Forcer spécifiquement certains types de fichiers (optionnel mais recommandé)
-*.mdx text eol=lf
-*.mjs text eol=lf
-*.md text eol=lf
-*.js text eol=lf
+*.mdx text  eol=lf
+*.mjs text  eol=lf
+*.md text   eol=lf
+*.js text   eol=lf
 *.json text eol=lf
 
 # Ignorer les fichiers binaires (ne pas toucher aux fins de ligne)
-*.png binary
-*.jpg binary
-
+*.png     binary
+*.jpg     binary
+*.drawio  binary
