@@ -1,0 +1,84 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.6.6 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36" version="29.6.6">
+  <diagram id="hyV9u9uD4l_90s5VDBlh" name="Page-1">
+    <mxGraphModel dx="2066" dy="1198" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="z20" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=11;verticalAlign=top;opacity=50;arcSize=5;" value="VLAN 20 — Clients&#xa;10.0.20.0/24" vertex="1">
+          <mxGeometry height="140" width="320" x="40" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="z10" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=11;verticalAlign=top;opacity=50;arcSize=5;" value="VLAN 10 — Serveurs&#xa;10.0.10.0/24" vertex="1">
+          <mxGeometry height="160" width="320" x="40" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="router" parent="1" style="shape=mxgraph.cisco.routers.router;sketch=0;html=1;pointerEvents=1;dashed=0;fillColor=#036897;strokeColor=#ffffff;strokeWidth=2;verticalLabelPosition=bottom;verticalAlign=top;align=center;outlineConnect=0;fontSize=11;fontColor=#333333;labelPosition=center;" value="Routeur&lt;br&gt;Cisco 2901" vertex="1">
+          <mxGeometry height="80" width="80" x="909.71" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="routerLabel" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" value="Routeur&#xa;Cisco 2901&#xa;&#xa;Gi0/0.10 → 10.0.10.1&#xa;Gi0/0.20 → 10.0.20.1" vertex="1">
+          <mxGeometry height="80" width="120" x="1029.71" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="switch" parent="1" style="shape=mxgraph.cisco.switches.workgroup_switch;sketch=0;html=1;pointerEvents=1;dashed=0;fillColor=#036897;strokeColor=#ffffff;strokeWidth=2;verticalLabelPosition=bottom;verticalAlign=top;align=center;outlineConnect=0;fontSize=11;fontColor=#333333;labelPosition=center;" value="Switch&#xa;Cisco 2960" vertex="1">
+          <mxGeometry height="60" width="80" x="600" y="320" as="geometry" />
+        </mxCell>
+        <mxCell id="switchLabel" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" value="SW1 — Cisco 2960&#xa;SVI Vlan10 : 10.0.10.2&#xa;GW : 10.0.10.1" vertex="1">
+          <mxGeometry height="50" width="120" x="740" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="pcgestion" parent="1" style="shape=mxgraph.cisco.computers_and_peripherals.pc;sketch=0;html=1;pointerEvents=1;dashed=0;fillColor=#036897;strokeColor=#ffffff;strokeWidth=2;verticalLabelPosition=bottom;verticalAlign=top;align=center;outlineConnect=0;fontSize=10;fontColor=#333333;" value="PC de gestion&#xa;10.0.10.10&#xa;GW : 10.0.10.1" vertex="1">
+          <mxGeometry height="50" width="60" x="140" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="pcclient" parent="1" style="shape=mxgraph.cisco.computers_and_peripherals.pc;sketch=0;html=1;pointerEvents=1;dashed=0;fillColor=#67AB9F;strokeColor=#ffffff;strokeWidth=2;verticalLabelPosition=bottom;verticalAlign=top;align=center;outlineConnect=0;fontSize=10;fontColor=#333333;" value="PC client&#xa;10.0.20.x&#xa;GW : 10.0.20.1" vertex="1">
+          <mxGeometry height="50" width="60" x="130" y="165" as="geometry" />
+        </mxCell>
+        <mxCell id="link_sw_r" edge="1" parent="1" source="switch" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#d79b00;strokeWidth=3;endArrow=none;fillColor=#ffe6cc;" target="router" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lbl_sw_trunk" connectable="0" parent="link_sw_r" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontSize=10;fontStyle=1;labelBackgroundColor=#dae8fc;" value="Fa0/1" vertex="1">
+          <mxGeometry relative="1" x="-0.8" as="geometry">
+            <mxPoint x="7" y="-20" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lbl_r_trunk" connectable="0" parent="link_sw_r" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontSize=10;fontStyle=1;labelBackgroundColor=#dae8fc;" value="Gi0/0" vertex="1">
+          <mxGeometry relative="1" x="0.8" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lbl_trunk_center" connectable="0" parent="link_sw_r" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontSize=9;fontStyle=2;labelBackgroundColor=#fff2cc;" value="trunk 802.1Q&#xa;VLAN 10 + 20" vertex="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="-5" y="-20" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="link_sw_pcg" edge="1" parent="1" source="switch" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#6c8ebf;strokeWidth=2;endArrow=none;" target="pcgestion" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="640" y="520" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lbl_sw_pcg" connectable="0" parent="link_sw_pcg" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontSize=9;fontStyle=2;labelBackgroundColor=#dae8fc;" value="Fa0/24&#xa;access VLAN 10" vertex="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="30" y="-20" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="link_sw_pcc" edge="1" parent="1" source="switch" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#82b366;strokeWidth=2;endArrow=none;" target="pcclient" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="640" y="200" />
+            </Array>
+            <mxPoint x="350.06" y="229.97" as="sourcePoint" />
+            <mxPoint x="100" y="350" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lbl_sw_pcc" connectable="0" parent="link_sw_pcc" style="edgeLabel;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];fontSize=9;fontStyle=2;labelBackgroundColor=#d5e8d4;" value="Fa0/x&#xa;access VLAN 20" vertex="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="45" y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="note_trunk" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;size=15;" value="Le trafic VLAN 10 et VLAN 20 circule&#xa;sur le même câble physique,&#xa;encapsulé en 802.1Q (dot1Q)." vertex="1">
+          <mxGeometry height="70" width="200" x="700" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="titre" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=15;fontStyle=1;" value="Routage inter-VLAN — Router-on-a-Stick&lt;br&gt;Cisco Catalyst 2960 + Cisco 2901&lt;div&gt;Sujet 1&lt;/div&gt;" vertex="1">
+          <mxGeometry height="70" width="390" x="420" y="20" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

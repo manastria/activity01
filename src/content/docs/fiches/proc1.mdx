@@ -7,13 +7,14 @@ section: "reseau"
 ---
 
 import { Steps, Aside } from '@astrojs/starlight/components';
+import ImageFigureViewer from "@/components/ImageFigureViewer.astro";
 
 ## Objectif
 
 Mettre en place un routage inter-*VLAN* (*Virtual Local Area Network*) en minimisant le temps
 passé sur le port console. La stratégie est la suivante : **une seule session console par
 équipement**, juste le temps d'activer Telnet, puis tout le reste se fait à distance depuis
-un PC branché en VLAN de gestion.
+un PC branché en VLAN serveurs.
 
 <Aside type="caution">
 **Attention : la partie réinitialisation des équipement ne fonctionne peut-être pas !**
@@ -21,32 +22,45 @@ un PC branché en VLAN de gestion.
 
 ---
 
+  <ImageFigureViewer
+    src="images/fiches/proc1/cisco-routage-inter-vlan-router-on-a-stick.svg"
+    alt=""
+  />
+
+
+---
+
 ## Plan d'adressage
 
-À compléter **avant** de commencer la manipulation.
+- VLAN **serveur** : 10
+- VLAN **client** : 20
 
-| Élément | VLAN | ID VLAN | Réseau | Adresse IP | Masque |
-|---|---|---|---|---|---|
-| Sous-interface routeur — VLAN gestion | ____________ | _____ | _________________ | _________________ | _________________ |
-| *SVI* (*Switched Virtual Interface*) switch — VLAN gestion | ____________ | _____ | _________________ | _________________ | _________________ |
-| Sous-interface routeur — VLAN clients | ____________ | _____ | _________________ | _________________ | _________________ |
-| PC de gestion | ____________ | _____ | _________________ | _________________ | _________________ |
+| Élément                          | ID VLAN | Réseau         | Adresse IP   | Masque          |
+| -------------------------------- | ------- | -------------- | ------------ | --------------- |
+| Routeur — VLAN serveurs          | 10      | `10.0.10.0/24` | `10.0.10.1`  | `255.255.255.0` |
+| Switch (*SVI*) — VLAN serveurs   | 10      | `10.0.10.0/24` | `10.0.10.2`  | `255.255.255.0` |
+| PC de gestion (pour admin cisco) | 10      | `10.0.10.0/24` | `10.0.10.10` | `255.255.255.0` |
+| Serveur HaProxy                  | 10      | `10.0.10.0/24` | `10.0.10.11` | `255.255.255.0` |
+| Serveur web1                     | 10      | `10.0.10.0/24` | `10.0.10.12` | `255.255.255.0` |
+| Serveur web2                     | 10      | `10.0.10.0/24` | `10.0.10.13` | `255.255.255.0` |
+| Routeur — VLAN clients           | 20      | `10.0.20.0/24` | `10.0.20.1`  | `255.255.255.0` |
 
-**Passerelle par défaut du switch :** _________________
-**Passerelle par défaut du PC de gestion :** _________________
+
+- **Passerelle par défaut du switch :** `10.0.10.1`
+- **Passerelle par défaut du PC de gestion :** `10.0.10.1`
 
 ---
 
 ## Câblage physique
 
-| Départ | Port | Arrivée | Port |
-|---|---|---|---|
-| Switch | _________ | Routeur | _________ |
-| Switch | _________ | PC de gestion | — |
+| Départ | Port     | Arrivée       | Port                 |
+| ------ | -------- | ------------- | -------------------- |
+| Switch | `Fa0/1`  | Routeur       | `GigabitEthernet0/0` |
+| Switch | `Fa0/24` | PC de gestion | —                    |
 
 <Aside type="note">
 Le lien switch → routeur sera configuré en *trunk 802.1Q*.
-Le port PC de gestion sera configuré en *access* sur le VLAN de gestion.
+Le port PC de gestion sera configuré en *access* sur le VLAN serveurs.
 </Aside>
 
 ---
@@ -102,17 +116,17 @@ sudo apt install telnet
 3. ### Création des VLANs
 
    ```
-   vlan <ID-VLAN-serveurs>
-    name <nom-VLAN-gestion>
-   vlan <ID-VLAN-clients>
-    name <nom-VLAN-clients>
+   vlan 10
+    name Serveurs
+   vlan 20
+    name Clients
    exit
    ```
 
 4. ### Port trunk vers le routeur
 
    ```
-   interface <port-trunk>
+   interface FastEthernet0/1
     switchport mode trunk
     no shutdown
    ```
@@ -120,32 +134,29 @@ sudo apt install telnet
 5. ### Port access pour le PC de gestion
 
    ```
-   interface <port-PC-gestion>
+   interface FastEthernet0/24
     switchport mode access
-    switchport access vlan <ID-VLAN-serveurs>
+    switchport access vlan 10
     no shutdown
    ```
 
-6. ### SVI de gestion et passerelle par défaut
+6. ### SVI du VLAN serveurs et passerelle par défaut
 
    ```
-   interface Vlan<ID-VLAN-serveurs>
-    ip address <IP-SVI-switch> <masque>
+   interface Vlan10
+    ip address 10.0.10.2 255.255.255.0
     no shutdown
    exit
-   ip default-gateway <IP-routeur-VLAN-gestion>
+   ip default-gateway 10.0.10.1
    ```
 
 7. ### Activation Telnet sur les *VTY* (*Virtual Teletype*)
 
    ```
-   username admin privilege 15 password <mot-de-passe>
+   username admin privilege 15 password toto
    line vty 0 15
     login local
     transport input telnet
-   exit
-   end
-   write memory
    ```
 
 </Steps>
@@ -189,38 +200,35 @@ sudo apt install telnet
 3. ### Activation de l'interface physique
 
    ```
-   interface <interface-physique-vers-switch>
+   interface GigabitEthernet0/0
     no shutdown
    ```
 
-4. ### Sous-interface VLAN gestion
+4. ### Sous-interface VLAN serveurs
 
    ```
-   interface <interface-physique>.<ID-VLAN-serveurs>
-    encapsulation dot1Q <ID-VLAN-serveurs>
-    ip address <IP-routeur-VLAN-gestion> <masque>
+   interface GigabitEthernet0/0.10
+    encapsulation dot1Q 10
+    ip address 10.0.10.1 255.255.255.0
     no shutdown
    ```
 
 5. ### Sous-interface VLAN clients
 
    ```
-   interface <interface-physique>.<ID-VLAN-clients>
-    encapsulation dot1Q <ID-VLAN-clients>
-    ip address <IP-routeur-VLAN-clients> <masque>
+   interface GigabitEthernet0/0.20
+    encapsulation dot1Q 20
+    ip address 10.0.20.1 255.255.255.0
     no shutdown
    ```
 
 6. ### Activation Telnet sur les VTY
 
    ```
-   username admin privilege 15 password <mot-de-passe>
+   username admin privilege 15 password toto
    line vty 0 4
     login local
     transport input telnet
-   exit
-   end
-   write memory
    ```
 
 </Steps>
@@ -237,26 +245,26 @@ sudo apt install telnet
 
 1. Brancher le PC sur le port *access* configuré à l'étape 1.
 
-2. Configurer une adresse IP statique dans le VLAN de gestion :
+2. Configurer une adresse IP statique dans le VLAN serveurs :
 
-   | Paramètre | Valeur |
-   |---|---|
-   | Adresse IP | _________________ |
-   | Masque | _________________ |
-   | Passerelle | _________________ |
+   | Paramètre  | Valeur          |
+   | ---------- | --------------- |
+   | Adresse IP | `10.0.10.10`    |
+   | Masque     | `255.255.255.0` |
+   | Passerelle | `10.0.10.1`     |
 
 3. Vérifier la connectivité :
 
    ```bash
-   ping <IP-SVI-switch>              # doit répondre
-   ping <IP-routeur-VLAN-gestion>    # doit répondre
+   ping 10.0.10.2   # SVI du switch — doit répondre
+   ping 10.0.10.1   # sous-interface routeur VLAN serveurs — doit répondre
    ```
 
 4. Ouvrir deux sessions Telnet :
 
    ```bash
-   telnet <IP-SVI-switch>             # accès switch
-   telnet <IP-routeur-VLAN-gestion>   # accès routeur
+   telnet 10.0.10.2   # accès switch
+   telnet 10.0.10.1   # accès routeur
    ```
 
 </Steps>
@@ -276,7 +284,7 @@ show ip interface brief
 Vérifier que :
 - les deux VLANs apparaissent dans `show vlan brief` avec le statut `active`
 - le port *trunk* est bien listé avec les VLANs autorisés dans `show interfaces trunk`
-- la SVI VLAN de gestion a une IP et est `up/up`
+- la SVI VLAN serveurs a une IP et est `up/up`
 
 ### Sur le routeur
 
@@ -295,18 +303,18 @@ Depuis un PC branché en VLAN clients (IP dans le sous-réseau clients, GW = sou
 routeur VLAN clients) :
 
 ```bash
-ping <IP-PC-gestion>   # test routage VLAN clients → VLAN gestion
+ping 10.0.10.10   # test routage VLAN clients → VLAN serveurs
 ```
 
 ---
 
 ## Récapitulatif
 
-| Équipement | Sessions console | Ce qui est fait en console |
-|---|---|---|
-| Switch 2960 | **1** | Réinitialisation + VLANs + *trunk* + SVI + Telnet |
-| Routeur 2901 | **1** | Réinitialisation + sous-interfaces + Telnet |
-| PC de gestion | 0 | Vérification Telnet + configuration réseau uniquement |
+| Équipement    | Sessions console | Ce qui est fait en console                            |
+| ------------- | ---------------- | ----------------------------------------------------- |
+| Switch 2960   | **1**            | Réinitialisation + VLANs + *trunk* + SVI + Telnet     |
+| Routeur 2901  | **1**            | Réinitialisation + sous-interfaces + Telnet           |
+| PC de gestion | 0                | Vérification Telnet + configuration réseau uniquement |
 
 Une fois Telnet actif sur les deux équipements, toute configuration complémentaire
 (*DHCP* — *Dynamic Host Configuration Protocol*, *ACL* — *Access Control List*,
