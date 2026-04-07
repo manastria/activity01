@@ -21,6 +21,22 @@ import { Aside, Steps } from '@astrojs/starlight/components';
 - ❌ haproxy n'est pas encore configuré en tant que reverse proxy
 </Aside>
 
+<Aside type="tip">
+**C'est quoi un "backend" ?**
+
+Dans l'architecture d'un reverse proxy, le **backend** désigne le serveur final (ou le groupe de serveurs) qui héberge réellement l'application ou le site web.
+
+Ici, nos backends sont les deux conteneurs Docker `node1` et `node2`. Ils sont situés "derrière" le proxy, cachés du réseau public, et ne traitent que les requêtes que le proxy leur renvoie.
+
+
+</Aside>
+
+<Aside type="note" title="Pourquoi utiliser Docker ici ?">
+Vous pourriez vous demander pourquoi nous n'avons pas simplement importé deux nouvelles machines virtuelles pour héberger `node1` et `node2`.
+
+La réponse est l'**économie de ressources**. Une machine virtuelle complète nécessite de charger un système d'exploitation entier, ce qui fige de la RAM, de l'espace disque et du temps CPU. En utilisant la conteneurisation, nos deux serveurs web Nginx vont partager le système de la seule VM `backends`. Ils ne consommeront que quelques mégaoctets de mémoire chacun, tout en apparaissant sur le réseau de la DMZ comme des machines totalement indépendantes grâce à la technologie **macvlan**.
+</Aside>
+
 ---
 
 ## 1) Prérequis
