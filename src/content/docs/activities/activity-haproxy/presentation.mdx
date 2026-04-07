@@ -1,0 +1,160 @@
+---
+title: "Présentation — Le reverse proxy"
+description: "Comprendre le problème que résout un reverse proxy et découvrir ce que vous allez construire dans cette activité."
+sidebar:
+  order: 1
+---
+
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
+import { Icon } from 'astro-icon/components';
+import Quiz from '@/components/Quiz.astro';
+import quizData from '@/data/quiz/haproxy-presentation.json';
+
+## Imaginez la situation
+
+Vous êtes administrateur système dans une PME. Votre entreprise héberge **trois services web** :
+
+- une boutique en ligne,
+- un blog,
+- une interface d'administration.
+
+Chaque service tourne sur un serveur distinct dans votre datacenter. Mais vous ne disposez que d'**une seule adresse IP publique**.
+
+Un client tape `https://boutique.example.fr` dans son navigateur. Comment sa requête arrive-t-elle sur le bon serveur ?
+
+Un deuxième client tape `https://admin.example.fr`. Comment l'empêcher d'atteindre le serveur de la boutique ?
+
+Et si le serveur de la boutique tombe en panne à 2h du matin — le service doit-il être interrompu pour tous les clients ?
+
+**Ce sont exactement les problèmes que résout un reverse proxy.**
+
+---
+
+## Le problème sans reverse proxy
+
+Sans intermédiaire, un seul serveur peut répondre sur une adresse IP et un port donnés.
+
+Pour publier trois services sur la même IP publique, il faudrait soit :
+
+- utiliser des ports différents (`boutique:8080`, `blog:8081`…) — peu professionnel et bloqué par la plupart des pare-feux,
+- mettre tous les services sur un seul serveur — un seul point de défaillance, difficile à maintenir.
+
+<Aside type="caution">
+Sans protection, un visiteur pourrait accéder directement à vos serveurs internes. Une faille dans l'application de la boutique exposerait aussi le serveur d'administration.
+</Aside>
+
+---
+
+## La solution : le reverse proxy
+
+Un *reverse proxy* est un serveur intermédiaire placé entre les clients et vos serveurs internes.
+
+Contrairement au *proxy direct* (ou *forward proxy*) qui agit **au nom des clients** pour accéder à Internet, le reverse proxy agit **au nom des serveurs** pour recevoir les connexions entrantes.
+
+```
+Internet                 Réseau interne (DMZ)
+─────────                ────────────────────
+
+Client  ──→  [Reverse proxy]  ──→  Serveur A (boutique)
+                               ──→  Serveur B (blog)
+                               ──→  Serveur C (admin)
+```
+
+Le client ne « voit » que le reverse proxy. Les serveurs internes restent invisibles.
+
+### Ce que le reverse proxy apporte concrètement
+
+<CardGrid>
+  <Card title="Un seul point d'entrée">
+    <Icon name="mdi:transit-connection-variant" size={32} />
+    Une seule adresse IP suffit pour héberger plusieurs services. Le proxy distribue selon le nom de domaine.
+  </Card>
+  <Card title="Sécurité">
+    <Icon name="mdi:shield-lock" size={32} />
+    Les serveurs internes ne sont jamais exposés directement. Une attaque doit d'abord passer par le proxy.
+  </Card>
+  <Card title="Équilibrage de charge">
+    <Icon name="mdi:scale-balance" size={32} />
+    Le trafic est réparti entre plusieurs serveurs. Si l'un tombe, le proxy redirige vers les autres automatiquement.
+  </Card>
+  <Card title="Chiffrement centralisé">
+    <Icon name="mdi:certificate-outline" size={32} />
+    Le proxy gère les certificats *TLS* (*Transport Layer Security* — protocole de chiffrement). Les serveurs internes n'ont pas besoin de les gérer.
+  </Card>
+</CardGrid>
+
+---
+
+## HAProxy, le reverse proxy de ce TP
+
+**HAProxy** (*High Availability Proxy*) est un logiciel libre de référence, utilisé par de très grandes infrastructures (GitHub, Reddit, Stack Overflow…).
+
+Il est réputé pour :
+
+- ses **performances élevées** (des centaines de milliers de connexions par seconde),
+- sa **fiabilité** en production,
+- ses capacités d'**équilibrage de charge** et de **haute disponibilité**.
+
+Dans ce TP, HAProxy tournera sur une machine Debian dédiée, placée entre le réseau labo (qui simule Internet) et les serveurs web *Docker* dans la *DMZ* (*Demilitarized Zone* — zone démilitarisée).
+
+---
+
+## Ce que vous allez construire
+
+<Aside type="note">
+L'objectif final est une infrastructure complète, telle qu'on la trouve dans un contexte professionnel réel.
+</Aside>
+
+Voici l'architecture cible :
+
+```
+Réseau labo (« Internet »)
+        │
+        ▼
+  ┌─────────────┐
+  │   HAProxy   │  ← reverse proxy, point d'entrée unique
+  │  Debian 12  │    HTTPS sur les ports 80 et 443
+  └──────┬──────┘
+         │  réseau DMZ (10.10.0.0/24)
+    ┌────┴────┐
+    ▼         ▼
+  node1     node2    ← serveurs web Nginx (conteneurs Docker)
+ (Docker) (Docker)
+```
+
+Le pare-feu *SNS* (*Stormshield Network Security*) sépare le réseau labo de la *DMZ* et assure le *NAT* (*Network Address Translation* — translation d'adresse réseau) sortant pour les mises à jour.
+
+### Les grandes étapes du TP
+
+| Partie | Ce que vous faites |
+|--------|--------------------|
+| **1 — Infrastructure** | Monter les VMs, configurer le réseau et le pare-feu SNS |
+| **2 — Backends Docker** | Déployer node1 et node2 en conteneurs sur le réseau DMZ |
+| **3 — HAProxy HTTPS** | Configurer le reverse proxy avec TLS et routage par nom de domaine |
+| **4 — Supervision** | Activer les logs et la page de statistiques HAProxy |
+| **5 — Load balancing** | Répartir la charge, simuler des pannes, observer le basculement |
+| **6 — Sécurisation** | En-têtes de sécurité, redirection HTTP→HTTPS, filtrage par URL |
+| **7 — Sticky sessions** | Maintenir un client sur le même backend |
+| **8 — Durcissement OS** | Pare-feu UFW, SSH sécurisé, mises à jour automatiques |
+
+---
+
+## Avant de commencer
+
+<Aside type="tip">
+Prenez le temps de répondre au quiz ci-dessous. Il vérifie que vous avez compris les concepts clés avant de vous lancer dans les manipulations.
+</Aside>
+
+Quelques questions pour vérifier votre compréhension :
+
+- Savez-vous ce qu'est une *DMZ* ?
+- Comprenez-vous pourquoi les backends ne doivent pas être accessibles directement depuis le réseau labo ?
+- Connaissez-vous la différence entre un proxy direct et un reverse proxy ?
+
+Si vous hésitez, relisez les sections ci-dessus — le quiz vous donnera un retour immédiat.
+
+---
+
+## Quiz — Le reverse proxy
+
+<Quiz data={quizData} />

@@ -1,0 +1,126 @@
+{
+  "templateVersion": "1.0",
+  "quizTitle": "Le reverse proxy — vérifiez votre compréhension",
+  "quizData": [
+    {
+      "question": "Une entreprise possède une seule adresse IP publique et veut publier trois sites web différents (boutique, blog, admin). Quel équipement lui permet de diriger chaque requête vers le bon serveur interne ?",
+      "options": [
+        "Un switch manageable",
+        "Un reverse proxy",
+        "Un serveur DNS",
+        "Un pare-feu en mode bridge"
+      ],
+      "correct": 1,
+      "hint": "Cet équipement se place devant les serveurs web et décide, selon le nom de domaine demandé, vers quel serveur interne envoyer la requête.",
+      "feedback": "Le reverse proxy est exactement fait pour ça : recevoir toutes les requêtes sur une seule adresse IP et les répartir vers le bon serveur interne selon des règles (nom de domaine, URL, etc.). C'est le rôle qu'HAProxy jouera dans ce TP.",
+      "wrong_feedbacks": [
+        "Un switch travaille au niveau 2 (adresses MAC) et distribue les trames dans un réseau local — il n'interprète pas les noms de domaine HTTP.",
+        "Le DNS traduit un nom de domaine en adresse IP, mais ne peut pas distinguer plusieurs serveurs derrière la même IP publique.",
+        "Un pare-feu en mode bridge filtre le trafic sans l'analyser en profondeur au niveau applicatif. Il ne peut pas rerouter selon le nom d'hôte HTTP.",
+        "Un pare-feu en mode bridge filtre le trafic sans l'analyser en profondeur au niveau applicatif. Il ne peut pas rerouter selon le nom d'hôte HTTP."
+      ]
+    },
+    {
+      "question": "Quelle est la différence fondamentale entre un <em>proxy direct</em> (forward proxy) et un <em>reverse proxy</em> ?",
+      "options": [
+        "Le proxy direct protège les serveurs ; le reverse proxy protège les clients.",
+        "Le proxy direct agit au nom des clients pour sortir vers Internet ; le reverse proxy agit au nom des serveurs pour recevoir les connexions entrantes.",
+        "Le proxy direct gère uniquement le protocole HTTP ; le reverse proxy gère uniquement HTTPS.",
+        "Le proxy direct est installé côté DMZ ; le reverse proxy est installé côté LAN."
+      ],
+      "correct": 1,
+      "hint": "Pensez à qui représente qui : dans un cas le proxy « sort » pour le client, dans l'autre il « reçoit » à la place du serveur.",
+      "feedback": "C'est la distinction essentielle. Le proxy direct (ex : Squid en entreprise) intercepte les requêtes des postes clients vers Internet. Le reverse proxy (ex : HAProxy, Nginx) intercepte les requêtes venant d'Internet à destination des serveurs internes — les clients ne « voient » que le proxy, jamais les vrais serveurs.",
+      "wrong_feedbacks": [
+        "C'est l'inverse : le proxy direct protège (ou contrôle) les clients en sortie ; le reverse proxy protège les serveurs en entrée.",
+        "Les deux types de proxy peuvent gérer HTTP et HTTPS. Le protocole utilisé n'est pas ce qui les distingue.",
+        "La position réseau n'est pas ce qui les distingue fondamentalement — c'est la direction du flux et le rôle joué qui comptent."
+      ]
+    },
+    {
+      "question": "Dans l'architecture du TP, les serveurs <code>node1</code> et <code>node2</code> (Docker) sont placés en DMZ. Pourquoi ne pas les exposer directement sur le réseau labo ?",
+      "options": [
+        "Parce que Docker ne supporte pas les connexions directes depuis un réseau externe.",
+        "Pour masquer les serveurs internes : seul HAProxy est exposé, les backends restent invisibles et injoignables directement.",
+        "Parce que les conteneurs Docker n'ont pas d'adresse IP routable.",
+        "Pour économiser des adresses IP publiques."
+      ],
+      "correct": 1,
+      "hint": "L'intérêt principal n'est pas technique mais sécuritaire : si un attaquant compromet un backend, il ne peut pas y accéder directement depuis l'extérieur.",
+      "feedback": "C'est un principe de défense en profondeur. En exposant uniquement HAProxy, on réduit la surface d'attaque : les backends n'ont pas de port ouvert vers le réseau labo. Une vulnérabilité dans l'application web ne donne pas d'accès direct depuis l'extérieur. HAProxy joue le rôle de « sas » obligatoire.",
+      "wrong_feedbacks": [
+        "Docker gère très bien les connexions directes — ce n'est pas une contrainte technique de Docker.",
+        "Les conteneurs créés avec le driver macvlan ont bien des adresses IP routables (ici 10.10.0.101 et .102). La raison est sécuritaire, pas technique.",
+        "L'économie d'adresses IP est un avantage secondaire du NAT, pas le but principal du reverse proxy dans ce contexte."
+      ]
+    },
+    {
+      "question": "HAProxy reçoit 1 000 requêtes par seconde à destination de <code>https://node1.example.test</code>. Il en achemine 500 vers node1 et 500 vers node2. Comment s'appelle cette fonctionnalité ?",
+      "options": [
+        "Le routage statique",
+        "La terminaison TLS",
+        "L'équilibrage de charge (<em>load balancing</em>)",
+        "La mise en cache (<em>caching</em>)"
+      ],
+      "correct": 2,
+      "hint": "Cette fonctionnalité répartit le trafic entre plusieurs serveurs pour éviter qu'un seul soit saturé.",
+      "feedback": "L'équilibrage de charge (load balancing) distribue les requêtes entre plusieurs serveurs backend selon un algorithme (round-robin, least-connections, etc.). C'est l'une des fonctionnalités majeures d'HAProxy, abordée en Partie 5 du TP.",
+      "wrong_feedbacks": [
+        "Le routage statique consiste à définir des routes réseau fixes dans une table de routage — ça n'a rien à voir avec la répartition de requêtes HTTP.",
+        "La terminaison TLS consiste à déchiffrer le trafic HTTPS au niveau du proxy (Partie 3 du TP). Ce n'est pas ce qui est décrit ici.",
+        "La mise en cache stocke les réponses pour les servir sans interroger le backend. HAProxy n'est pas un cache — c'est un proxy d'équilibrage."
+      ]
+    },
+    {
+      "question": "HAProxy déchiffre le trafic HTTPS entrant, puis communique en HTTP simple avec les backends. Comment appelle-t-on ce mécanisme ?",
+      "options": [
+        "Le Full-TLS (<em>end-to-end encryption</em>)",
+        "La terminaison TLS (<em>TLS offloading</em> ou <em>TLS termination</em>)",
+        "Le chiffrement symétrique",
+        "Le tunnel VPN"
+      ],
+      "correct": 1,
+      "hint": "Dans ce mode, HAProxy « arrête » la session TLS côté client et recrée une connexion non chiffrée (ou re-chiffrée) vers les backends.",
+      "feedback": "La terminaison TLS (TLS offloading) permet à HAProxy de gérer tout le chiffrement : les clients voient HTTPS, les backends reçoivent HTTP (ou HTTPS avec des certificats différents). Cela simplifie la gestion des certificats et allège les serveurs applicatifs. C'est ce que vous configurerez en Partie 3.",
+      "wrong_feedbacks": [
+        "Le Full-TLS (bout en bout) est le cas où le chiffrement est maintenu jusqu'au backend — c'est l'opposé de ce qui est décrit. C'est le sujet de la Partie 10 (Bonus).",
+        "Le chiffrement symétrique (AES, etc.) est une technique cryptographique de bas niveau, pas une architecture de déploiement proxy.",
+        "Un tunnel VPN chiffre tout le flux IP entre deux points — c'est différent d'un proxy HTTP qui inspecte et recrée les connexions."
+      ]
+    },
+    {
+      "question": "Un étudiant voit dans les logs HAProxy : <code>backend node2 is DOWN</code>. HAProxy continue à servir les requêtes sur node1 sans interruption visible. Quelle fonctionnalité rend cela possible ?",
+      "options": [
+        "Le pare-feu SNS qui redirige automatiquement le trafic",
+        "La persistance de session (sticky sessions)",
+        "Les health checks et le basculement automatique (<em>failover</em>)",
+        "Le cache DNS"
+      ],
+      "correct": 2,
+      "hint": "HAProxy surveille régulièrement l'état de chaque backend et cesse de lui envoyer du trafic dès qu'il ne répond plus.",
+      "feedback": "Les health checks (vérifications de santé) permettent à HAProxy de tester régulièrement chaque backend (par ex. une requête HTTP GET). Dès qu'un backend ne répond plus, HAProxy le marque DOWN et redirige automatiquement tout le trafic vers les serveurs encore UP — sans intervention humaine. Vous expérimenterez ce comportement en Partie 5.",
+      "wrong_feedbacks": [
+        "Le pare-feu SNS contrôle l'accès réseau mais ne connaît pas l'état des applications HTTP qui tournent derrière HAProxy.",
+        "La persistance de session (sticky sessions) fait qu'un même client est toujours renvoyé vers le même backend — elle ne gère pas les pannes.",
+        "Le cache DNS n'a aucun rôle dans la détection et le basculement lors d'une panne applicative."
+      ]
+    },
+    {
+      "question": "À la fin du TP, un client tape <code>https://node1.example.test</code> dans son navigateur. Quel est le chemin complet de la requête ?",
+      "options": [
+        "Client → node1 (Docker) directement",
+        "Client → SNS → node1 (Docker)",
+        "Client → HAProxy → node1 (Docker, via la DMZ)",
+        "Client → DNS → HAProxy → SNS → node1"
+      ],
+      "correct": 2,
+      "hint": "Rappelez-vous : seul HAProxy est joignable depuis le réseau labo. Les backends sont dans la DMZ, inaccessibles directement.",
+      "feedback": "Le client envoie sa requête HTTPS à HAProxy (la seule machine exposée sur le réseau labo). HAProxy déchiffre le TLS, identifie le backend grâce au nom d'hôte (SNI), puis transmet la requête à node1 via le réseau DMZ (10.10.0.0/24). Le client ne communique jamais directement avec node1.",
+      "wrong_feedbacks": [
+        "Les backends Docker ne sont pas joignables directement depuis le réseau labo — c'est précisément le but de l'architecture DMZ.",
+        "Le SNS (pare-feu) ne fait pas de reverse proxy HTTP. Il assure le routage et le NAT, mais c'est HAProxy qui redirige les requêtes applicatives.",
+        "Le DNS n'est pas un maillon de la chaîne de transmission des requêtes HTTP — il sert uniquement à résoudre le nom d'hôte en adresse IP avant d'ouvrir la connexion."
+      ]
+    }
+  ]
+}
