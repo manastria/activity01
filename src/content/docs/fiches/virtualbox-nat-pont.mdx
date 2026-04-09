@@ -1,0 +1,95 @@
+---
+title: "Modes NAT et pont dans VirtualBox"
+description: "Explication des deux modes réseau principaux dans VirtualBox : NAT pour accès Internet isolé, pont pour intégration au réseau du laboratoire."
+topic: "virtualbox"
+section: "systeme"
+filename: "virtualbox-nat-pont"
+---
+
+import { Aside, Steps, Badge } from '@astrojs/starlight/components';
+import ImageFigureViewer from "@/components/ImageFigureViewer.astro";
+
+En mode NAT, votre machine virtuelle peut accéder à Internet, mais elle est **invisible depuis le réseau du labo**. En mode pont, elle obtient une adresse du labo et devient visible de toutes les autres machines. Cette fiche explique comment choisir et comment basculer d'un mode à l'autre.
+
+## La vitre sans tain
+
+Imaginez une vitre sans tain : vous voyez tout ce qui se passe de l'autre côté, mais depuis l'autre côté, personne ne vous voit.
+
+**C'est exactement ce qu'est le mode NAT.**
+
+Votre VM voit l'extérieur — elle peut naviguer, télécharger, faire des mises à jour. Mais depuis le labo, elle est invisible. Les autres machines ne peuvent pas la joindre, parce qu'elles ne savent pas qu'elle existe.
+
+**Le mode pont, c'est enlever la vitre.** La VM entre dans la pièce avec tout le monde. Elle reçoit une vraie adresse sur le réseau du labo et les autres machines peuvent la voir et la contacter.
+
+<Aside type="tip" title="Résumé rapide">
+|                                  |        NAT        |     Pont     |
+| -------------------------------- | :---------------: | :----------: |
+| La VM peut aller sur Internet    |        ✓         |      ✓      |
+| La VM a une adresse du labo      |        ✗         |      ✓      |
+| Les autres machines voient la VM |        ✗         |      ✓      |
+| Utilisé quand…                   | navigation simple | TP en réseau |
+</Aside>
+
+## Mode NAT — la VM derrière la vitre
+
+  <ImageFigureViewer
+    src="images/fiches/virtualbox-nat-pont/schema-nat.svg"
+    alt=""
+  />
+
+<Aside type="note" title="Ce que montre ce schéma">
+La VM communique avec l'extérieur via le commutateur NAT de l'hyperviseur. Depuis le LAN physique, la VM est invisible : seule la machine hôte est connue du réseau.
+</Aside>
+
+La VM possède une adresse privée attribuée par VirtualBox (`10.0.2.15`). Quand elle envoie un paquet vers Internet, l'hyperviseur substitue cette adresse par celle de la machine hôte. Le réseau extérieur ne voit jamais la VM directement.
+
+<Aside type="caution" title="Conséquence pratique">
+Deux VMs en mode NAT ne peuvent **pas** se contacter directement, même sur le même PC. Elles sont chacune derrière leur propre vitre.
+</Aside>
+
+## Mode pont — la VM sur le réseau du labo
+
+  <ImageFigureViewer
+    src="images/fiches/virtualbox-nat-pont/schema-pont.svg"
+    alt=""
+  />
+
+<Aside type="note" title="Ce que montre ce schéma">
+La VM partage la carte réseau physique de l'hôte. Elle obtient une adresse du même réseau que les vrais PC du labo — le DHCP du routeur lui en attribue une automatiquement.
+</Aside>
+
+En mode pont, VirtualBox « branche » la VM directement sur la carte réseau physique du PC. Le routeur du labo la traite comme n'importe quel autre équipement : il lui attribue une adresse, et toutes les machines du labo peuvent la joindre.
+
+<Aside type="caution" title="Point d'attention">
+En mode pont, la VM est exposée sur le réseau du labo sans le filtrage implicite du NAT. C'est voulu pour les TP, mais à garder en tête si la VM fait tourner des services.
+</Aside>
+
+## Changer de mode dans VirtualBox
+
+<Aside type="danger" title="Avant de commencer">
+Éteignez la VM avant de modifier ses paramètres réseau. Un changement à chaud n'est pas pris en compte.
+</Aside>
+
+<Steps>
+1. **Éteindre la VM** — Menu *Machine* → *Arrêter* → *Éteindre*.
+
+2. **Ouvrir les paramètres** — Clic droit sur la VM dans la liste → *Paramètres* → onglet *Réseau*.
+
+3. **Sélectionner l'adaptateur** — Onglet *Adaptateur 1* (celui actuellement en NAT).
+
+4. **Changer le mode** — Dans le menu *Attaché à*, choisir *Accès par pont*.
+
+5. **Choisir la carte physique** — Dans *Nom*, sélectionner la carte Ethernet du PC (généralement `Intel...` ou `Realtek...`, **pas** une carte Wi-Fi).
+
+6. **Valider et démarrer** — Cliquer *OK*, puis démarrer la VM.
+
+7. **Vérifier l'adresse obtenue** — Dans un terminal de la VM :
+   ```bash
+   ip a
+   ```
+   L'interface `eth0` doit afficher une adresse du réseau du labo (ex. `192.168.1.x`).
+</Steps>
+
+<Aside type="tip" title="Pour revenir en NAT">
+Même procédure : *Paramètres* → *Réseau* → *Attaché à* → choisir *NAT*.
+</Aside>
